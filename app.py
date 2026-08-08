@@ -151,8 +151,8 @@ CFG = {
     "app_title": "Faculty Grade Analytics Portal",
     "app_version": "Version 1.0",
     "app_subtitle": "Saranathan College of Engineering · Regulations 2024 Compatible",
-    "host": os.environ.get("HOST", "127.0.0.1"),
-    "port": int(os.environ.get("PORT", "8000")),
+    "host": os.environ.get("HOST", "0.0.0.0"),
+    "port": int(os.environ.get("PORT", 8000)),
     "max_upload_mb": int(os.environ.get("MAX_UPLOAD_MB", "20")),
     "ai_provider": AI_PROVIDER,
     "ollama_api_key": os.environ.get("OLLAMA_API_KEY", "").strip(),
@@ -4344,19 +4344,14 @@ def route_download_pdf(report_id: str = ""):
 # 14) APPLICATION STARTUP
 # =============================================================================
 
-def main():
-    print("=" * 60)
-    print(f"  {CFG['app_title']}")
-    print(f"  {CFG['app_subtitle']}")
-    print(f"  Server: http://{CFG['host']}:{CFG['port']}")
-    print(f"  AI Provider: {CFG['ai_provider']}")
-    print(f"  Ollama Model: {CFG['ollama_model']}")
-    print(f"  Kaleido (static PNG): {'available' if _KALEIDO_OK else 'not installed'}")
-    print(f"  xhtml2pdf: {'available' if _PISA_OK else 'not installed'}")
-    print("=" * 60)
-    import uvicorn
-    uvicorn.run(app, host=CFG["host"], port=CFG["port"], log_level="info")
-
-
 if __name__ == "__main__":
-    main()
+    import os
+    import uvicorn
+
+    port = int(os.environ.get("PORT", 8000))
+
+    uvicorn.run(
+        app,
+        host="0.0.0.0",
+        port=port
+    )
