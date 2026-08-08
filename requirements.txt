@@ -1,0 +1,9 @@
+python-fasthtml
+pandas
+openpyxl
+plotly
+kaleido
+xhtml2pdf
+langchain-community
+uvicorn
+python-dotenv
