@@ -4098,8 +4098,13 @@ app = FastHTML(
             ::-webkit-scrollbar-thumb:hover { background: var(--slate-400); }
         """),
     ),
-    exception_handlers={404: lambda req: page_upload()},
+    exception_handlers={404: lambda req, exc: page_upload()},
 )
+
+
+@app.get("/favicon.ico")
+def route_favicon():
+    return Response(status_code=204)
 
 
 @app.get("/")
