@@ -2499,29 +2499,131 @@ def page_upload() -> Tuple:
         H1("Upload Semester Result", cls="text-2xl font-bold text-slate-800 mb-2"),
         P("Upload an official .xlsx spreadsheet containing declared final result grades.",
           cls="text-slate-500 mb-8"),
-        Div(
+        Form(
             Div(
                 Div(
                     Div(
-                        Span("📄", cls="text-4xl mb-3 block"),
-                        P("Drag & drop your .xlsx file here", cls="text-slate-600 font-medium mb-1"),
-                        P("or click to browse from system", cls="text-slate-400 text-sm"),
+                        Span("📄", cls="text-4xl mb-3 block", id="upload-icon"),
+                        P("Drag & drop your .xlsx file here", cls="text-slate-600 font-medium mb-1", id="upload-text"),
+                        P("or click to browse from system", cls="text-slate-400 text-sm", id="upload-subtext"),
                         cls="text-center py-8"
                     ),
                     Input(type="file", name="file", accept=".xlsx", aria_label="Upload Excel spreadsheet file",
+                          id="file-input",
                           cls="absolute inset-0 w-full h-full opacity-0 cursor-pointer"),
+                    id="drop-zone",
                     cls="relative border-2 border-dashed border-slate-300 rounded-xl hover:border-blue-400 hover:bg-blue-50/30 transition-colors"
                 ),
                 P(f"Accepted format: .xlsx only. Maximum size limit: {CFG['max_upload_mb']} MB.",
                   cls="mt-3 text-xs text-slate-400 text-center"),
                 cls="mb-6"
             ),
-            Button("Analyze Spreadsheet & Preview Mapping →", type="submit",
+            # Progress overlay (hidden by default)
+            Div(
+                Div(
+                    Div(cls="upload-spinner"),
+                    P("Uploading & analyzing…", cls="text-slate-600 font-medium mt-3", id="progress-text"),
+                    P("Please wait while we process your spreadsheet.", cls="text-slate-400 text-sm mt-1"),
+                    cls="text-center"
+                ),
+                id="upload-progress",
+                cls="hidden rounded-xl bg-white/90 backdrop-blur-sm border border-slate-200 p-8 mb-6"
+            ),
+            Button("Analyze Spreadsheet & Preview Mapping →", type="submit", id="upload-btn",
                    cls="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold "
                        "py-3.5 px-6 rounded-lg transition-all hover:shadow-lg active:scale-[0.98]"),
             action="/upload-preview", method="POST", enctype="multipart/form-data",
             cls="card p-6"
         ),
+        Style("""
+            .upload-spinner {
+                width: 40px; height: 40px; margin: 0 auto;
+                border: 4px solid #e2e8f0; border-top-color: #3b82f6;
+                border-radius: 50%; animation: spin 0.8s linear infinite;
+            }
+            @keyframes spin { to { transform: rotate(360deg); } }
+            #drop-zone.drag-over {
+                border-color: #3b82f6 !important;
+                background-color: rgba(59, 130, 246, 0.08) !important;
+                transform: scale(1.01);
+            }
+            #drop-zone.file-selected {
+                border-color: #16a34a !important;
+                background-color: rgba(22, 163, 74, 0.05) !important;
+            }
+        """),
+        Script("""
+        (function() {
+            var dropZone = document.getElementById('drop-zone');
+            var fileInput = document.getElementById('file-input');
+            var uploadIcon = document.getElementById('upload-icon');
+            var uploadText = document.getElementById('upload-text');
+            var uploadSubtext = document.getElementById('upload-subtext');
+            var uploadBtn = document.getElementById('upload-btn');
+            var progressDiv = document.getElementById('upload-progress');
+            var form = dropZone ? dropZone.closest('form') : null;
+
+            if (!dropZone || !fileInput || !form) return;
+
+            function showFileSelected(name) {
+                dropZone.classList.remove('drag-over');
+                dropZone.classList.add('file-selected');
+                uploadIcon.textContent = '✅';
+                uploadText.textContent = name;
+                uploadSubtext.textContent = 'File ready. Click the button below to analyze.';
+            }
+
+            // Drag & drop events
+            ['dragenter', 'dragover'].forEach(function(evt) {
+                dropZone.addEventListener(evt, function(e) {
+                    e.preventDefault(); e.stopPropagation();
+                    dropZone.classList.add('drag-over');
+                });
+            });
+            ['dragleave', 'drop'].forEach(function(evt) {
+                dropZone.addEventListener(evt, function(e) {
+                    e.preventDefault(); e.stopPropagation();
+                    dropZone.classList.remove('drag-over');
+                });
+            });
+
+            dropZone.addEventListener('drop', function(e) {
+                var files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    var file = files[0];
+                    if (file.name.toLowerCase().endsWith('.xlsx')) {
+                        fileInput.files = files;
+                        showFileSelected(file.name);
+                    } else {
+                        uploadText.textContent = 'Only .xlsx files are accepted!';
+                        uploadText.style.color = '#dc2626';
+                        setTimeout(function() {
+                            uploadText.textContent = 'Drag & drop your .xlsx file here';
+                            uploadText.style.color = '';
+                        }, 2500);
+                    }
+                }
+            });
+
+            // File input change (click-to-browse)
+            fileInput.addEventListener('change', function() {
+                if (fileInput.files.length > 0) {
+                    showFileSelected(fileInput.files[0].name);
+                }
+            });
+
+            // Show progress on form submit
+            form.addEventListener('submit', function() {
+                if (!fileInput.files || fileInput.files.length === 0) return;
+                if (progressDiv) {
+                    progressDiv.classList.remove('hidden');
+                }
+                uploadBtn.disabled = true;
+                uploadBtn.textContent = 'Uploading…';
+                uploadBtn.classList.add('opacity-60', 'cursor-not-allowed');
+            });
+        })();
+        """),
         cls="max-w-xl mx-auto"
     ))
 
