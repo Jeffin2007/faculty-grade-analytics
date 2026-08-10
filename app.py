@@ -16,7 +16,9 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import difflib
 import gc
+import hashlib
 import html
 import io
 import json
@@ -284,9 +286,571 @@ OPTIONAL_FIELDS = ["course_code", "dept", "programme", "batch", "year", "semeste
 STATUS_CLEARED = "cleared"
 STATUS_U = "u"
 STATUS_MULTI_U = "multi-u"
+STATUS_BACKLOG = "backlog"
 STATUS_SA = "sa"
 STATUS_WD = "wd"
 STATUS_MALPRACTICE = "malpractice"
+
+# =============================================================================
+# 3.1) B.TECH AI & DS (R2024) SYLLABUS CATALOG & ALIAS RESOLVER
+# =============================================================================
+
+SYLLABUS_CATALOG_R2024: List[Dict[str, Any]] = [
+    # Semester 1 (Foundation)
+    {"code": "24HS101", "name": "Technical English", "credits": 3.0, "semester": 1, "category": "Sem 1-4 Foundation", "aliases": ["HS24101", "ENGLISH", "TECH ENG", "ENG", "TECHNICAL ENGLISH I", "PROFESSIONAL ENGLISH I", "PROFESSIONAL ENGLISH"]},
+    {"code": "24MA101", "name": "Linear Algebra and Calculus", "credits": 4.0, "semester": 1, "category": "Sem 1-4 Foundation", "aliases": ["MA24101", "MATHEMATICS I", "MATHS I", "MATH I", "LAC", "M1", "MATHEMATICS", "MATHS", "MATH"]},
+    {"code": "24PH101", "name": "Engineering Physics", "credits": 3.0, "semester": 1, "category": "Sem 1-4 Foundation", "aliases": ["PH24101", "PHYSICS", "PHY", "ENGG PHYSICS", "PHYSICS FOR INFORMATION SCIENCE"]},
+    {"code": "24CY101", "name": "Engineering Chemistry", "credits": 3.0, "semester": 1, "category": "Sem 1-4 Foundation", "aliases": ["CY24101", "CHEMISTRY", "CHEM", "ENGG CHEM", "CHEMISTRY FOR INFORMATION SCIENCE"]},
+    {"code": "24GE101", "name": "Python Programming", "credits": 3.0, "semester": 1, "category": "Sem 1-4 Foundation", "aliases": ["GE24101", "PYTHON", "PROBLEM SOLVING AND PYTHON PROGRAMMING", "PROGRAMMING IN PYTHON", "PY"]},
+    {"code": "24EE101", "name": "Basic Electrical and Electronics Engineering", "credits": 3.0, "semester": 1, "category": "Sem 1-4 Foundation", "aliases": ["EE24101", "BEEE", "BASIC ELECTRICAL AND ELECTRONICS", "ELECTRICAL AND ELECTRONICS", "BEE", "BASIC ELECTRICAL/ELECTRONICS"]},
+    
+    # Semester 2 (Foundation)
+    {"code": "24HS201", "name": "Professional English II", "credits": 3.0, "semester": 2, "category": "Sem 1-4 Foundation", "aliases": ["HS24201", "ENGLISH II", "PROF ENG II", "TECHNICAL ENGLISH II"]},
+    {"code": "24MA201", "name": "Complex Variables and Transforms", "credits": 4.0, "semester": 2, "category": "Sem 1-4 Foundation", "aliases": ["MA24201", "MATHEMATICS II", "MATHS II", "MATH II", "CVT", "TRANSFORMS AND CALCULUS", "M2"]},
+    {"code": "24PH201", "name": "Physics for Computer Science", "credits": 3.0, "semester": 2, "category": "Sem 1-4 Foundation", "aliases": ["PH24201", "PCS", "PHYSICS FOR CS"]},
+    {"code": "24CS201", "name": "Programming in C", "credits": 3.0, "semester": 2, "category": "Sem 1-4 Foundation", "aliases": ["CS24201", "C PROGRAMMING", "C PROG", "C", "PROGRAMMING IN C"]},
+    {"code": "24CS202", "name": "Digital Principles and Computer Organization", "credits": 4.0, "semester": 2, "category": "Sem 1-4 Foundation", "aliases": ["CS24202", "DPCO", "DIGITAL PRINCIPLES", "COMPUTER ORGANIZATION", "DP&CO", "COA", "CA", "DIGITAL PRINCIPLES AND COMPUTER ORGANIZATION"]},
+
+    # Semester 3 (Foundation / Core)
+    {"code": "24MA301", "name": "Discrete Mathematics", "credits": 4.0, "semester": 3, "category": "Sem 1-4 Foundation", "aliases": ["MA24301", "DM", "DISCRETE MATHS", "DISCRETE MATH", "M3", "DISCRETE MATHEMATICS"]},
+    {"code": "24AD301", "name": "Data Structures and Algorithms", "credits": 4.0, "semester": 3, "category": "Sem 1-4 Foundation", "aliases": ["AD24301", "DSA", "DATA STRUCTURES", "DATA STRUCTURES AND ALGORITHMS", "DS", "ALGORITHMS"]},
+    {"code": "24AD302", "name": "Database Design and Management", "credits": 3.0, "semester": 3, "category": "Sem 1-4 Foundation", "aliases": ["AD24302", "DBMS", "DATABASE DESIGN AND MANAGEMENT", "DATABASE MANAGEMENT SYSTEMS", "DATABASE DESIGN", "DATABASE"]},
+    {"code": "24AD303", "name": "Object Oriented Programming", "credits": 3.0, "semester": 3, "category": "Sem 1-4 Foundation", "aliases": ["AD24303", "OOP", "OBJECT ORIENTED PROGRAMMING", "OOPS", "JAVA PROGRAMMING", "OBJECT ORIENTED PROGRAMMING USING JAVA"]},
+    {"code": "24AD304", "name": "Software Engineering", "credits": 3.0, "semester": 3, "category": "Sem 1-4 Foundation", "aliases": ["AD24304", "SE", "SOFTWARE ENG", "SOFTWARE ENGINEERING", "SOFTWARE ENGINEERING AND AGILE"]},
+
+    # Semester 4 (Foundation / Core)
+    {"code": "24MA401", "name": "Probability and Statistics", "credits": 4.0, "semester": 4, "category": "Sem 1-4 Foundation", "aliases": ["MA24401", "P&S", "PAS", "PROBABILITY & STATISTICS", "PROBABILITY AND STATISTICS", "PROBABILITY AND QUEUEING THEORY", "M4"]},
+    {"code": "24AD401", "name": "Operating Systems", "credits": 3.0, "semester": 4, "category": "Sem 1-4 Foundation", "aliases": ["AD24401", "OS", "OPERATING SYSTEM", "OPERATING SYSTEMS", "PRINCIPLES OF OPERATING SYSTEMS", "PRINCIPLES TO OPERATING SYSTEM", "OPERATING SYSTEMS CONCEPTS"]},
+    {"code": "24AD402", "name": "Introduction to Artificial Intelligence", "credits": 3.0, "semester": 4, "category": "Sem 1-4 Foundation", "aliases": ["AD24402", "AI", "ARTIFICIAL INTELLIGENCE", "INTRO TO AI", "INTRODUCTION TO AI", "INTRODUCTION TO ARTIFICIAL INTELLIGENCE", "AI FUNDAMENTALS"]},
+    {"code": "24AD403", "name": "Machine Learning", "credits": 4.0, "semester": 4, "category": "Sem 1-4 Foundation", "aliases": ["AD24403", "ML", "MACHINE LEARNING", "ML CONCEPTS", "MACHINE LEARNING TECHNIQUES"]},
+    {"code": "24AD404", "name": "Data Science and Exploratory Data Analysis", "credits": 3.0, "semester": 4, "category": "Sem 1-4 Foundation", "aliases": ["AD24404", "DSEA", "EDA", "EXPLORATORY DATA ANALYSIS", "DATA SCIENCE AND EDA", "DATA SCIENCE AND EXPLORATORY DATA ANALYSIS", "DATA SCIENCE"]},
+
+    # Semester 5 (Advanced Core / Electives)
+    {"code": "24AD501", "name": "Deep Learning", "credits": 4.0, "semester": 5, "category": "Sem 5-8 Advanced", "aliases": ["AD24501", "DL", "DEEP LEARNING", "DEEP LEARNING CONCEPTS"]},
+    {"code": "24CS501", "name": "Computer Networks", "credits": 3.0, "semester": 5, "category": "Sem 5-8 Advanced", "aliases": ["CS24501", "CN", "COMPUTER NETWORK", "COMPUTER NETWORKS", "NETWORKS", "DATA COMMUNICATION AND NETWORKS"]},
+    {"code": "24AD502", "name": "Full Stack Development", "credits": 4.0, "semester": 5, "category": "Sem 5-8 Advanced", "aliases": ["AD24502", "FSD", "FULL STACK", "FULL STACK DEVELOPMENT", "FULL STACK WEB DEVELOPMENT", "WEB DEVELOPMENT"]},
+
+    # Semester 6 (Advanced Core / Electives / Projects)
+    {"code": "24AD601", "name": "Computer Vision", "credits": 3.0, "semester": 6, "category": "Sem 5-8 Advanced", "aliases": ["AD24601", "CV", "COMPUTER VISION", "IMAGE PROCESSING AND COMPUTER VISION"]},
+    {"code": "24AD602", "name": "Natural Language Processing", "credits": 3.0, "semester": 6, "category": "Sem 5-8 Advanced", "aliases": ["AD24602", "NLP", "NATURAL LANGUAGE PROCESSING", "NLP AND TEXT ANALYTICS"]},
+    {"code": "24CS601", "name": "Compiler Design", "credits": 3.0, "semester": 6, "category": "Sem 5-8 Advanced", "aliases": ["CS24601", "CD", "COMPILER DESIGN", "FLAT", "FORMAL LANGUAGES AND AUTOMATA THEORY", "AUTOMATA AND COMPILER DESIGN"]},
+    {"code": "24AD603", "name": "Summer Internship", "credits": 2.0, "semester": 6, "category": "Internship & Project", "aliases": ["AD24603", "SUMMER INTERNSHIP", "INTERNSHIP", "INDUSTRIAL TRAINING"]},
+    {"code": "24AD604", "name": "Mini Project", "credits": 2.0, "semester": 6, "category": "Internship & Project", "aliases": ["AD24604", "MINI PROJECT", "MINIPROJECT"]},
+
+    # Semester 7 (Advanced Core / Electives / Projects)
+    {"code": "24AD701", "name": "Internet of Things", "credits": 3.0, "semester": 7, "category": "Sem 5-8 Advanced", "aliases": ["AD24701", "IOT", "INTERNET OF THINGS", "IOT AND SENSORS"]},
+    {"code": "24AD702", "name": "Generative AI", "credits": 3.0, "semester": 7, "category": "Sem 5-8 Advanced", "aliases": ["AD24702", "GAI", "GEN AI", "GENERATIVE AI", "GENAI", "GENERATIVE ARTIFICIAL INTELLIGENCE"]},
+    {"code": "24AD703", "name": "Project Work Phase 1", "credits": 3.0, "semester": 7, "category": "Internship & Project", "aliases": ["AD24703", "PROJECT PHASE 1", "PROJECT WORK PHASE 1", "PROJECT 1"]},
+
+    # Semester 8 (Project & Electives)
+    {"code": "24AD801", "name": "Project Work", "credits": 8.0, "semester": 8, "category": "Internship & Project", "aliases": ["AD24801", "PROJECT WORK", "PROJECT", "PROJECT PHASE 2", "FINAL PROJECT"]},
+
+    # Electives & Mandatory Special Categories
+    {"code": "24PE001", "name": "Professional Elective I", "credits": 3.0, "semester": 5, "category": "Professional Elective", "aliases": ["PE24001", "PE", "PE1", "PE-1", "PROFESSIONAL ELECTIVE 1", "PROFESSIONAL ELECTIVE I", "PROFESSIONAL ELECTIVE"]},
+    {"code": "24PE002", "name": "Professional Elective II", "credits": 3.0, "semester": 6, "category": "Professional Elective", "aliases": ["PE24002", "PE2", "PE-2", "PROFESSIONAL ELECTIVE 2", "PROFESSIONAL ELECTIVE II"]},
+    {"code": "24PE003", "name": "Professional Elective III", "credits": 3.0, "semester": 7, "category": "Professional Elective", "aliases": ["PE24003", "PE3", "PE-3", "PROFESSIONAL ELECTIVE 3", "PROFESSIONAL ELECTIVE III"]},
+    {"code": "24PE004", "name": "Professional Elective IV", "credits": 3.0, "semester": 8, "category": "Professional Elective", "aliases": ["PE24004", "PE4", "PE-4", "PROFESSIONAL ELECTIVE 4", "PROFESSIONAL ELECTIVE IV"]},
+    {"code": "24OE001", "name": "Open Elective I", "credits": 3.0, "semester": 5, "category": "Open Elective", "aliases": ["OE24001", "OE", "OE1", "OE-1", "OPEN ELECTIVE 1", "OPEN ELECTIVE I", "OPEN ELECTIVE"]},
+    {"code": "24OE002", "name": "Open Elective II", "credits": 3.0, "semester": 7, "category": "Open Elective", "aliases": ["OE24002", "OE2", "OE-2", "OPEN ELECTIVE 2", "OPEN ELECTIVE II"]},
+    {"code": "24MC001", "name": "Mandatory Course", "credits": 0.0, "semester": 1, "category": "Mandatory Course", "aliases": ["MC24001", "MC", "EVS", "ENVIRONMENTAL SCIENCE", "INDIAN CONSTITUTION", "HERITAGE OF TAMILS", "TAMILS AND TECHNOLOGY", "MANDATORY COURSE"]},
+
+    # Labs & Practical Courses
+    {"code": "24GE111", "name": "Engineering Graphics", "credits": 3.0, "semester": 1, "category": "Sem 1-4 Foundation", "aliases": ["GE24111", "EG", "GRAPHICS", "ENGINEERING GRAPHICS", "ENGG GRAPHICS"]},
+    {"code": "24HS111", "name": "Heritage of Tamils", "credits": 1.0, "semester": 1, "category": "Mandatory Course", "aliases": ["HS24111", "HERITAGE OF TAMILS", "HT", "TAMIL HERITAGE", "TAMILS AND TECHNOLOGY"]},
+    {"code": "24HS211", "name": "Tamils and Technology", "credits": 1.0, "semester": 2, "category": "Mandatory Course", "aliases": ["HS24211", "TAMILS AND TECHNOLOGY", "TT", "TAMIL TECH"]},
+    {"code": "24BS111", "name": "Physics and Chemistry Laboratory", "credits": 1.5, "semester": 1, "category": "Sem 1-4 Foundation", "aliases": ["BS24111", "PHYSICS AND CHEMISTRY LAB", "PHY & CHEM LAB", "BS LAB", "PHYSICS LAB", "CHEMISTRY LAB"]},
+    {"code": "24GE112", "name": "Python Programming Laboratory", "credits": 1.5, "semester": 1, "category": "Sem 1-4 Foundation", "aliases": ["GE24112", "PYTHON LAB", "PYTHON PROGRAMMING LAB", "PY LAB"]},
+    {"code": "24HS212", "name": "Communication Laboratory I", "credits": 1.5, "semester": 2, "category": "Sem 1-4 Foundation", "aliases": ["HS24212", "COMMUNICATION LAB I", "COMM LAB 1", "ENGLISH LAB I"]},
+    {"code": "24AD311", "name": "Data Structures and Algorithms Laboratory", "credits": 1.5, "semester": 3, "category": "Sem 1-4 Foundation", "aliases": ["AD24311", "DSA LAB", "DATA STRUCTURES LAB", "DS LAB"]},
+    {"code": "24AD312", "name": "Database Design and Management Laboratory", "credits": 1.5, "semester": 3, "category": "Sem 1-4 Foundation", "aliases": ["AD24312", "DBMS LAB", "DATABASE LAB"]},
+    {"code": "24AD313", "name": "Object Oriented Programming Laboratory", "credits": 1.5, "semester": 3, "category": "Sem 1-4 Foundation", "aliases": ["AD24313", "OOP LAB", "JAVA LAB", "OOPS LAB"]},
+    {"code": "24AD511", "name": "Deep Learning Laboratory", "credits": 1.5, "semester": 5, "category": "Sem 5-8 Advanced", "aliases": ["AD24511", "DL LAB", "DEEP LEARNING LAB"]},
+    {"code": "24CS511", "name": "Computer Networks Laboratory", "credits": 1.5, "semester": 5, "category": "Sem 5-8 Advanced", "aliases": ["CS24511", "CN LAB", "NETWORKS LAB", "NETWORK LAB"]},
+    {"code": "24AD512", "name": "Full Stack Development Laboratory", "credits": 1.5, "semester": 5, "category": "Sem 5-8 Advanced", "aliases": ["AD24512", "FSD LAB", "FULL STACK LAB", "WEB DEV LAB"]}
+]
+
+
+def resolve_subject_info(raw_name: Any, custom_overrides: Optional[Dict[str, str]] = None) -> Tuple[str, str, float, int, str, float, bool]:
+    """
+    Resolve a raw subject string, course code, or abbreviation against the R2024 AI & DS syllabus catalog.
+    Formatting noise is stripped (24-AD-301 -> 24AD301, 24 AD 301 -> 24AD301).
+    Semantic course codes (24AD301) are NEVER reordered.
+    Returns: (canonical_name, course_code, credits, semester, category, confidence, is_ambiguous)
+    """
+    if not raw_name:
+        return ("Unknown Subject", "", 0.0, 0, "Uncategorized", 0.0, True)
+
+    clean_raw = str(raw_name).strip()
+    norm = re.sub(r"\s+", " ", clean_raw).upper()
+    # Strip formatting noise ONLY: 24-AD-301 -> 24AD301, 24 AD 301 -> 24AD301
+    clean_code = re.sub(r"[^A-Z0-9]", "", norm)
+
+    # 0. Check custom manual alias overrides first
+    if custom_overrides and norm in custom_overrides:
+        target_name = custom_overrides[norm]
+        for item in SYLLABUS_CATALOG_R2024:
+            if item["name"].upper() == target_name.upper():
+                return (item["name"], item["code"], item["credits"], item["semester"], item["category"], 1.0, False)
+        return (target_name, "", 3.0, 1, "Custom Subject", 1.0, False)
+
+    # 1. Deterministic exact match on canonical name, code, or aliases
+    for item in SYLLABUS_CATALOG_R2024:
+        code_clean = re.sub(r"[^A-Z0-9]", "", item["code"].upper())
+        if norm == item["name"].upper() or norm == item["code"].upper() or clean_code == code_clean:
+            return (item["name"], item["code"], item["credits"], item["semester"], item["category"], 1.0, False)
+        for alias in item["aliases"]:
+            alias_clean = re.sub(r"[^A-Z0-9]", "", alias.upper())
+            if norm == alias.upper() or clean_code == alias_clean:
+                return (item["name"], item["code"], item["credits"], item["semester"], item["category"], 1.0, False)
+
+    # 2. Deterministic partial token match
+    for item in SYLLABUS_CATALOG_R2024:
+        for alias in item["aliases"]:
+            if len(alias) >= 2 and alias.upper() == norm:
+                return (item["name"], item["code"], item["credits"], item["semester"], item["category"], 1.0, False)
+
+    # 3. Fuzzy match fallback
+    best_item = None
+    best_score = 0.0
+
+    for item in SYLLABUS_CATALOG_R2024:
+        s_name = difflib.SequenceMatcher(None, norm, item["name"].upper()).ratio()
+        if s_name > best_score:
+            best_score = s_name
+            best_item = item
+        for alias in item["aliases"]:
+            s_alias = difflib.SequenceMatcher(None, norm, alias.upper()).ratio()
+            if s_alias > best_score:
+                best_score = s_alias
+                best_item = item
+
+    if best_item and best_score >= 0.80:
+        return (best_item["name"], best_item["code"], best_item["credits"], best_item["semester"], best_item["category"], round(best_score, 2), False)
+    elif best_item and best_score >= 0.60:
+        return (best_item["name"], best_item["code"], best_item["credits"], best_item["semester"], best_item["category"], round(best_score, 2), True)
+
+    # Fallback if no confident match found: preserve clean_raw title and clean_code without reordering
+    return (clean_raw, clean_code or clean_raw, 3.0, 1, "Sem 1-4 Foundation", round(best_score, 2), True)
+
+
+# =============================================================================
+# 3.2) DIRECT COE PDF EXTRACTION, METADATA & RECONCILIATION ENGINE
+# =============================================================================
+
+@dataclass
+class DocumentMetadata:
+    institution: str = "Saranathan College of Engineering"
+    programme: str = "B.Tech AI & DS"
+    department: str = "Department of AI & DS"
+    regulation: str = "R2024"
+    semester: str = "Semester III"
+    academic_year: str = "2025 - 2026"
+    exam_session: str = "Nov / Dec 2025"
+    publication_date: str = "Unknown / Needs Review"
+    page_count: int = 0
+    document_type: str = "DIGITAL_TEXT_PDF"  # "DIGITAL_TEXT_PDF" | "SCANNED_PDF" | "EMPTY_OR_CORRUPT_PDF"
+
+
+@dataclass
+class StudentResultRecord:
+    register_number: str
+    student_name: str
+    batch_number: str = ""
+    subject_code: str = ""
+    subject_name: str = ""
+    original_subject_text: str = ""
+    credits: float = 3.0
+    result_status: str = "U"
+    raw_result_status: str = ""
+    result_semester: int = 3
+    subject_semester: int = 3
+    source_type: str = "PDF"  # "PDF" | "EXCEL"
+    source_page: int = 1
+    extraction_confidence: float = 1.0
+
+
+@dataclass
+class PDFExtractionReport:
+    ok: bool = True
+    doc_metadata: DocumentMetadata = field(default_factory=DocumentMetadata)
+    records: List[StudentResultRecord] = field(default_factory=list)
+    raw_inspector_items: List[Dict[str, Any]] = field(default_factory=list)
+    quarantined_tokens: List[Dict[str, Any]] = field(default_factory=list)
+    student_count: int = 0
+    subject_count: int = 0
+    result_cell_count: int = 0
+    unknown_token_count: int = 0
+    unresolved_subject_count: int = 0
+    overall_confidence: float = 1.0
+    warnings: List[str] = field(default_factory=list)
+    fatal_error: str = ""
+
+
+@dataclass
+class ReconciliationReport:
+    matched_count: int = 0
+    mismatched_count: int = 0
+    mismatched_records: List[Dict[str, Any]] = field(default_factory=list)
+    missing_in_excel: List[Dict[str, Any]] = field(default_factory=list)
+    missing_in_pdf: List[Dict[str, Any]] = field(default_factory=list)
+
+
+def extract_coe_pdf(pdf_bytes: bytes, filename: str) -> PDFExtractionReport:
+    """
+    Direct COE PDF extraction engine using PyMuPDF (pymupdf / fitz) with pdfplumber fallback.
+    Extracts document metadata, multi-page tables, strips repeated headers/footers,
+    extracts course codes & grade cells, and maintains page provenance (source_page).
+    """
+    report = PDFExtractionReport()
+    if not pdf_bytes:
+        report.ok = False
+        report.fatal_error = "Uploaded PDF file is empty (0 bytes)."
+        return report
+
+    try:
+        import fitz  # PyMuPDF
+        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    except Exception as e:
+        report.ok = False
+        report.doc_metadata.document_type = "EMPTY_OR_CORRUPT_PDF"
+        report.fatal_error = f"Could not open or parse PDF document: {e}"
+        return report
+
+    report.doc_metadata.page_count = len(doc)
+    if len(doc) == 0:
+        report.ok = False
+        report.doc_metadata.document_type = "EMPTY_OR_CORRUPT_PDF"
+        report.fatal_error = "PDF document contains 0 pages."
+        return report
+
+    # 1. Page-by-page text sampling for PDF Classification
+    total_chars = 0
+    page_texts = []
+    for page_num in range(len(doc)):
+        text = doc[page_num].get_text("text") or ""
+        page_texts.append(text)
+        total_chars += len(text.strip())
+
+    avg_chars_per_page = total_chars / len(doc)
+    if avg_chars_per_page < 80:
+        report.doc_metadata.document_type = "SCANNED_PDF"
+        report.warnings.append("PDF appears to be scanned or image-based with minimal selectable text layer.")
+    else:
+        report.doc_metadata.document_type = "DIGITAL_TEXT_PDF"
+
+    # 2. Extract Document Metadata from Header Page (Page 1)
+    p1_text = page_texts[0] if page_texts else ""
+    p1_upper = p1_text.upper()
+
+    if "SARANATHAN" in p1_upper:
+        report.doc_metadata.institution = "Saranathan College of Engineering"
+    elif "COLLEGE OF ENGINEERING" in p1_upper:
+        report.doc_metadata.institution = "College of Engineering"
+
+    if "ARTIFICIAL INTELLIGENCE" in p1_upper or "AI & DS" in p1_upper or "AI AND DS" in p1_upper:
+        report.doc_metadata.department = "Department of AI & DS"
+        report.doc_metadata.programme = "B.Tech AI & DS"
+
+    if "REGULATION 2024" in p1_upper or "R2024" in p1_upper or "R-2024" in p1_upper:
+        report.doc_metadata.regulation = "R2024"
+
+    sem_m = re.search(r"SEMESTER\s*([I|V|X|0-9]+)", p1_upper)
+    if sem_m:
+        report.doc_metadata.semester = f"Semester {sem_m.group(1)}"
+
+    ay_m = re.search(r"(202\d\s*-\s*202\d|NOV\s*/\s*DEC\s*202\d|APR\s*/\s*MAY\s*202\d)", p1_upper)
+    if ay_m:
+        report.doc_metadata.exam_session = ay_m.group(1)
+
+    dt_m = re.search(r"DATE\s*:\s*(\d{2}[-/\.]\d{2}[-/\.]\d{4})", p1_upper)
+    if dt_m:
+        report.doc_metadata.publication_date = dt_m.group(1)
+
+    # 3. COE Noise Headers & Footers to Filter Out
+    noise_patterns = [
+        r"OFFICE OF THE CONTROLLER OF EXAMINATIONS",
+        r"SARANATHAN COLLEGE OF ENGINEERING",
+        r"END SEMESTER EXAMINATIONS",
+        r"RESULT SHEET",
+        r"PAGE\s*\d+\s*OF\s*\d+",
+        r"CONTROLLER OF EXAMINATIONS",
+        r"SIGNATURE OF",
+        r"ACADEMIC YEAR",
+        r"DEPARTMENT OF",
+    ]
+
+    extracted_records: List[StudentResultRecord] = []
+    inspector_items: List[Dict[str, Any]] = []
+    quarantined_tokens: List[Dict[str, Any]] = []
+    course_headers_detected = []
+    student_reg_pattern = re.compile(r"^(8138\d{8}|\d{12})\b")
+
+    for page_idx in range(len(doc)):
+        page = doc[page_idx]
+        src_page = page_idx + 1
+        page_lines = page_texts[page_idx].split("\n")
+
+        # Scan for course codes in page header
+        for line in page_lines[:15]:
+            codes = re.findall(r"\b([A-Z]{2}\d{5}|24[A-Z]{2}\d{3}|[A-Z]{2}24\d{3}|24[-_][A-Z]{2}[-_]\d{3})\b", line.upper())
+            for ccode in codes:
+                can_name, code, cred, sem, cat, conf, amb = resolve_subject_info(ccode)
+                if code not in [ch["code"] for ch in course_headers_detected]:
+                    course_headers_detected.append({
+                        "code": code or ccode,
+                        "canonical_name": can_name,
+                        "credits": cred,
+                        "semester": sem,
+                        "category": cat,
+                        "confidence": conf
+                    })
+
+        # Process text blocks from page
+        blocks = page.get_text("blocks")
+        for b in blocks:
+            b_text = b[4].strip()
+            if not b_text:
+                continue
+
+            lines_in_block = b_text.split("\n")
+            for line_str in lines_in_block:
+                line_clean = line_str.strip()
+                if not line_clean:
+                    continue
+                if any(re.search(p, line_clean.upper()) for p in noise_patterns):
+                    continue
+                m = student_reg_pattern.match(line_clean)
+                if m:
+                    regno = m.group(1)
+                    after_reg = line_clean[len(regno):].strip()
+
+                    tokens = [t.strip().upper() for t in re.split(r"[\s\t,]+", after_reg) if t.strip()]
+                    name_parts = []
+                    grades_found = []
+                    for tok in tokens:
+                        g_norm = _grade_normalize(tok)
+                        if g_norm:
+                            grades_found.append((tok, g_norm))
+                        elif tok in ["UA", "AB", "NR", "NE", "FAIL", "F", "ABSENT", "WITHHELD"]:
+                            quarantined_tokens.append({
+                                "row": f"Page {src_page}",
+                                "regno": regno,
+                                "column": "PDF Text Stream",
+                                "raw_value": tok,
+                                "reason": f"Unrecognized PDF result status '{tok}' quarantined requiring faculty review."
+                            })
+                        elif re.match(r"^[A-Z\.]+$", tok) and len(grades_found) == 0:
+                            name_parts.append(tok)
+
+                    raw_name = " ".join(name_parts)
+
+                    for idx, (raw_g, norm_g) in enumerate(grades_found):
+                        if idx < len(course_headers_detected):
+                            ch = course_headers_detected[idx]
+                            subj_code = ch["code"]
+                            subj_name = ch["canonical_name"]
+                            credits_val = ch["credits"]
+                            subj_sem = ch["semester"]
+                        else:
+                            subj_code = f"SUBJ_{idx+1}"
+                            subj_name = f"Subject {idx+1}"
+                            credits_val = 3.0
+                            subj_sem = 3
+
+                        rec = StudentResultRecord(
+                            register_number=regno,
+                            student_name=raw_name,
+                            subject_code=subj_code,
+                            subject_name=subj_name,
+                            original_subject_text=subj_code,
+                            credits=credits_val,
+                            result_status=norm_g,
+                            raw_result_status=raw_g,
+                            result_semester=3,
+                            subject_semester=subj_sem,
+                            source_type="PDF",
+                            source_page=src_page,
+                            extraction_confidence=0.95
+                        )
+                        extracted_records.append(rec)
+
+                        inspector_items.append({
+                            "source_page": src_page,
+                            "raw_text": line_clean,
+                            "parsed_regno": regno,
+                            "parsed_name": raw_name or "—",
+                            "parsed_subject": subj_name,
+                            "parsed_grade": norm_g,
+                            "confidence": "HIGH" if ch.get("confidence", 1.0) >= 0.8 else "REVIEW"
+                        })
+
+    # Secondary fallback using pdfplumber if PyMuPDF blocks were plain structured grid tables
+    if len(extracted_records) == 0:
+        try:
+            import pdfplumber
+            with pdfplumber.open(io.BytesIO(pdf_bytes)) as plumber_pdf:
+                for p_idx, p in enumerate(plumber_pdf.pages):
+                    src_page = p_idx + 1
+                    tables = p.extract_tables()
+                    for table in tables:
+                        if not table or len(table) < 2:
+                            continue
+                        headers = [str(c or "").strip() for c in table[0]]
+                        for row_idx in range(1, len(table)):
+                            row = table[row_idx]
+                            if not row:
+                                continue
+                            row_str = " ".join(str(c or "") for c in row)
+                            m = student_reg_pattern.search(row_str)
+                            if m:
+                                regno = m.group(1)
+                                name_val = m.group(2).strip() if m.group(2) else ""
+                                for c_idx in range(2, len(row)):
+                                    cell_v = str(row[c_idx] or "").strip()
+                                    norm_g = _grade_normalize(cell_v)
+                                    if norm_g:
+                                        subj_hdr = headers[c_idx] if c_idx < len(headers) else f"Column_{c_idx}"
+                                        can_name, code, cred, sem, cat, conf, amb = resolve_subject_info(subj_hdr)
+                                        rec = StudentResultRecord(
+                                            register_number=regno,
+                                            student_name=name_val,
+                                            subject_code=code or subj_hdr,
+                                            subject_name=can_name,
+                                            original_subject_text=subj_hdr,
+                                            credits=cred if cred > 0 else 3.0,
+                                            result_status=norm_g,
+                                            raw_result_status=cell_v,
+                                            source_type="PDF",
+                                            source_page=src_page,
+                                            extraction_confidence=0.90
+                                        )
+                                        extracted_records.append(rec)
+                                        inspector_items.append({
+                                            "source_page": src_page,
+                                            "raw_text": row_str,
+                                            "parsed_regno": regno,
+                                            "parsed_name": name_val or "—",
+                                            "parsed_subject": can_name,
+                                            "parsed_grade": norm_g,
+                                            "confidence": "HIGH"
+                                        })
+        except Exception as pe:
+            report.warnings.append(f"pdfplumber table extraction notice: {pe}")
+
+    report.records = extracted_records
+    report.raw_inspector_items = inspector_items
+    report.quarantined_tokens = quarantined_tokens
+    report.student_count = len(set(r.register_number for r in extracted_records))
+    report.subject_count = len(set(r.subject_name for r in extracted_records))
+    report.result_cell_count = len(extracted_records)
+    report.unknown_token_count = len(quarantined_tokens)
+
+    if report.result_cell_count > 0:
+        base_conf = 0.96
+        if report.unknown_token_count > 0:
+            base_conf -= min(0.15, report.unknown_token_count * 0.02)
+        report.overall_confidence = round(max(0.50, base_conf), 2)
+    elif report.unknown_token_count > 0:
+        report.overall_confidence = 0.50
+        report.ok = True
+        report.warnings.append("Document contains quarantined unknown result tokens requiring faculty review.")
+    else:
+        report.overall_confidence = 0.0
+        report.ok = False
+        report.fatal_error = "Could not extract student result records from PDF. Please review file format or upload Excel sheet."
+
+    return report
+
+
+def reconcile_pdf_and_excel(
+    pdf_records: List[StudentResultRecord],
+    excel_records: Any
+) -> ReconciliationReport:
+    """
+    Reconcile COE PDF extraction against uploaded Excel dataset.
+    Matches by (register_number, subject_code/canonical_subject) and checks result_status.
+    """
+    report = ReconciliationReport()
+    pdf_map = {(r.register_number.upper(), r.subject_name.strip().lower()): r for r in pdf_records}
+
+    excel_map = {}
+    if isinstance(excel_records, pd.DataFrame):
+        for _, row in excel_records.iterrows():
+            reg = str(row["regno"]).strip().upper()
+            subj = str(row["subject"]).strip().lower()
+            excel_map[(reg, subj)] = row
+    elif isinstance(excel_records, list):
+        for r in excel_records:
+            if hasattr(r, "regno"):
+                reg = str(r.regno).strip().upper()
+                subj = str(r.subject).strip().lower()
+                excel_map[(reg, subj)] = r
+            elif isinstance(r, dict):
+                reg = str(r.get("regno", "")).strip().upper()
+                subj = str(r.get("subject", "")).strip().lower()
+                excel_map[(reg, subj)] = r
+
+    all_keys = set(pdf_map.keys()) | set(excel_map.keys())
+
+    for key in all_keys:
+        pdf_rec = pdf_map.get(key)
+        excel_item = excel_map.get(key)
+
+        if pdf_rec is not None and excel_item is not None:
+            excel_grade = excel_item["grade"] if isinstance(excel_item, (pd.Series, dict)) else excel_item.grade
+            excel_name = excel_item["name"] if isinstance(excel_item, (pd.Series, dict)) else excel_item.name
+            if pdf_rec.result_status == excel_grade:
+                report.matched_count += 1
+            else:
+                report.mismatched_count += 1
+                report.mismatched_records.append({
+                    "register_number": pdf_rec.register_number,
+                    "student_name": pdf_rec.student_name or excel_name,
+                    "subject": pdf_rec.subject_name,
+                    "pdf_grade": pdf_rec.result_status,
+                    "excel_grade": excel_grade,
+                    "status": "MISMATCH"
+                })
+        elif pdf_rec is not None and excel_item is None:
+            report.missing_in_excel.append({
+                "register_number": pdf_rec.register_number,
+                "student_name": pdf_rec.student_name,
+                "subject": pdf_rec.subject_name,
+                "pdf_grade": pdf_rec.result_status,
+            })
+        elif excel_item is not None and pdf_rec is None:
+            excel_reg = excel_item["regno"] if isinstance(excel_item, (pd.Series, dict)) else excel_item.regno
+            excel_name = excel_item["name"] if isinstance(excel_item, (pd.Series, dict)) else excel_item.name
+            excel_subj = excel_item["subject"] if isinstance(excel_item, (pd.Series, dict)) else excel_item.subject
+            excel_grade = excel_item["grade"] if isinstance(excel_item, (pd.Series, dict)) else excel_item.grade
+            report.missing_in_pdf.append({
+                "register_number": excel_reg,
+                "student_name": excel_name,
+                "subject": excel_subj,
+                "excel_grade": excel_grade,
+            })
+
+    return report
+
+
+def pdf_records_to_dataframe(pdf_records: List[StudentResultRecord]) -> pd.DataFrame:
+    """Convert StudentResultRecord list into normalized pandas DataFrame for compute_class_analysis."""
+    rows = []
+    for idx, r in enumerate(pdf_records):
+        rows.append({
+            "regno": r.register_number,
+            "name": r.student_name,
+            "subject": r.subject_name,
+            "course_code": r.subject_code,
+            "credits": r.credits if (r.credits and r.credits > 0) else 3.0,
+            "grade": r.result_status,
+            "points": GRADE_POINTS.get(r.result_status, 0.0),
+            "src_row": r.source_page,
+            "source_type": r.source_type,
+            "batch": r.batch_number,
+        })
+    return pd.DataFrame(rows)
+
 
 # =============================================================================
 # 4) DATA MODELS
@@ -318,6 +882,10 @@ class ValidationReport:
     mapped_columns: Dict[str, str] = field(default_factory=dict)
     discovered_metadata: Dict[str, str] = field(default_factory=dict)
     fatal_error: str = ""
+    format_detected: str = "long"  # "wide" | "long"
+    subject_mappings: List[Dict[str, Any]] = field(default_factory=list)
+    quarantined_tokens: List[Dict[str, Any]] = field(default_factory=list)
+    copy_paste_cleaned_count: int = 0
 
     def add(self, severity: str, row: str, field: str, value: str, reason: str) -> None:
         self.issues.append(ValidationIssue(severity, row, field, str(value), reason))
@@ -374,6 +942,11 @@ class SubjectAnalysis:
     grade_counts: Dict[str, int]
     top_students: List[Dict[str, Any]] = field(default_factory=list)
     u_students: List[Dict[str, Any]] = field(default_factory=list)
+    semester: int = 0
+    category: str = "Sem 1-4 Foundation"
+    rank: Optional[int] = None
+    difficulty_score: float = 0.0
+    grade_tier_counts: Dict[str, int] = field(default_factory=dict)
 
     @property
     def arrear_count(self) -> int:
@@ -394,6 +967,8 @@ class SubjectAnalysis:
                 "priority_level": self.priority_level,
                 "gp_diff_vs_class": self.gp_diff_vs_class,
                 "u_pct": self.u_pct, "grade_counts": self.grade_counts,
+                "semester": self.semester, "category": self.category, "rank": self.rank,
+                "difficulty_score": self.difficulty_score, "grade_tier_counts": self.grade_tier_counts,
                 "top_students": [(s["regno"], s["name"], s["grade"], s["points"]) for s in self.top_students],
                 "u_students": [(s["regno"], s["name"]) for s in self.u_students]}
 
@@ -431,6 +1006,10 @@ class StudentAnalysis:
     is_high_performer: bool = False
     strongest_subjects: List[str] = field(default_factory=list)
     attention_subjects: List[str] = field(default_factory=list)
+    backlog_arrear_count: int = 0
+    has_backlog_arrears: bool = False
+    backlog_subjects: List[str] = field(default_factory=list)
+    risk_level: str = "Low Risk / Cleared"
     meta: Dict[str, str] = field(default_factory=dict)
 
     @property
@@ -455,6 +1034,10 @@ class StudentAnalysis:
              "attention": self.attention, "is_high_performer": self.is_high_performer,
              "strongest_subjects": self.strongest_subjects,
              "attention_subjects": self.attention_subjects,
+             "backlog_arrear_count": self.backlog_arrear_count,
+             "has_backlog_arrears": self.has_backlog_arrears,
+             "backlog_subjects": self.backlog_subjects,
+             "risk_level": self.risk_level,
              "courses": [{"subject": c.subject, "course_code": c.course_code,
                           "credits": c.credits, "grade": c.grade, "points": c.points}
                          for c in self.courses]}
@@ -481,12 +1064,17 @@ class ClassAnalysis:
     sa_student_count: int = 0
     wd_student_count: int = 0
     malpractice_student_count: int = 0
+    backlog_student_count: int = 0
+    format_detected: str = "long"
     pass_rate: Optional[float] = None
     record_pass_rate: Optional[float] = None
     grade_distribution: Dict[str, int] = field(default_factory=dict)
     subject_distribution: Dict[str, int] = field(default_factory=dict)
     students: List[StudentAnalysis] = field(default_factory=list)
     subjects: List[SubjectAnalysis] = field(default_factory=list)
+    subject_mappings: List[Dict[str, Any]] = field(default_factory=list)
+    quarantined_tokens: List[Dict[str, Any]] = field(default_factory=list)
+    copy_paste_cleaned_count: int = 0
     metadata: Dict[str, Any] = field(default_factory=dict)
 
     @property
@@ -503,12 +1091,16 @@ class ClassAnalysis:
                 "arrear_student_count": self.arrear_student_count, "multiple_u_count": self.multiple_u_count,
                 "sa_student_count": self.sa_student_count, "wd_student_count": self.wd_student_count,
                 "malpractice_student_count": self.malpractice_student_count,
+                "backlog_student_count": self.backlog_student_count,
+                "format_detected": self.format_detected,
                 "pass_rate": self.pass_rate, "record_pass_rate": self.record_pass_rate,
                 "grade_distribution": self.grade_distribution,
                 "subject_distribution": self.subject_distribution,
+                "subject_mappings": self.subject_mappings,
                 "students": [s.to_dict() for s in self.students],
                 "subjects": [s.to_dict() for s in self.subjects],
                 "metadata": self.metadata}
+
 
 
 @dataclass
@@ -621,6 +1213,53 @@ def _columns_to_targets(columns: List[str]) -> Dict[str, str]:
 
     return mapping
 
+def _clean_copy_paste_df(df: pd.DataFrame) -> Tuple[pd.DataFrame, int]:
+    """Sanitize noisy COE PDF copy-paste dumps, split merged RegNo+Name cells, and strip headers/footers."""
+    if df is None or len(df) == 0:
+        return df, 0
+
+    df = df.copy().fillna("")
+    cleaned_rows_count = 0
+    noise_keywords = [
+        "SARANATHAN COLLEGE", "CONTROLLER OF EXAMINATIONS", "END SEMESTER",
+        "RESULT SHEET", "PAGE ", "SIGNATURE OF", "TOTAL PASSED", "PASS PERCENTAGE",
+        "DEPT OF AI", "CONTROLLER OF EXAM"
+    ]
+
+    valid_row_indices = []
+    for idx in range(len(df)):
+        row_str = " ".join(str(v).strip().upper() for v in df.iloc[idx].tolist())
+        if any(kw in row_str for kw in noise_keywords):
+            cleaned_rows_count += 1
+            continue
+        valid_row_indices.append(idx)
+
+    if valid_row_indices and len(valid_row_indices) < len(df):
+        df = df.iloc[valid_row_indices].reset_index(drop=True)
+
+    reg_name_pattern = re.compile(r"^(8138\d{8}|\d{12})\s*([A-Za-z\.\s]{2,})$")
+    split_regno = []
+    split_name = []
+
+    for cidx in range(min(3, len(df.columns))):
+        col_vals = [str(v).strip() for v in df.iloc[:, cidx].tolist()]
+        matches = [reg_name_pattern.match(v) for v in col_vals if v and reg_name_pattern.match(v)]
+        if len(matches) >= max(1, int(len(df) * 0.2)):
+            for v in col_vals:
+                m = reg_name_pattern.match(v)
+                if m:
+                    split_regno.append(m.group(1))
+                    split_name.append(m.group(2).strip())
+                else:
+                    split_regno.append(v)
+                    split_name.append("")
+            df.insert(0, "Register Number (Cleaned)", split_regno)
+            df.insert(1, "Student Name (Cleaned)", split_name)
+            cleaned_rows_count += len(matches)
+            break
+
+    return df, cleaned_rows_count
+
 
 def _read_workbook(data: bytes) -> Tuple[Optional[pd.DataFrame], ValidationReport]:
     """Locate the most populated sheet and the best header row from an .xlsx."""
@@ -653,6 +1292,9 @@ def _read_workbook(data: bytes) -> Tuple[Optional[pd.DataFrame], ValidationRepor
         return None, report
 
     scan = scan.fillna("")
+    scan, cleaned_cnt = _clean_copy_paste_df(scan)
+    report.copy_paste_cleaned_count = cleaned_cnt
+
     best_row = 0
     best_score = 0
     limit = min(16, len(scan))
@@ -662,14 +1304,20 @@ def _read_workbook(data: bytes) -> Tuple[Optional[pd.DataFrame], ValidationRepor
         if nonempty == 0:
             continue
         mapped = _columns_to_targets(list(map(str, row)))
-        score = nonempty + len(mapped) * 10
+        score = nonempty + len(mapped or {}) * 10
         if score > best_score:
             best_score = score
             best_row = idx
     report.header_row = best_row
 
-    df = pd.read_excel(io.BytesIO(data), sheet_name=chosen, header=best_row,
-                       engine="openpyxl", dtype=str)
+    # Re-slice scan starting from best_row as header
+    if best_row < len(scan):
+        headers = [str(c).strip() or f"Column_{i}" for i, c in enumerate(scan.iloc[best_row].tolist())]
+        df = scan.iloc[best_row + 1:].copy()
+        df.columns = headers
+    else:
+        df = scan.copy()
+
     df = df.fillna("")
     return df, report
 
@@ -709,7 +1357,7 @@ def _readable_required_columns() -> str:
 
 
 def validate_and_clean(data: bytes, file_name: str, custom_mapping: Optional[Dict[str, str]] = None) -> AnalyticsResult:
-    """Validate + normalize the uploaded workbook into clean GradeRecords."""
+    """Validate + normalize the uploaded workbook into clean GradeRecords (supporting wide and long formats)."""
     report = ValidationReport()
 
     df, report = _read_workbook(data)
@@ -717,95 +1365,232 @@ def validate_and_clean(data: bytes, file_name: str, custom_mapping: Optional[Dic
         return AnalyticsResult(ok=False, report=report)
 
     cols = [str(c) for c in df.columns.tolist()]
-    mapping = custom_mapping or _columns_to_targets(cols)
+    report.total_input_rows = len(df)
+
+    # 1. Determine format type: Wide or Long
+    mapping = custom_mapping or _columns_to_targets(cols) or {}
     report.mapped_columns = mapping
 
-    missing = [f for f in REQUIRED_FIELDS if f not in mapping or not mapping[f]]
-    if missing:
-        report.fatal_error = (
-            "Could not locate required columns in the detected header row "
-            f"(row {report.header_row + 1}). Missing: {', '.join(missing)}. "
-            "Expected columns such as: " + _readable_required_columns() + "."
-        )
-        return AnalyticsResult(ok=False, report=report)
+    has_regno = "regno" in mapping and bool(mapping["regno"])
+    has_subject_col = "subject" in mapping and bool(mapping["subject"])
+    has_grade_col = "grade" in mapping and bool(mapping["grade"])
 
-    report.total_input_rows = len(df)
+    is_wide_format = False
+    if has_regno and not (has_subject_col and has_grade_col):
+        is_wide_format = True
+    elif has_regno and has_subject_col and has_grade_col:
+        is_wide_format = False
+
+    regno_col = mapping.get("regno")
+    name_col = mapping.get("name")
+    
+    ignored_headers = {
+        "s.no", "sl.no", "sno", "slno", "serial", "serial no", "serial number",
+        "regno", "register no", "register number", "reg number", "roll no", "student id",
+        "name", "student name", "candidate name", "batch", "dept", "department",
+        "section", "sec", "total", "total marks", "remarks", "result", "cgpa", "gpa",
+        "arrears", "arrear count", "passed", "failed", "status", "attendance", "attendance %"
+    }
+
+    if not is_wide_format and not (has_subject_col and has_grade_col):
+        candidate_grade_cols = []
+        for col in cols:
+            norm_col = _norm_header(col)
+            if norm_col in ignored_headers or col == regno_col or col == name_col:
+                continue
+            sample_vals = [df[col].iloc[i] for i in range(min(15, len(df)))]
+            valid_grade_hits = sum(1 for v in sample_vals if _grade_normalize(v) in GRADE_POINTS)
+            if valid_grade_hits >= 2 or resolve_subject_info(col)[5] >= 0.60:
+                candidate_grade_cols.append(col)
+        if candidate_grade_cols and has_regno:
+            is_wide_format = True
 
     records: List[GradeRecord] = []
     seen: Dict[Tuple[str, str], GradeRecord] = {}
     dropped = 0
     dup = 0
+    subject_mappings_log: List[Dict[str, Any]] = []
 
-    col_index = {t: (cols.index(v) if v and v in cols else None) for t, v in mapping.items()}
-    for ridx in range(len(df)):
-        row = df.iloc[ridx]
-        rno = ridx + report.header_row + 2
-        vals: Dict[str, str] = {}
-        for target, ci in col_index.items():
-            if ci is None:
-                vals[target] = ""
-            else:
-                try:
-                    vals[target] = _clean_value(row.iloc[ci])
-                except Exception:
-                    vals[target] = ""
-
-        if not vals["regno"]:
-            dropped += 1
-            report.add("error", str(rno), "regno", "", "Missing student/register number.")
-            continue
-        if not vals["subject"]:
-            dropped += 1
-            report.add("error", str(rno), "subject", "", "Missing subject/course name.")
-            continue
-        grade = _grade_normalize(vals["grade"])
-        if not grade:
-            dropped += 1
-            report.add("error", str(rno), "grade", vals["grade"], "Missing or blank final grade.")
-            continue
-        if grade not in GRADE_POINTS:
-            dropped += 1
-            report.add("error", str(rno), "grade", vals["grade"],
-                       f"Unknown grade '{vals['grade']}' (expecting O, A+, A, B+, B, C, U, RA, SA, WD, MM, WH2).")
-            continue
-
-        credit = _parse_credits(vals["credits"])
-        if credit is None:
-            report.add("warning", str(rno), "credits", vals["credits"],
-                       "Missing/invalid credits; treated as 0 (record still counted).")
-            credit = 0.0
-
-        norm_regno = vals["regno"].strip().upper()
-        norm_subject = vals["subject"].strip().lower()
-        key = (norm_regno, norm_subject)
-
-        if key in seen:
-            pre = seen[key]
-            if pre.credits == credit and pre.grade == grade:
-                dup += 1
-                report.add("warning", str(rno), "duplicate", vals["regno"],
-                           "Duplicate record (same student + subject exported twice) removed.")
+    if is_wide_format:
+        report.format_detected = "wide"
+        if not regno_col:
+            for col in cols:
+                if _norm_header(col) in ignored_headers and ("reg" in _norm_header(col) or "roll" in _norm_header(col)):
+                    regno_col = col
+                    break
+            if not regno_col:
+                regno_col = cols[0]
+        
+        subj_cols = []
+        for col in cols:
+            norm_col = _norm_header(col)
+            if col == regno_col or col == name_col:
                 continue
-            dropped += 1
-            report.add("warning", str(rno), "conflict", vals["regno"],
-                       f"Conflicting repeat grade (same student+subject seen at row {pre.src_row}). "
-                       "Kept first occurrence only.")
-            continue
+            if norm_col in ignored_headers:
+                continue
+            can_name, code, cred, sem, cat, conf, is_amb = resolve_subject_info(col)
+            sample_vals = [df[col].iloc[i] for i in range(min(15, len(df)))]
+            grade_count = sum(1 for v in sample_vals if _grade_normalize(v) in GRADE_POINTS)
+            if grade_count > 0 or conf >= 0.60:
+                subj_cols.append(col)
+                subject_mappings_log.append({
+                    "raw_header": col,
+                    "canonical_subject": can_name,
+                    "course_code": code,
+                    "credits": cred if cred > 0 else 3.0,
+                    "semester": sem,
+                    "category": cat,
+                    "confidence": conf,
+                    "is_ambiguous": is_amb
+                })
 
-        meta = {opt: vals[opt] for opt in OPTIONAL_FIELDS if vals.get(opt)}
-        rec = GradeRecord(
-            regno=vals["regno"],
-            name=vals["name"] or "",
-            subject=vals["subject"],
-            course_code=vals["course_code"] or "",
-            credits=credit,
-            grade=grade,
-            points=GRADE_POINTS[grade],
-            src_row=rno,
-            meta=meta,
-        )
-        seen[key] = rec
-        records.append(rec)
+        report.subject_mappings = subject_mappings_log
+
+        if not subj_cols:
+            report.fatal_error = (
+                "Wide-format Excel detected, but could not locate valid subject columns with declared grades. "
+                "Please verify column headers."
+            )
+            return AnalyticsResult(ok=False, report=report)
+
+        for ridx in range(len(df)):
+            row = df.iloc[ridx]
+            rno = ridx + report.header_row + 2
+            raw_reg = _clean_value(row[regno_col]) if regno_col in df.columns else ""
+            raw_name = _clean_value(row[name_col]) if name_col and name_col in df.columns else ""
+
+            if not raw_reg:
+                dropped += 1
+                report.add("error", str(rno), "regno", "", "Missing student register number.")
+                continue
+
+            for col in subj_cols:
+                raw_g = _clean_value(row[col])
+                if not raw_g:
+                    continue
+                grade = _grade_normalize(raw_g)
+                if not grade or grade not in GRADE_POINTS:
+                    report.quarantined_tokens.append({
+                        "row": str(rno),
+                        "regno": raw_reg,
+                        "column": col,
+                        "raw_value": raw_g,
+                        "reason": f"Unrecognized result token '{raw_g}' quarantined for manual department review."
+                    })
+                    report.add("warning", str(rno), col, raw_g, f"Ignored & quarantined unrecognized result token '{raw_g}'.")
+                    continue
+
+                can_name, code, cred, sem, cat, conf, is_amb = resolve_subject_info(col, custom_mapping)
+                credit_val = cred if cred > 0 else 3.0
+
+                key = (raw_reg.strip().upper(), can_name.strip().lower())
+                if key in seen:
+                    dup += 1
+                    report.add("warning", str(rno), "duplicate", raw_reg, f"Duplicate grade for subject '{can_name}' removed.")
+                    continue
+
+                meta = {}
+                for opt in OPTIONAL_FIELDS:
+                    opt_col = mapping.get(opt)
+                    if opt_col and opt_col in df.columns:
+                        meta[opt] = _clean_value(row[opt_col])
+
+                rec = GradeRecord(
+                    regno=raw_reg,
+                    name=raw_name,
+                    subject=can_name,
+                    course_code=code,
+                    credits=credit_val,
+                    grade=grade,
+                    points=GRADE_POINTS[grade],
+                    src_row=rno,
+                    meta=meta,
+                )
+                seen[key] = rec
+                records.append(rec)
+
+    else:
+        report.format_detected = "long"
+        missing = [f for f in REQUIRED_FIELDS if f not in mapping or not mapping[f]]
+        if missing:
+            report.fatal_error = (
+                "Could not locate required columns in the detected header row "
+                f"(row {report.header_row + 1}). Missing: {', '.join(missing)}. "
+                "Expected columns such as: " + _readable_required_columns() + "."
+            )
+            return AnalyticsResult(ok=False, report=report)
+
+        col_index = {t: (cols.index(v) if v and v in cols else None) for t, v in mapping.items()}
+        for ridx in range(len(df)):
+            row = df.iloc[ridx]
+            rno = ridx + report.header_row + 2
+            vals: Dict[str, str] = {}
+            for target, ci in col_index.items():
+                if ci is None:
+                    vals[target] = ""
+                else:
+                    try:
+                        vals[target] = _clean_value(row.iloc[ci])
+                    except Exception:
+                        vals[target] = ""
+
+            if not vals["regno"]:
+                dropped += 1
+                report.add("error", str(rno), "regno", "", "Missing student/register number.")
+                continue
+            if not vals["subject"]:
+                dropped += 1
+                report.add("error", str(rno), "subject", "", "Missing subject/course name.")
+                continue
+            grade = _grade_normalize(vals["grade"])
+            if not grade or grade not in GRADE_POINTS:
+                report.quarantined_tokens.append({
+                    "row": str(rno),
+                    "regno": vals["regno"],
+                    "column": mapping.get("grade", "grade"),
+                    "raw_value": vals["grade"],
+                    "reason": f"Unrecognized grade token '{vals['grade']}' quarantined."
+                })
+                dropped += 1
+                report.add("error", str(rno), "grade", vals["grade"],
+                           f"Unknown grade '{vals['grade']}' (expecting O, A+, A, B+, B, C, U, RA, SA, WD, MM, WH2).")
+                continue
+
+            can_name, code, cred, sem, cat, conf, is_amb = resolve_subject_info(vals["subject"], custom_mapping)
+            course_code_val = vals["course_code"] or code
+            credit_parsed = _parse_credits(vals["credits"])
+            credit_val = credit_parsed if credit_parsed is not None else (cred if cred > 0 else 3.0)
+
+            norm_regno = vals["regno"].strip().upper()
+            norm_subject = can_name.strip().lower()
+            key = (norm_regno, norm_subject)
+
+            if key in seen:
+                pre = seen[key]
+                if pre.credits == credit_val and pre.grade == grade:
+                    dup += 1
+                    report.add("warning", str(rno), "duplicate", vals["regno"],
+                               "Duplicate record (same student + subject exported twice) removed.")
+                    continue
+                dropped += 1
+                report.add("warning", str(rno), "conflict", vals["regno"],
+                           f"Conflicting repeat grade (same student+subject seen at row {pre.src_row}). Kept first occurrence only.")
+                continue
+
+            meta = {opt: vals[opt] for opt in OPTIONAL_FIELDS if vals.get(opt)}
+            rec = GradeRecord(
+                regno=vals["regno"],
+                name=vals["name"] or "",
+                subject=can_name,
+                course_code=course_code_val,
+                credits=credit_val,
+                grade=grade,
+                points=GRADE_POINTS[grade],
+                src_row=rno,
+                meta=meta,
+            )
+            seen[key] = rec
+            records.append(rec)
 
     report.valid_records = len(records)
     report.dropped_rows = dropped
@@ -834,11 +1619,6 @@ def validate_and_clean(data: bytes, file_name: str, custom_mapping: Optional[Dic
     return AnalyticsResult(ok=True, records=out, report=report)
 
 
-# =============================================================================
-# 6) ANALYTICS ENGINE & DETERMINISTIC INSIGHTS (UI-agnostic)
-# =============================================================================
-
-
 def _round(x: Optional[float], ndigits: int = 2) -> Optional[float]:
     if x is None:
         return None
@@ -852,7 +1632,7 @@ def _pct(num: Union[int, float], den: Union[int, float]) -> Optional[float]:
 
 
 def compute_subject_analytics(records: pd.DataFrame, class_gpa_ref: Optional[float] = None) -> List[SubjectAnalysis]:
-    """Subject-level metrics from the validated records dataframe."""
+    """Subject-level metrics from the validated records dataframe with syllabus categories & subject rankings."""
     subjects: List[SubjectAnalysis] = []
     for subject, grp in records.groupby("subject", sort=True):
         grp = grp.reset_index(drop=True)
@@ -883,14 +1663,19 @@ def compute_subject_analytics(records: pd.DataFrame, class_gpa_ref: Optional[flo
         else:
             priority = "Normal"
 
+        # Resolve syllabus metadata
+        can_name, code_syl, cred_syl, sem_syl, cat_syl, _, _ = resolve_subject_info(subject)
+
         course_code = ""
         cc = grp["course_code"].dropna().astype(str)
         cc = cc[cc.str.strip() != ""]
         if len(cc):
             course_code = cc.mode().iloc[0]
+        elif code_syl:
+            course_code = code_syl
 
         credits_series = grp["credits"].dropna().astype(float)
-        credits = float(credits_series.mode().iloc[0]) if len(credits_series) else 0.0
+        credits = float(credits_series.mode().iloc[0]) if len(credits_series) else (cred_syl if cred_syl > 0 else 3.0)
 
         top = grp.sort_values(["points", "regno"], ascending=[False, True]).head(6)
         top_students = [
@@ -905,6 +1690,22 @@ def compute_subject_analytics(records: pd.DataFrame, class_gpa_ref: Optional[flo
             for _, r in u_df.iterrows()
         ]
 
+        # Compute Difficulty Score & Grade Tiers
+        u_pct_val = u_pct or 0.0
+        avg_gp_gap = max(0.0, 8.0 - (avg_gp or 0.0))
+        diff_score = _round(u_pct_val * 0.6 + avg_gp_gap * 4.0 + credits * 1.5, 1) or 0.0
+
+        distinction_cnt = counts.get("O", 0) + counts.get("A+", 0)
+        high_pass_cnt = counts.get("A", 0) + counts.get("B+", 0)
+        pass_cnt = counts.get("B", 0) + counts.get("C", 0)
+        fail_cnt = u_count + ra_count + sa_count + wd_count + mm_count + wh2_count
+        grade_tiers = {
+            "Distinction (O/A+)": distinction_cnt,
+            "High Pass (A/B+)": high_pass_cnt,
+            "Pass (B/C)": pass_cnt,
+            "Fail / Arrear": fail_cnt,
+        }
+
         subjects.append(SubjectAnalysis(
             subject=str(subject), course_code=course_code, credits=credits,
             student_count=int(students), avg_gp=avg_gp, median_gp=median_gp,
@@ -912,12 +1713,23 @@ def compute_subject_analytics(records: pd.DataFrame, class_gpa_ref: Optional[flo
             sa_count=sa_count, wd_count=wd_count, mm_count=mm_count, wh2_count=wh2_count,
             u_pct=u_pct, priority_level=priority, gp_diff_vs_class=gp_diff,
             grade_counts=counts, top_students=top_students, u_students=u_students,
+            semester=sem_syl, category=cat_syl,
+            difficulty_score=diff_score, grade_tier_counts=grade_tiers,
         ))
+
+    # Rank subjects by arrear rate (descending), arrear count (descending), and avg GP (ascending)
+    subjects_sorted = sorted(
+        subjects,
+        key=lambda s: (-(s.u_pct or 0.0), -s.arrear_count, (s.avg_gp if s.avg_gp is not None else 10.0))
+    )
+    for idx, subj in enumerate(subjects_sorted):
+        subj.rank = idx + 1
+
     return subjects
 
 
 def compute_student_analytics(records: pd.DataFrame) -> List[StudentAnalysis]:
-    """Student-level metrics with credit-weighted GPA (Regulations 2024)."""
+    """Student-level metrics with credit-weighted GPA, risk scoring & Sem 1-4 backlog tracking."""
     students: List[StudentAnalysis] = []
     for regno, grp in records.groupby("regno", sort=True):
         grp = grp.reset_index(drop=True)
@@ -928,12 +1740,24 @@ def compute_student_analytics(records: pd.DataFrame) -> List[StudentAnalysis]:
             name = nm.mode().iloc[0]
 
         courses = []
+        backlog_subjects = []
+        backlog_arrear_count = 0
+
         for _, r in grp.iterrows():
+            subj_title = str(r["subject"])
+            grade_val = str(r["grade"])
             courses.append(StudentSubjectResult(
-                subject=str(r["subject"]), course_code=str(r["course_code"] or ""),
-                credits=float(r["credits"] or 0.0), grade=str(r["grade"]),
+                subject=subj_title, course_code=str(r["course_code"] or ""),
+                credits=float(r["credits"] or 0.0), grade=grade_val,
                 points=float(r["points"] or 0.0),
             ))
+
+            if grade_val in ARREAR_GRADES:
+                can_name, code, cred, sem, cat, conf, amb = resolve_subject_info(subj_title)
+                if sem in [1, 2, 3, 4] or cat == "Sem 1-4 Foundation":
+                    backlog_subjects.append(can_name)
+                    backlog_arrear_count += 1
+
         courses.sort(key=lambda c: (c.subject.lower(), c.course_code))
 
         passing = [c for c in courses if c.grade in PASSING_GRADES]
@@ -952,9 +1776,12 @@ def compute_student_analytics(records: pd.DataFrame) -> List[StudentAnalysis]:
 
         arrear_total = u_count + ra_count
         malpractice_total = mm_count + wh2_count
+        has_backlog = (backlog_arrear_count > 0)
 
         if arrear_total >= 2:
             attention = STATUS_MULTI_U
+        elif has_backlog:
+            attention = STATUS_BACKLOG
         elif arrear_total == 1:
             attention = STATUS_U
         elif malpractice_total > 0:
@@ -965,6 +1792,16 @@ def compute_student_analytics(records: pd.DataFrame) -> List[StudentAnalysis]:
             attention = STATUS_WD
         else:
             attention = STATUS_CLEARED
+
+        # Determine Student Risk Level
+        if arrear_total >= 3 or malpractice_total > 0:
+            risk_level = "Critical Risk"
+        elif arrear_total == 2 or has_backlog:
+            risk_level = "High Risk"
+        elif arrear_total == 1 or sa_count > 0 or wd_count > 0:
+            risk_level = "Moderate Risk"
+        else:
+            risk_level = "Low Risk / Cleared"
 
         is_high = (
             gpa is not None and gpa >= 8.5 and attention == STATUS_CLEARED
@@ -992,6 +1829,10 @@ def compute_student_analytics(records: pd.DataFrame) -> List[StudentAnalysis]:
             mm_count=mm_count, wh2_count=wh2_count,
             attention=attention, is_high_performer=is_high,
             strongest_subjects=strongest, attention_subjects=attention_subjects,
+            backlog_arrear_count=backlog_arrear_count,
+            has_backlog_arrears=has_backlog,
+            backlog_subjects=backlog_subjects,
+            risk_level=risk_level,
             meta=meta,
         ))
     return students
@@ -1058,6 +1899,9 @@ def generate_deterministic_insights(ca: ClassAnalysis) -> Dict[str, Any]:
     if ca.multiple_u_count > 0:
         insights.append(f"{ca.multiple_u_count} student(s) hold multiple arrears requiring immediate intervention.")
 
+    if ca.backlog_student_count > 0:
+        insights.append(f"⚠️ {ca.backlog_student_count} student(s) carry backlog arrears from Semesters I-IV foundation courses.")
+
     if ca.malpractice_student_count > 0:
         insights.append(f"🚨 {ca.malpractice_student_count} student(s) have recorded malpractice status (MM / WH2).")
 
@@ -1114,6 +1958,7 @@ def compute_class_analysis(records: pd.DataFrame, file_name: str) -> ClassAnalys
     ca.ra_student_count = sum(1 for s in ca.students if s.ra_count > 0)
     ca.arrear_student_count = sum(1 for s in ca.students if s.arrear_count > 0)
     ca.multiple_u_count = sum(1 for s in ca.students if s.arrear_count >= 2)
+    ca.backlog_student_count = sum(1 for s in ca.students if s.has_backlog_arrears)
     ca.sa_student_count = sum(1 for s in ca.students if s.sa_count > 0)
     ca.wd_student_count = sum(1 for s in ca.students if s.wd_count > 0)
     ca.malpractice_student_count = sum(1 for s in ca.students if s.malpractice_count > 0)
@@ -2277,6 +3122,7 @@ def status_badge(status: str) -> Span:
         STATUS_CLEARED: ("Cleared", "badge-green"),
         STATUS_U: ("Arrear (1)", "badge-red"),
         STATUS_MULTI_U: ("Multi-Arrear", "badge-red"),
+        STATUS_BACKLOG: ("Sem 1-4 Backlog", "badge-amber"),
         STATUS_SA: ("SA (Attendance)", "badge-amber"),
         STATUS_WD: ("WD (Withdrawn)", "badge-purple"),
         STATUS_MALPRACTICE: ("🚨 Malpractice", "badge-indigo"),
@@ -2496,144 +3342,88 @@ def layout(title: str, active: str, content, ca: Optional[ClassAnalysis] = None)
 
 def page_upload() -> Tuple:
     return layout("Upload", "upload", Div(
-        H1("Upload Semester Result", cls="text-2xl font-bold text-slate-800 mb-2"),
-        P("Upload an official .xlsx spreadsheet containing declared final result grades.",
-          cls="text-slate-500 mb-8"),
-        Form(
-            Div(
+        Div(
+            H1("Upload Semester Result Data", cls="text-2xl font-bold text-slate-800 mb-1"),
+            P("Select your preferred result input mode (COE PDF, Excel, or Dual Reconciliation):", cls="text-slate-500 text-sm mb-6"),
+        ),
+
+        Div(
+            # Mode A: PDF Direct Upload (Primary)
+            Form(
                 Div(
                     Div(
-                        Span("📄", cls="text-4xl mb-3 block", id="upload-icon"),
-                        P("Drag & drop your .xlsx file here", cls="text-slate-600 font-medium mb-1", id="upload-text"),
-                        P("or click to browse from system", cls="text-slate-400 text-sm", id="upload-subtext"),
-                        cls="text-center py-8"
+                        Span("📄", cls="text-3xl mb-2 block"),
+                        H3("Mode A: Upload COE Result PDF (Primary)", cls="text-sm font-bold text-slate-800 mb-1"),
+                        P("Directly parse official COE semester result PDF without manual Excel cleanup.", cls="text-xs text-slate-500 mb-3"),
+                        Input(type="file", name="file_pdf", accept=".pdf", required=True,
+                              cls="block w-full text-xs text-slate-500 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"),
                     ),
-                    Input(type="file", name="file", accept=".xlsx", aria_label="Upload Excel spreadsheet file",
-                          id="file-input",
-                          cls="absolute inset-0 w-full h-full opacity-0 cursor-pointer"),
-                    id="drop-zone",
-                    cls="relative border-2 border-dashed border-slate-300 rounded-xl hover:border-blue-400 hover:bg-blue-50/30 transition-colors"
+                    Button("Analyze PDF & Preview Extraction →", type="submit",
+                           cls="mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 px-4 rounded-lg text-sm transition-all shadow-sm"),
+                    cls="card p-5 border-l-4 border-l-blue-600"
                 ),
-                P(f"Accepted format: .xlsx only. Maximum size limit: {CFG['max_upload_mb']} MB.",
-                  cls="mt-3 text-xs text-slate-400 text-center"),
-                cls="mb-6"
+                action="/upload-pdf", method="POST", enctype="multipart/form-data",
             ),
-            # Progress overlay (hidden by default)
-            Div(
+
+            # Mode B: Excel Upload (Secondary)
+            Form(
                 Div(
-                    Div(cls="upload-spinner"),
-                    P("Uploading & analyzing…", cls="text-slate-600 font-medium mt-3", id="progress-text"),
-                    P("Please wait while we process your spreadsheet.", cls="text-slate-400 text-sm mt-1"),
-                    cls="text-center"
+                    Div(
+                        Span("📊", cls="text-3xl mb-2 block"),
+                        H3("Mode B: Upload Excel File", cls="text-sm font-bold text-slate-800 mb-1"),
+                        P("Upload wide or long format .xlsx spreadsheet containing student grades.", cls="text-xs text-slate-500 mb-3"),
+                        Input(type="file", name="file", accept=".xlsx", required=True,
+                              cls="block w-full text-xs text-slate-500 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100"),
+                    ),
+                    Button("Analyze Excel & Preview Mapping →", type="submit",
+                           cls="mt-4 w-full bg-slate-800 hover:bg-slate-900 text-white font-semibold py-2.5 px-4 rounded-lg text-sm transition-all shadow-sm"),
+                    cls="card p-5 border-l-4 border-l-emerald-600"
                 ),
-                id="upload-progress",
-                cls="hidden rounded-xl bg-white/90 backdrop-blur-sm border border-slate-200 p-8 mb-6"
+                action="/upload-preview", method="POST", enctype="multipart/form-data",
             ),
-            Button("Analyze Spreadsheet & Preview Mapping →", type="submit", id="upload-btn",
-                   cls="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold "
-                       "py-3.5 px-6 rounded-lg transition-all hover:shadow-lg active:scale-[0.98]"),
-            action="/upload-preview", method="POST", enctype="multipart/form-data",
-            cls="card p-6"
+
+            # Mode C: Dual PDF + Excel Reconciliation
+            Form(
+                Div(
+                    Div(
+                        Span("🔄", cls="text-3xl mb-2 block"),
+                        H3("Mode C: PDF + Excel Dual Reconciliation", cls="text-sm font-bold text-slate-800 mb-1"),
+                        P("Upload both PDF & Excel to detect discrepancies and verify accuracy.", cls="text-xs text-slate-500 mb-3"),
+                        Div(
+                            Div(
+                                Label("COE Result PDF:", cls="text-[11px] font-semibold text-slate-600 block mb-1"),
+                                Input(type="file", name="file_pdf", accept=".pdf", required=True,
+                                      cls="block w-full text-xs text-slate-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-[11px] file:bg-purple-50 file:text-purple-700"),
+                            ),
+                            Div(
+                                Label("Excel File:", cls="text-[11px] font-semibold text-slate-600 block mb-1"),
+                                Input(type="file", name="file_excel", accept=".xlsx", required=True,
+                                      cls="block w-full text-xs text-slate-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-[11px] file:bg-purple-50 file:text-purple-700"),
+                            ),
+                            cls="grid grid-cols-1 sm:grid-cols-2 gap-3"
+                        ),
+                    ),
+                    Button("Reconcile PDF & Excel →", type="submit",
+                           cls="mt-4 w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold py-2.5 px-4 rounded-lg text-sm transition-all shadow-sm"),
+                    cls="card p-5 border-l-4 border-l-purple-600 sm:col-span-2"
+                ),
+                action="/upload-dual", method="POST", enctype="multipart/form-data",
+            ),
+
+            cls="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-8 max-w-4xl mx-auto"
         ),
-        Style("""
-            .upload-spinner {
-                width: 40px; height: 40px; margin: 0 auto;
-                border: 4px solid #e2e8f0; border-top-color: #3b82f6;
-                border-radius: 50%; animation: spin 0.8s linear infinite;
-            }
-            @keyframes spin { to { transform: rotate(360deg); } }
-            #drop-zone.drag-over {
-                border-color: #3b82f6 !important;
-                background-color: rgba(59, 130, 246, 0.08) !important;
-                transform: scale(1.01);
-            }
-            #drop-zone.file-selected {
-                border-color: #16a34a !important;
-                background-color: rgba(22, 163, 74, 0.05) !important;
-            }
-        """),
-        Script("""
-        (function() {
-            var dropZone = document.getElementById('drop-zone');
-            var fileInput = document.getElementById('file-input');
-            var uploadIcon = document.getElementById('upload-icon');
-            var uploadText = document.getElementById('upload-text');
-            var uploadSubtext = document.getElementById('upload-subtext');
-            var uploadBtn = document.getElementById('upload-btn');
-            var progressDiv = document.getElementById('upload-progress');
-            var form = dropZone ? dropZone.closest('form') : null;
-
-            if (!dropZone || !fileInput || !form) return;
-
-            function showFileSelected(name) {
-                dropZone.classList.remove('drag-over');
-                dropZone.classList.add('file-selected');
-                uploadIcon.textContent = '✅';
-                uploadText.textContent = name;
-                uploadSubtext.textContent = 'File ready. Click the button below to analyze.';
-            }
-
-            // Drag & drop events
-            ['dragenter', 'dragover'].forEach(function(evt) {
-                dropZone.addEventListener(evt, function(e) {
-                    e.preventDefault(); e.stopPropagation();
-                    dropZone.classList.add('drag-over');
-                });
-            });
-            ['dragleave', 'drop'].forEach(function(evt) {
-                dropZone.addEventListener(evt, function(e) {
-                    e.preventDefault(); e.stopPropagation();
-                    dropZone.classList.remove('drag-over');
-                });
-            });
-
-            dropZone.addEventListener('drop', function(e) {
-                var files = e.dataTransfer.files;
-                if (files.length > 0) {
-                    var file = files[0];
-                    if (file.name.toLowerCase().endsWith('.xlsx')) {
-                        fileInput.files = files;
-                        showFileSelected(file.name);
-                    } else {
-                        uploadText.textContent = 'Only .xlsx files are accepted!';
-                        uploadText.style.color = '#dc2626';
-                        setTimeout(function() {
-                            uploadText.textContent = 'Drag & drop your .xlsx file here';
-                            uploadText.style.color = '';
-                        }, 2500);
-                    }
-                }
-            });
-
-            // File input change (click-to-browse)
-            fileInput.addEventListener('change', function() {
-                if (fileInput.files.length > 0) {
-                    showFileSelected(fileInput.files[0].name);
-                }
-            });
-
-            // Show progress on form submit
-            form.addEventListener('submit', function() {
-                if (!fileInput.files || fileInput.files.length === 0) return;
-                if (progressDiv) {
-                    progressDiv.classList.remove('hidden');
-                }
-                uploadBtn.disabled = true;
-                uploadBtn.textContent = 'Uploading…';
-                uploadBtn.classList.add('opacity-60', 'cursor-not-allowed');
-            });
-        })();
-        """),
-        cls="max-w-xl mx-auto"
+        cls="max-w-4xl mx-auto"
     ))
 
 
 def page_upload_mapping() -> Tuple:
-    """Requirements 1, 2, 3: Structure Preview, Column Mapping & Data Quality Check."""
+    """Requirements 1, 2, 3: Structure Preview, Format Detection, Column Mapping & Data Quality Check."""
     cols = SESSION.get("preview_cols", [])
     report: ValidationReport = SESSION.get("preview_report") or ValidationReport()
     filename = SESSION.get("preview_filename", "")
     mapping = report.mapped_columns or {}
+    format_type = getattr(report, "format_detected", "long")
+    subject_maps = getattr(report, "subject_mappings", [])
 
     def col_select(target: str, label: str) -> Div:
         options = [Option("-- Unmapped --", value="")]
@@ -2647,11 +3437,129 @@ def page_upload_mapping() -> Tuple:
             cls="mb-3"
         )
 
-    return layout("Excel Structure & Column Mapping", "upload", Div(
-        H1("Excel File Analysis & Mapping", cls="text-2xl font-bold text-slate-800 mb-2"),
-        P(f"File: {html.escape(filename)} · Review structure preview, column mapping, and data quality check.", cls="text-slate-500 mb-6"),
+    format_badge = (
+        Span("Wide Format (Student Rows × Subject Grade Columns)", cls="px-3 py-1 bg-blue-100 text-blue-800 text-xs font-semibold rounded-full")
+        if format_type == "wide"
+        else Span("Long Format (Row per Grade Entry)", cls="px-3 py-1 bg-green-100 text-green-800 text-xs font-semibold rounded-full")
+    )
 
-        # Requirement 1: Structure Preview Cards
+    mapping_rows = []
+    for sm in subject_maps:
+        conf_pct = int(sm["confidence"] * 100)
+        badge = (
+            Span(f"✓ Verified ({conf_pct}%)", cls="text-xs font-semibold text-green-700 bg-green-50 border border-green-200 px-2 py-0.5 rounded")
+            if sm["confidence"] >= 0.80
+            else Span(f"⚠ Review Required ({conf_pct}%)", cls="text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded")
+        )
+        mapping_rows.append(Tr(
+            Td(sm["raw_header"], cls="px-4 py-2.5 text-xs font-mono text-slate-700 border-b"),
+            Td(sm["canonical_subject"], cls="px-4 py-2.5 text-xs font-medium text-slate-900 border-b"),
+            Td(sm["course_code"] or "—", cls="px-4 py-2.5 text-xs text-slate-500 border-b"),
+            Td(f"Sem {sm['semester']} ({sm['category']})", cls="px-4 py-2.5 text-xs text-slate-600 border-b"),
+            Td(badge, cls="px-4 py-2.5 text-xs border-b"),
+        ))
+
+    subject_mapping_card = (
+        Div(
+            H3("Detected Subject Columns & Abbreviation Resolution (R2024 AI & DS Catalog)", cls="text-sm font-bold text-slate-800 mb-2"),
+            P("The deterministic parser mapped the following columns to official syllabus subjects:", cls="text-xs text-slate-500 mb-3"),
+            Div(
+                Table(
+                    Thead(Tr(
+                        Th("Raw Header", cls="px-4 py-2 text-left text-xs font-semibold text-slate-600 bg-slate-50 border-b"),
+                        Th("Resolved Canonical Subject", cls="px-4 py-2 text-left text-xs font-semibold text-slate-600 bg-slate-50 border-b"),
+                        Th("Code", cls="px-4 py-2 text-left text-xs font-semibold text-slate-600 bg-slate-50 border-b"),
+                        Th("Curriculum Group", cls="px-4 py-2 text-left text-xs font-semibold text-slate-600 bg-slate-50 border-b"),
+                        Th("Match Confidence", cls="px-4 py-2 text-left text-xs font-semibold text-slate-600 bg-slate-50 border-b"),
+                    )),
+                    Tbody(*mapping_rows),
+                    cls="w-full border border-slate-200 rounded-lg overflow-hidden"
+                ),
+                cls="overflow-x-auto mb-6"
+            ),
+            cls="card p-5 mb-6"
+        ) if mapping_rows else None
+    )
+
+    # Quarantined Tokens Card
+    quarantined = getattr(report, "quarantined_tokens", [])
+    quarantine_card = (
+        Div(
+            Div(
+                Span("⚠️", cls="text-amber-500 text-lg mr-2"),
+                H3("Unrecognized Result Token Quarantine Report", cls="text-sm font-bold text-slate-800"),
+                Span(f"{len(quarantined)} token(s) quarantined", cls="ml-auto text-xs badge badge-amber"),
+                cls="flex items-center mb-3"
+            ),
+            P("The following unknown result tokens were encountered and quarantined for department review:", cls="text-xs text-slate-500 mb-3"),
+            Div(
+                Table(
+                    Thead(Tr(
+                        Th("Row", cls="px-3 py-2 text-left text-xs font-semibold text-slate-600 bg-slate-50 border-b"),
+                        Th("Register No", cls="px-3 py-2 text-left text-xs font-semibold text-slate-600 bg-slate-50 border-b"),
+                        Th("Column / Subject", cls="px-3 py-2 text-left text-xs font-semibold text-slate-600 bg-slate-50 border-b"),
+                        Th("Raw Value", cls="px-3 py-2 text-left text-xs font-semibold text-slate-600 bg-slate-50 border-b"),
+                        Th("Status / Action", cls="px-3 py-2 text-left text-xs font-semibold text-slate-600 bg-slate-50 border-b"),
+                    )),
+                    Tbody(*[Tr(
+                        Td(q["row"], cls="px-3 py-2 text-xs font-mono border-b"),
+                        Td(q["regno"] or "—", cls="px-3 py-2 text-xs font-mono border-b"),
+                        Td(q["column"], cls="px-3 py-2 text-xs font-mono border-b"),
+                        Td(Span(q["raw_value"], cls="px-2 py-0.5 bg-amber-100 text-amber-800 font-mono font-bold rounded text-xs"), cls="px-3 py-2 border-b"),
+                        Td(q["reason"], cls="px-3 py-2 text-xs text-slate-600 border-b"),
+                    ) for q in quarantined]),
+                    cls="w-full border border-slate-200 rounded-lg overflow-hidden"
+                ),
+                cls="overflow-x-auto mb-3"
+            ),
+            cls="card p-5 border-l-4 border-l-amber-500 mb-6"
+        ) if quarantined else None
+    )
+
+    # Department Manual Alias Override Form
+    alias_override_card = Div(
+        H3("Department Manual Subject Alias Override", cls="text-sm font-bold text-slate-800 mb-2"),
+        P("Map custom non-standard classroom subject abbreviations directly to canonical syllabus subjects:", cls="text-xs text-slate-500 mb-3"),
+        Form(
+            Div(
+                Input(type="text", name="raw_token", placeholder="e.g. DSEA-LAB, ML-THEORY", required=True,
+                      cls="px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500"),
+                Select(
+                    *[Option(item["name"], value=item["name"]) for item in SYLLABUS_CATALOG_R2024],
+                    name="canonical_target", required=True,
+                    cls="px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500"
+                ),
+                Button("Save Alias Override", type="submit", cls="px-4 py-2 text-sm font-semibold bg-slate-800 text-white rounded-lg hover:bg-slate-900 transition-colors"),
+                cls="grid grid-cols-1 sm:grid-cols-3 gap-3"
+            ),
+            action="/alias-override", method="POST",
+        ),
+        cls="card p-5 mb-6"
+    )
+
+    # Copy-Paste Sanitization Alert Banner
+    cleaned_cnt = getattr(report, "copy_paste_cleaned_count", 0)
+    copy_paste_alert = (
+        Div(
+            Span("✨", cls="text-blue-500 text-lg mr-2"),
+            Span(f"PDF Copy-Paste Sanitizer active: Cleaned {cleaned_cnt} merged/shifted COE formatting anomalies.", cls="text-xs font-semibold text-blue-800"),
+            cls="flex items-center px-4 py-3 bg-blue-50 border border-blue-200 rounded-xl mb-6"
+        ) if cleaned_cnt > 0 else None
+    )
+
+    return layout("Excel Structure & Column Mapping", "upload", Div(
+        Div(
+            H1("Excel File Analysis & Preflight Review", cls="text-2xl font-bold text-slate-800 mb-1"),
+            Div(
+                Span(f"File: {html.escape(filename)}", cls="text-sm text-slate-500 mr-3"),
+                format_badge,
+                cls="flex items-center gap-2 mb-6"
+            ),
+        ),
+
+        copy_paste_alert,
+
+        # Structure Preview Cards
         Div(
             stat_card("Detected Rows", str(report.total_input_rows), "#3b82f6"),
             stat_card("Valid Records", str(report.valid_records), "#16a34a"),
@@ -2660,28 +3568,33 @@ def page_upload_mapping() -> Tuple:
             cls="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6"
         ),
 
-        # Requirement 3: Data Quality Check Report
+        # Data Quality Check Report
         Div(
-            H3("Excel Data Quality Check", cls="text-sm font-bold text-slate-800 mb-3"),
+            H3("Excel Data Quality & Preflight Check", cls="text-sm font-bold text-slate-800 mb-3"),
             Div(
                 Div(Span("✓", cls="text-green-600 font-bold mr-2"), Span(f"{report.valid_records} valid result records detected.", cls="text-sm text-slate-700"), cls="py-1 flex items-center"),
                 Div(Span("✓", cls="text-green-600 font-bold mr-2"), Span(f"Header row located automatically at row {report.header_row + 1}.", cls="text-sm text-slate-700"), cls="py-1 flex items-center"),
+                Div(Span("ℹ", cls="text-blue-600 font-bold mr-2"), Span(f"Structure recognized as {format_type.upper()} format.", cls="text-sm text-slate-700"), cls="py-1 flex items-center"),
                 Div(Span("⚠", cls="text-amber-600 font-bold mr-2"), Span(f"{report.duplicates_removed} duplicate row(s) removed during validation.", cls="text-sm text-slate-700"), cls="py-1 flex items-center") if report.duplicates_removed else None,
                 Div(Span("⚠", cls="text-amber-600 font-bold mr-2"), Span(f"{report.dropped_rows} row(s) dropped due to missing mandatory fields.", cls="text-sm text-slate-700"), cls="py-1 flex items-center") if report.dropped_rows else None,
             ),
             cls="card p-5 mb-6"
         ),
 
-        # Requirement 2: Column Mapping Form
+        quarantine_card,
+        subject_mapping_card,
+        alias_override_card,
+
+        # Column Mapping Form
         Form(
-            H3("Detected Column Mapping", cls="text-sm font-bold text-slate-800 mb-3"),
-            P("Confirm or adjust spreadsheet column assignments:", cls="text-xs text-slate-500 mb-4"),
+            H3("Student Identity Column Assignments", cls="text-sm font-bold text-slate-800 mb-3"),
+            P("Confirm or adjust student identity spreadsheet column assignments:", cls="text-xs text-slate-500 mb-4"),
             Div(
                 col_select("regno", "Register Number"),
                 col_select("name", "Student Name"),
-                col_select("subject", "Subject Name"),
-                col_select("credits", "Course Credits"),
-                col_select("grade", "Final Result Grade"),
+                col_select("subject", "Subject Name (Long format only)"),
+                col_select("credits", "Course Credits (Long format only)"),
+                col_select("grade", "Final Result Grade (Long format only)"),
                 col_select("course_code", "Course Code (Optional)"),
                 cls="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6"
             ),
@@ -3543,6 +4456,7 @@ def page_interactive_report(ca: ClassAnalysis) -> Tuple:
 
 def page_attention(ca: ClassAnalysis) -> Tuple:
     multi_u = [s for s in ca.students if s.attention == STATUS_MULTI_U]
+    backlog_u = [s for s in ca.students if s.has_backlog_arrears]
     u_only = [s for s in ca.students if s.attention == STATUS_U]
     sa = [s for s in ca.students if s.attention == STATUS_SA]
     wd = [s for s in ca.students if s.attention == STATUS_WD]
@@ -3568,7 +4482,7 @@ def page_attention(ca: ClassAnalysis) -> Tuple:
                 Div(
                     A(s.name or "—", href=f"/students/{quote(s.regno, safe='')}",
                       cls="text-sm font-medium text-slate-800 hover:text-blue-600"),
-                    P(s.regno, cls="text-xs text-slate-400 font-mono mt-0.5"),
+                    P(f"{s.regno} {'· Backlogs: ' + ', '.join(s.backlog_subjects) if s.backlog_subjects else ''}", cls="text-xs text-slate-400 font-mono mt-0.5"),
                     cls="flex-1 min-w-0"
                 ),
                 Div(
@@ -3584,33 +4498,35 @@ def page_attention(ca: ClassAnalysis) -> Tuple:
 
     return layout("Attention", "attention", Div(
         Div(
-            H1("Students Requiring Attention", cls="text-2xl font-bold text-slate-800"),
-            P(f"{len(multi_u) + len(u_only) + len(sa) + len(wd) + len(malpractice)} students need attention across categories",
+            H1("Students Requiring Academic Attention", cls="text-2xl font-bold text-slate-800"),
+            P(f"{len(multi_u) + len(backlog_u) + len(u_only) + len(sa) + len(wd) + len(malpractice)} students need targeted attention across academic & status categories",
               cls="text-slate-500 text-sm mt-1"),
             cls="mb-6"
         ),
 
         Div(
             stat_card("Multiple Arrears", str(len(multi_u)), "#dc2626"),
-            stat_card("Single Arrear", str(len(u_only)), "#dc2626"),
+            stat_card("Sem 1-4 Backlogs", str(len(backlog_u)), "#d97706"),
+            stat_card("Single Arrear", str(len(u_only)), "#ef4444"),
             stat_card("SA (Attendance)", str(len(sa)), "#d97706"),
             stat_card("Malpractice (MM/WH2)", str(len(malpractice)), "#7c3aed"),
-            cls="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8"
+            cls="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-8"
         ),
 
         Div(
             attn_section("Multiple Arrear Students (U/RA)", multi_u, "badge-red", "No students with multiple arrears."),
-            attn_section("Single Arrear Students (U/RA)", u_only, "badge-red", "No students with single arrear."),
+            attn_section("⚠️ Sem 1-4 Backlog Subject Arrears", backlog_u, "badge-amber", "No students carrying Sem 1-4 foundation backlogs."),
             cls="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6"
         ),
         Div(
-            attn_section("SA – Attendance Shortage", sa, "badge-amber", "No students with SA status."),
+            attn_section("Single Current Semester Arrear Students", u_only, "badge-red", "No students with single arrear."),
+            attn_section("SA – Shortage of Attendance", sa, "badge-amber", "No students with SA status."),
+            cls="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6"
+        ),
+        Div(
             attn_section("WD – Withdrawal Status", wd, "badge-purple", "No students with WD status."),
-            cls="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6"
-        ),
-        Div(
             attn_section("🚨 Malpractice Record (MM / WH2)", malpractice, "badge-indigo", "No students with malpractice record."),
-            cls="mb-6"
+            cls="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6"
         ),
 
         cls="max-w-7xl mx-auto"
@@ -4117,6 +5033,266 @@ def route_upload_get():
     return page_upload()
 
 
+def page_pdf_preview() -> Tuple:
+    """PDF Preflight Extraction Review & Inspection Page."""
+    pdf_report: PDFExtractionReport = SESSION.get("preview_pdf_report") or PDFExtractionReport()
+    reconcil: Optional[ReconciliationReport] = SESSION.get("reconciliation_report")
+    filename = SESSION.get("preview_pdf_filename", "coe_result.pdf")
+    meta = pdf_report.doc_metadata
+
+    # 1. Document Metadata Card
+    doc_meta_card = Div(
+        H3("COE PDF Document Metadata", cls="text-sm font-bold text-slate-800 mb-3"),
+        Div(
+            Div(Span("Institution:", cls="text-xs text-slate-400 block"), Span(meta.institution, cls="text-sm font-medium text-slate-800")),
+            Div(Span("Programme / Dept:", cls="text-xs text-slate-400 block"), Span(f"{meta.programme} ({meta.department})", cls="text-sm font-medium text-slate-800")),
+            Div(Span("Regulation & Semester:", cls="text-xs text-slate-400 block"), Span(f"{meta.regulation} · {meta.semester}", cls="text-sm font-medium text-slate-800")),
+            Div(Span("Exam Session & Date:", cls="text-xs text-slate-400 block"), Span(f"{meta.exam_session} · {meta.publication_date}", cls="text-sm font-medium text-slate-800")),
+            Div(Span("Doc Type & Pages:", cls="text-xs text-slate-400 block"), Span(f"{meta.document_type} ({meta.page_count} Pages)", cls="text-sm font-medium text-slate-800")),
+            cls="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
+        ),
+        cls="card p-5 mb-6"
+    )
+
+    # 2. Data Quality & Confidence Stats
+    conf_pct = int(pdf_report.overall_confidence * 100)
+    conf_color = "#16a34a" if conf_pct >= 85 else "#d97706"
+
+    stats_cards = Div(
+        stat_card("Extraction Confidence", f"{conf_pct}%", conf_color),
+        stat_card("Detected Students", str(pdf_report.student_count), "#3b82f6"),
+        stat_card("Detected Subjects", str(pdf_report.subject_count), "#8b5cf6"),
+        stat_card("Validated Result Cells", str(pdf_report.result_cell_count), "#16a34a"),
+        stat_card("Quarantined Tokens", str(pdf_report.unknown_token_count), "#dc2626" if pdf_report.unknown_token_count > 0 else "#64748b"),
+        cls="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6"
+    )
+
+    # 3. Raw Extraction Inspector
+    inspector_rows = []
+    for item in pdf_report.raw_inspector_items[:60]:
+        badge_cls = "bg-green-100 text-green-800" if item["confidence"] == "HIGH" else "bg-amber-100 text-amber-800"
+        page_num = item['source_page']
+        raw_escaped = item['raw_text'].replace("'", "\\'").replace('"', '\\"')
+        reg_v = item["parsed_regno"]
+        name_v = item["parsed_name"]
+        subj_v = item["parsed_subject"]
+        grade_v = item["parsed_grade"]
+        conf_v = item["confidence"]
+        inspector_rows.append(Tr(
+            Td(
+                Div(
+                    Span(f"Page {page_num}", cls="text-xs font-mono font-bold text-slate-700 block mb-0.5"),
+                    A(
+                        f"📄 View Page {page_num}",
+                        href="#",
+                        onclick=f"alert('Source Document Provenance Traceability\\n\\nRecord: {reg_v} ({name_v})\\nSubject: {subj_v} -> Grade: {grade_v}\\nConfidence: {conf_v}\\n\\nSource Location: COE PDF Page {page_num}\\nRaw Text Line:\\n{raw_escaped}'); return false;",
+                        cls="inline-block px-2 py-0.5 text-[10px] font-semibold bg-blue-50 text-blue-700 hover:bg-blue-100 rounded border border-blue-200 transition-colors"
+                    )
+                ),
+                cls="px-3 py-2 border-b"
+            ),
+            Td(item["raw_text"], cls="px-3 py-2 text-xs font-mono text-slate-600 border-b truncate max-w-xs"),
+            Td(item["parsed_regno"], cls="px-3 py-2 text-xs font-mono font-bold text-slate-900 border-b"),
+            Td(item["parsed_name"], cls="px-3 py-2 text-xs font-medium text-slate-800 border-b"),
+            Td(item["parsed_subject"], cls="px-3 py-2 text-xs text-slate-700 border-b"),
+            Td(Span(item["parsed_grade"], cls=f"px-2 py-0.5 text-xs font-bold rounded {status_badge(item['parsed_grade'])[1]}"), cls="px-3 py-2 border-b"),
+            Td(Span(item["confidence"], cls=f"px-2 py-0.5 text-[10px] font-semibold rounded {badge_cls}"), cls="px-3 py-2 border-b"),
+        ))
+
+    inspector_card = Div(
+        H3("🔍 Raw PDF Extraction Inspector (Page Provenance Traceability)", cls="text-sm font-bold text-slate-800 mb-2"),
+        P("Inspect exact page source and coordinates for parsed student grade cells. Click [View Page X] to verify source line:", cls="text-xs text-slate-500 mb-3"),
+        Div(
+            Table(
+                Thead(Tr(
+                    Th("Source Location", cls="px-3 py-2 text-left text-xs font-semibold text-slate-600 bg-slate-50 border-b"),
+                    Th("Raw Text Line", cls="px-3 py-2 text-left text-xs font-semibold text-slate-600 bg-slate-50 border-b"),
+                    Th("Parsed RegNo", cls="px-3 py-2 text-left text-xs font-semibold text-slate-600 bg-slate-50 border-b"),
+                    Th("Parsed Name", cls="px-3 py-2 text-left text-xs font-semibold text-slate-600 bg-slate-50 border-b"),
+                    Th("Subject", cls="px-3 py-2 text-left text-xs font-semibold text-slate-600 bg-slate-50 border-b"),
+                    Th("Grade", cls="px-3 py-2 text-left text-xs font-semibold text-slate-600 bg-slate-50 border-b"),
+                    Th("Confidence", cls="px-3 py-2 text-left text-xs font-semibold text-slate-600 bg-slate-50 border-b"),
+                )),
+                Tbody(*inspector_rows),
+                cls="w-full border border-slate-200 rounded-lg overflow-hidden"
+            ),
+            cls="overflow-x-auto max-h-96 mb-6"
+        ),
+        cls="card p-5 mb-6"
+    )
+
+    # 4. PDF vs Excel Reconciliation Section (If available)
+    reconcil_card = None
+    if reconcil:
+        reconcil_rows = []
+        for m in reconcil.mismatched_records:
+            reconcil_rows.append(Tr(
+                Td(m["register_number"], cls="px-3 py-2 text-xs font-mono font-bold text-slate-900 border-b"),
+                Td(m["student_name"], cls="px-3 py-2 text-xs text-slate-800 border-b"),
+                Td(m["subject"], cls="px-3 py-2 text-xs text-slate-700 border-b"),
+                Td(Span(m["pdf_grade"], cls="px-2 py-0.5 text-xs font-bold bg-blue-100 text-blue-800 rounded"), cls="px-3 py-2 border-b"),
+                Td(Span(m["excel_grade"], cls="px-2 py-0.5 text-xs font-bold bg-amber-100 text-amber-800 rounded"), cls="px-3 py-2 border-b"),
+                Td(Span("🚨 MISMATCH", cls="px-2 py-0.5 text-xs font-bold bg-red-100 text-red-800 rounded"), cls="px-3 py-2 border-b"),
+            ))
+
+        reconcil_card = Div(
+            Div(
+                Span("🔄", cls="text-xl mr-2"),
+                H3("PDF vs Excel Reconciliation Report", cls="text-sm font-bold text-slate-800"),
+                Span(f"{reconcil.matched_count} Matched · {reconcil.mismatched_count} Mismatches", cls="ml-auto text-xs badge badge-slate"),
+                cls="flex items-center mb-3"
+            ),
+            P("COE PDF is treated as the primary authoritative source. Mismatches require faculty verification:", cls="text-xs text-slate-500 mb-3"),
+            Div(
+                Table(
+                    Thead(Tr(
+                        Th("Register No", cls="px-3 py-2 text-left text-xs font-semibold text-slate-600 bg-slate-50 border-b"),
+                        Th("Student Name", cls="px-3 py-2 text-left text-xs font-semibold text-slate-600 bg-slate-50 border-b"),
+                        Th("Subject", cls="px-3 py-2 text-left text-xs font-semibold text-slate-600 bg-slate-50 border-b"),
+                        Th("COE PDF Grade (Authoritative)", cls="px-3 py-2 text-left text-xs font-semibold text-slate-600 bg-slate-50 border-b"),
+                        Th("Excel Grade", cls="px-3 py-2 text-left text-xs font-semibold text-slate-600 bg-slate-50 border-b"),
+                        Th("Discrepancy Status", cls="px-3 py-2 text-left text-xs font-semibold text-slate-600 bg-slate-50 border-b"),
+                    )),
+                    Tbody(*reconcil_rows),
+                    cls="w-full border border-slate-200 rounded-lg overflow-hidden"
+                ) if reconcil_rows else P("✓ 100% Match! PDF and Excel result grades match perfectly.", cls="text-xs font-semibold text-green-700 bg-green-50 p-3 rounded"),
+                cls="overflow-x-auto mb-4"
+            ),
+            cls="card p-5 border-l-4 border-l-blue-600 mb-6"
+        )
+
+    return layout("PDF Result Preflight Review", "upload", Div(
+        Div(
+            H1("COE PDF Analysis & Data Quality Review", cls="text-2xl font-bold text-slate-800 mb-1"),
+            P(f"File: {html.escape(filename)} · Source: COE Digital Result PDF", cls="text-sm text-slate-500 mb-6"),
+        ),
+        doc_meta_card,
+        stats_cards,
+        reconcil_card if reconcil_card else None,
+        inspector_card,
+        Form(
+            Div(
+                A("← Upload Different File", href="/upload", cls="px-4 py-2.5 text-sm font-medium text-slate-600 hover:text-slate-800"),
+                Button("Confirm & Analyze Results →", type="submit",
+                       cls="px-6 py-2.5 text-sm font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors shadow-sm"),
+                cls="flex items-center justify-between border-t pt-4"
+            ),
+            action="/confirm-pdf", method="POST",
+            cls="card p-6 mb-8"
+        ),
+        cls="max-w-5xl mx-auto"
+    ))
+
+
+@app.post("/upload-pdf")
+async def route_upload_pdf(request):
+    try:
+        form = await request.form()
+        file = form.get("file_pdf")
+        if file is None:
+            push_alert("No PDF file selected.", "red")
+            return RedirectResponse("/upload", status_code=303)
+
+        raw_filename = getattr(file, "filename", "") or "result.pdf"
+        filename = os.path.basename(raw_filename)
+        filename = re.sub(r"[^\w\.\-]", "_", filename)
+
+        if not filename.lower().endswith(".pdf"):
+            push_alert("Only .pdf files are accepted in Mode A.", "red")
+            return RedirectResponse("/upload", status_code=303)
+
+        pdf_bytes = await file.read()
+        if not pdf_bytes:
+            push_alert("Uploaded PDF file is empty.", "red")
+            return RedirectResponse("/upload", status_code=303)
+
+        pdf_report = extract_coe_pdf(pdf_bytes, filename)
+        if not pdf_report.ok:
+            push_alert(pdf_report.fatal_error, "red")
+            return RedirectResponse("/upload", status_code=303)
+
+        SESSION["preview_pdf_bytes"] = pdf_bytes
+        SESSION["preview_pdf_filename"] = filename
+        SESSION["preview_pdf_report"] = pdf_report
+        SESSION["reconciliation_report"] = None
+
+        return page_pdf_preview()
+    except Exception as e:
+        push_alert(f"PDF extraction error: {e}", "red")
+        return RedirectResponse("/upload", status_code=303)
+
+
+@app.post("/upload-dual")
+async def route_upload_dual(request):
+    try:
+        form = await request.form()
+        file_pdf = form.get("file_pdf")
+        file_excel = form.get("file_excel")
+        if not file_pdf or not file_excel:
+            push_alert("Please select both PDF and Excel files for dual reconciliation.", "red")
+            return RedirectResponse("/upload", status_code=303)
+
+        pdf_bytes = await file_pdf.read()
+        excel_bytes = await file_excel.read()
+
+        pdf_filename = os.path.basename(getattr(file_pdf, "filename", "") or "result.pdf")
+        excel_filename = os.path.basename(getattr(file_excel, "filename", "") or "result.xlsx")
+
+        pdf_report = extract_coe_pdf(pdf_bytes, pdf_filename)
+        if not pdf_report.ok:
+            push_alert(f"PDF error: {pdf_report.fatal_error}", "red")
+            return RedirectResponse("/upload", status_code=303)
+
+        excel_res = validate_and_clean(excel_bytes, excel_filename)
+        if not excel_res.ok:
+            push_alert(f"Excel error: {excel_res.report.fatal_error}", "red")
+            return RedirectResponse("/upload", status_code=303)
+
+        reconcil_report = reconcile_pdf_and_excel(pdf_report.records, excel_res.records)
+
+        SESSION["preview_pdf_bytes"] = pdf_bytes
+        SESSION["preview_pdf_filename"] = pdf_filename
+        SESSION["preview_pdf_report"] = pdf_report
+        SESSION["preview_raw_bytes"] = excel_bytes
+        SESSION["preview_filename"] = excel_filename
+        SESSION["preview_report"] = excel_res.report
+        SESSION["reconciliation_report"] = reconcil_report
+
+        push_alert(f"Dual Reconciliation complete: {reconcil_report.matched_count} matched, {reconcil_report.mismatched_count} mismatches.", "blue")
+        return page_pdf_preview()
+    except Exception as e:
+        push_alert(f"Dual upload error: {e}", "red")
+        return RedirectResponse("/upload", status_code=303)
+
+
+@app.post("/confirm-pdf")
+async def route_confirm_pdf(request):
+    try:
+        pdf_report: PDFExtractionReport = SESSION.get("preview_pdf_report")
+        filename = SESSION.get("preview_pdf_filename", "result.pdf")
+        if not pdf_report or not pdf_report.records:
+            push_alert("No extracted PDF records found to analyze.", "red")
+            return RedirectResponse("/upload", status_code=303)
+
+        df = pdf_records_to_dataframe(pdf_report.records)
+        ca = compute_class_analysis(df, filename)
+
+        SESSION["records"] = df
+        SESSION["analytics"] = ca
+        SESSION["file_name"] = filename
+        SESSION["ptm_briefs"] = {}
+
+        push_alert(
+            f"Successfully analyzed COE PDF ({pdf_report.doc_metadata.programme}, {pdf_report.doc_metadata.semester}): "
+            f"Processed {ca.student_count} students across {ca.subject_count} subjects with {int(pdf_report.overall_confidence*100)}% extraction confidence.",
+            "green"
+        )
+        return RedirectResponse("/dashboard", status_code=303)
+    except Exception as e:
+        push_alert(f"PDF confirm error: {e}", "red")
+        return RedirectResponse("/upload", status_code=303)
+
+
 @app.post("/upload-preview")
 async def route_upload_preview(request):
     try:
@@ -4200,6 +5376,10 @@ async def route_upload_confirm(request):
             return RedirectResponse("/upload", status_code=303)
 
         ca = compute_class_analysis(result.records, filename)
+        ca.subject_mappings = result.report.subject_mappings
+        ca.quarantined_tokens = result.report.quarantined_tokens
+        ca.copy_paste_cleaned_count = result.report.copy_paste_cleaned_count
+        ca.format_detected = result.report.format_detected
 
         SESSION["records"] = result.records
         SESSION["analytics"] = ca
@@ -4207,15 +5387,37 @@ async def route_upload_confirm(request):
         SESSION["validation"] = result.report
         SESSION["ptm_briefs"] = {}
 
-        push_alert(
-            f"Successfully processed {result.report.valid_records} records for {ca.student_count} "
-            f"students across {ca.subject_count} subjects.",
-            "green"
-        )
+        msg = f"Successfully processed {result.report.valid_records} records for {ca.student_count} students across {ca.subject_count} subjects."
+        if result.report.copy_paste_cleaned_count > 0:
+            msg += f" (Sanitized {result.report.copy_paste_cleaned_count} PDF copy-paste formatting anomalies)."
+        push_alert(msg, "green")
         return RedirectResponse("/dashboard", status_code=303)
     except Exception as e:
         push_alert(f"Processing error: {e}", "red")
         return RedirectResponse("/upload", status_code=303)
+
+
+@app.post("/alias-override")
+async def route_alias_override(request):
+    try:
+        form = await request.form()
+        raw_token = form.get("raw_token", "").strip()
+        canonical_target = form.get("canonical_target", "").strip()
+        if raw_token and canonical_target:
+            overrides = SESSION.get("custom_alias_overrides", {})
+            overrides[raw_token.upper()] = canonical_target
+            SESSION["custom_alias_overrides"] = overrides
+            push_alert(f"Added custom alias override: '{raw_token}' → '{canonical_target}'. Re-analyzing spreadsheet...", "green")
+            
+            data = SESSION.get("preview_raw_bytes")
+            filename = SESSION.get("preview_filename", "result.xlsx")
+            if data:
+                full_res = validate_and_clean(data, filename, overrides)
+                SESSION["preview_report"] = full_res.report
+        return RedirectResponse("/upload-preview", status_code=303)
+    except Exception as e:
+        push_alert(f"Alias override error: {e}", "red")
+        return RedirectResponse("/upload-preview", status_code=303)
 
 
 @app.post("/reset")

@@ -7,3 +7,5 @@ xhtml2pdf
 langchain-community
 uvicorn
 python-dotenv
+PyMuPDF
+pdfplumber
