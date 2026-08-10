@@ -370,46 +370,64 @@ SYLLABUS_CATALOG_R2024: List[Dict[str, Any]] = [
 ]
 
 
-def resolve_subject_info(raw_name: Any, custom_overrides: Optional[Dict[str, str]] = None) -> Tuple[str, str, float, int, str, float, bool]:
-    """
-    Resolve a raw subject string, course code, or abbreviation against the R2024 AI & DS syllabus catalog.
-    Formatting noise is stripped (24-AD-301 -> 24AD301, 24 AD 301 -> 24AD301).
-    Semantic course codes (24AD301) are NEVER reordered.
-    Returns: (canonical_name, course_code, credits, semester, category, confidence, is_ambiguous)
-    """
-    if not raw_name:
-        return ("Unknown Subject", "", 0.0, 0, "Uncategorized", 0.0, True)
+# Pre-computed O(1) indexes for SYLLABUS_CATALOG_R2024
+COURSE_CODE_INDEX: Dict[str, Dict[str, Any]] = {}
+SUBJECT_NAME_INDEX: Dict[str, Dict[str, Any]] = {}
+ALIAS_INDEX: Dict[str, Dict[str, Any]] = {}
+SEMESTER_INDEX: Dict[int, List[Dict[str, Any]]] = {}
 
-    clean_raw = str(raw_name).strip()
-    norm = re.sub(r"\s+", " ", clean_raw).upper()
-    # Strip formatting noise ONLY: 24-AD-301 -> 24AD301, 24 AD 301 -> 24AD301
-    clean_code = re.sub(r"[^A-Z0-9]", "", norm)
-
-    # 0. Check custom manual alias overrides first
-    if custom_overrides and norm in custom_overrides:
-        target_name = custom_overrides[norm]
-        for item in SYLLABUS_CATALOG_R2024:
-            if item["name"].upper() == target_name.upper():
-                return (item["name"], item["code"], item["credits"], item["semester"], item["category"], 1.0, False)
-        return (target_name, "", 3.0, 1, "Custom Subject", 1.0, False)
-
-    # 1. Deterministic exact match on canonical name, code, or aliases
+def _build_syllabus_indexes():
     for item in SYLLABUS_CATALOG_R2024:
-        code_clean = re.sub(r"[^A-Z0-9]", "", item["code"].upper())
-        if norm == item["name"].upper() or norm == item["code"].upper() or clean_code == code_clean:
-            return (item["name"], item["code"], item["credits"], item["semester"], item["category"], 1.0, False)
-        for alias in item["aliases"]:
-            alias_clean = re.sub(r"[^A-Z0-9]", "", alias.upper())
-            if norm == alias.upper() or clean_code == alias_clean:
-                return (item["name"], item["code"], item["credits"], item["semester"], item["category"], 1.0, False)
+        code_raw = item["code"].upper()
+        code_clean = re.sub(r"[^A-Z0-9]", "", code_raw)
+        COURSE_CODE_INDEX[code_raw] = item
+        COURSE_CODE_INDEX[code_clean] = item
 
-    # 2. Deterministic partial token match
-    for item in SYLLABUS_CATALOG_R2024:
-        for alias in item["aliases"]:
-            if len(alias) >= 2 and alias.upper() == norm:
-                return (item["name"], item["code"], item["credits"], item["semester"], item["category"], 1.0, False)
+        name_upper = item["name"].upper()
+        name_clean = re.sub(r"[^A-Z0-9]", "", name_upper)
+        SUBJECT_NAME_INDEX[name_upper] = item
+        SUBJECT_NAME_INDEX[name_clean] = item
 
-    # 3. Fuzzy match fallback
+        for alias in item["aliases"]:
+            alias_upper = alias.upper()
+            alias_clean = re.sub(r"[^A-Z0-9]", "", alias_upper)
+            ALIAS_INDEX[alias_upper] = item
+            ALIAS_INDEX[alias_clean] = item
+
+        sem = item["semester"]
+        SEMESTER_INDEX.setdefault(sem, []).append(item)
+
+_build_syllabus_indexes()
+
+import functools
+
+@functools.lru_cache(maxsize=2048)
+def _memoized_resolve_subject_info(norm: str, clean_code: str) -> Tuple[str, str, float, int, str, float, bool]:
+    # Stage 1: Exact / Normalized Course Code (O(1))
+    if norm in COURSE_CODE_INDEX:
+        item = COURSE_CODE_INDEX[norm]
+        return (item["name"], item["code"], item["credits"], item["semester"], item["category"], 1.0, False)
+    if clean_code in COURSE_CODE_INDEX:
+        item = COURSE_CODE_INDEX[clean_code]
+        return (item["name"], item["code"], item["credits"], item["semester"], item["category"], 1.0, False)
+
+    # Stage 2: Exact / Normalized Subject Name (O(1))
+    if norm in SUBJECT_NAME_INDEX:
+        item = SUBJECT_NAME_INDEX[norm]
+        return (item["name"], item["code"], item["credits"], item["semester"], item["category"], 1.0, False)
+    if clean_code in SUBJECT_NAME_INDEX:
+        item = SUBJECT_NAME_INDEX[clean_code]
+        return (item["name"], item["code"], item["credits"], item["semester"], item["category"], 1.0, False)
+
+    # Stage 3: Exact / Normalized Alias (O(1))
+    if norm in ALIAS_INDEX:
+        item = ALIAS_INDEX[norm]
+        return (item["name"], item["code"], item["credits"], item["semester"], item["category"], 1.0, False)
+    if clean_code in ALIAS_INDEX:
+        item = ALIAS_INDEX[clean_code]
+        return (item["name"], item["code"], item["credits"], item["semester"], item["category"], 1.0, False)
+
+    # Stage 4: Fuzzy Match Fallback (only executed if O(1) lookups fail)
     best_item = None
     best_score = 0.0
 
@@ -429,8 +447,33 @@ def resolve_subject_info(raw_name: Any, custom_overrides: Optional[Dict[str, str
     elif best_item and best_score >= 0.60:
         return (best_item["name"], best_item["code"], best_item["credits"], best_item["semester"], best_item["category"], round(best_score, 2), True)
 
-    # Fallback if no confident match found: preserve clean_raw title and clean_code without reordering
-    return (clean_raw, clean_code or clean_raw, 3.0, 1, "Sem 1-4 Foundation", round(best_score, 2), True)
+    return (norm, clean_code or norm, 3.0, 1, "Sem 1-4 Foundation", round(best_score, 2), True)
+
+
+def resolve_subject_info(raw_name: Any, custom_overrides: Optional[Dict[str, str]] = None) -> Tuple[str, str, float, int, str, float, bool]:
+    """
+    Staged resolver for subject strings, course codes, or abbreviations against R2024 AI & DS catalog.
+    Uses pre-built O(1) hash indexes for course code, name, and alias lookups.
+    """
+    if not raw_name:
+        return ("Unknown Subject", "", 0.0, 0, "Uncategorized", 0.0, True)
+
+    clean_raw = str(raw_name).strip()
+    norm = re.sub(r"\s+", " ", clean_raw).upper()
+    clean_code = re.sub(r"[^A-Z0-9]", "", norm)
+
+    # 0. Check custom manual alias overrides first
+    if custom_overrides and norm in custom_overrides:
+        target_name = custom_overrides[norm]
+        if target_name.upper() in SUBJECT_NAME_INDEX:
+            item = SUBJECT_NAME_INDEX[target_name.upper()]
+            return (item["name"], item["code"], item["credits"], item["semester"], item["category"], 1.0, False)
+        return (target_name, "", 3.0, 1, "Custom Subject", 1.0, False)
+
+    res = _memoized_resolve_subject_info(norm, clean_code)
+    if res[0] == norm:
+        return (clean_raw, clean_code or clean_raw, res[2], res[3], res[4], res[5], res[6])
+    return res
 
 
 # =============================================================================
@@ -704,7 +747,7 @@ def extract_coe_pdf(pdf_bytes: bytes, filename: str) -> PDFExtractionReport:
                             m = student_reg_pattern.search(row_str)
                             if m:
                                 regno = m.group(1)
-                                name_val = m.group(2).strip() if m.group(2) else ""
+                                name_val = str(row[1]).strip() if len(row) > 1 and row[1] else ""
                                 for c_idx in range(2, len(row)):
                                     cell_v = str(row[c_idx] or "").strip()
                                     norm_g = _grade_normalize(cell_v)
@@ -3112,6 +3155,46 @@ def md_to_html(text: str) -> str:
     return "".join(out)
 
 
+def grade_badge_cls(grade: str) -> str:
+    g = str(grade).upper().strip()
+    if g in ("O", "A+", "A", "B+", "B", "C"):
+        return "bg-green-100 text-green-800"
+    elif g in ("U", "RA"):
+        return "bg-red-100 text-red-800"
+    elif g in ("SA", "WD"):
+        return "bg-amber-100 text-amber-800"
+    elif g in ("MM", "WH2"):
+        return "bg-purple-100 text-purple-800"
+    return "bg-slate-100 text-slate-800"
+
+
+def explain_insight_box(title: str, reasons: List[str], id_suffix: str = "") -> Div:
+    box_id = f"explain-box-{id_suffix}" if id_suffix else "explain-box"
+    return Div(
+        Button(
+            "❓ Why is this flagged?",
+            type="button",
+            onclick=f"document.getElementById('{box_id}').classList.toggle('hidden')",
+            cls="px-2 py-0.5 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 rounded border border-blue-200 transition-colors inline-flex items-center gap-1 cursor-pointer"
+        ),
+        Div(
+            Div(
+                P(title, cls="text-xs font-bold text-slate-900 mb-0.5"),
+                P("Calculated from result data", cls="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-2 block"),
+                *[Div(
+                    Span("•", cls="text-blue-600 font-bold mr-1.5 text-xs"),
+                    Span(r, cls="text-xs text-slate-700"),
+                    cls="flex items-start py-0.5"
+                ) for r in reasons],
+                cls="p-3 bg-blue-50/90 border border-blue-200 rounded-lg mt-2 shadow-xs"
+            ),
+            id=box_id,
+            cls="hidden mt-1"
+        ),
+        cls="inline-block"
+    )
+
+
 def grade_badge(grade: str) -> Span:
     css_class = grade.replace("+", "PLUS").replace(" ", "")
     return Span(grade, cls=f"grade-badge grade-{css_class}")
@@ -3342,77 +3425,196 @@ def layout(title: str, active: str, content, ca: Optional[ClassAnalysis] = None)
 
 def page_upload() -> Tuple:
     return layout("Upload", "upload", Div(
+        # Top Navigation / Hero Header
         Div(
-            H1("Upload Semester Result Data", cls="text-2xl font-bold text-slate-800 mb-1"),
-            P("Select your preferred result input mode (COE PDF, Excel, or Dual Reconciliation):", cls="text-slate-500 text-sm mb-6"),
+            Div(
+                Span("Faculty Grade Analytics Portal", cls="text-xs font-bold uppercase tracking-wider text-blue-600 bg-blue-50 px-3 py-1 rounded-full border border-blue-200 inline-block mb-3"),
+                Span("R2024 • AI & Data Science", cls="ml-2 text-xs font-medium text-slate-500"),
+            ),
+            H1("Turn COE Results into Actionable Academic Insights", cls="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight mb-3"),
+            P("Upload official COE result PDFs or Excel spreadsheets. Automatically parse records, identify U/RA arrears, map subjects to the R2024 syllabus, and generate faculty-ready analytics.",
+              cls="text-slate-600 text-base max-w-2xl mx-auto leading-relaxed mb-8"),
+            cls="text-center max-w-3xl mx-auto mb-10"
         ),
 
+        # Upload Cards Container
         Div(
             # Mode A: PDF Direct Upload (Primary)
             Form(
                 Div(
                     Div(
-                        Span("📄", cls="text-3xl mb-2 block"),
-                        H3("Mode A: Upload COE Result PDF (Primary)", cls="text-sm font-bold text-slate-800 mb-1"),
-                        P("Directly parse official COE semester result PDF without manual Excel cleanup.", cls="text-xs text-slate-500 mb-3"),
-                        Input(type="file", name="file_pdf", accept=".pdf", required=True,
-                              cls="block w-full text-xs text-slate-500 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"),
+                        Div(
+                            Span("📄", cls="text-4xl block mb-2"),
+                            Span("RECOMMENDED: COE PDF", cls="inline-block text-[10px] font-bold bg-blue-600 text-white px-2 py-0.5 rounded shadow-xs uppercase tracking-wide mb-2"),
+                            H3("Upload COE Result PDF", cls="text-base font-bold text-slate-900 mb-1"),
+                            P("Drop your official result PDF here or click to browse. Automatically extracts grades & verifies page provenance.", cls="text-xs text-slate-500 mb-4"),
+                            Input(type="file", name="file_pdf", accept=".pdf", required=True, id="file_pdf_input",
+                                  cls="block w-full text-xs text-slate-500 file:mr-3 file:py-2.5 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer"),
+                        ),
+                        Button("Analyze PDF & Preview Extraction →", type="submit", id="btn_analyze_pdf",
+                               cls="mt-5 w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-xl text-sm transition-all shadow-md flex items-center justify-center gap-2"),
+
+                        # Stage Progress Container (Hidden by default)
+                        Div(
+                            Div(Span("⏳ Processing COE PDF...", cls="text-xs font-bold text-blue-800 block mb-2")),
+                            Div(
+                                Div(Span("✓", cls="text-green-600 font-bold mr-2"), Span("Reading document stream", cls="text-xs text-slate-700"), cls="flex items-center text-xs py-0.5"),
+                                Div(Span("•", cls="text-blue-500 font-bold mr-2 animate-pulse"), Span("Detecting student records & subjects...", cls="text-xs text-slate-700"), cls="flex items-center text-xs py-0.5"),
+                                Div(Span("•", cls="text-slate-300 font-bold mr-2"), Span("Mapping R2024 syllabus...", cls="text-xs text-slate-400"), cls="flex items-center text-xs py-0.5"),
+                                Div(Span("•", cls="text-slate-300 font-bold mr-2"), Span("Preparing preflight review...", cls="text-xs text-slate-400"), cls="flex items-center text-xs py-0.5"),
+                                cls="bg-blue-50 p-3 rounded-lg border border-blue-100 mt-3"
+                            ),
+                            id="pdf_progress_card", cls="hidden mt-3"
+                        ),
+                        cls="card p-6 border-2 border-blue-500/20 hover:border-blue-500/50 transition-all shadow-sm"
                     ),
-                    Button("Analyze PDF & Preview Extraction →", type="submit",
-                           cls="mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 px-4 rounded-lg text-sm transition-all shadow-sm"),
-                    cls="card p-5 border-l-4 border-l-blue-600"
                 ),
                 action="/upload-pdf", method="POST", enctype="multipart/form-data",
+                onsubmit="handleUploadFormSubmit(this, 'pdf_progress_card', 'Analyzing COE PDF...')"
             ),
 
             # Mode B: Excel Upload (Secondary)
             Form(
                 Div(
                     Div(
-                        Span("📊", cls="text-3xl mb-2 block"),
-                        H3("Mode B: Upload Excel File", cls="text-sm font-bold text-slate-800 mb-1"),
-                        P("Upload wide or long format .xlsx spreadsheet containing student grades.", cls="text-xs text-slate-500 mb-3"),
-                        Input(type="file", name="file", accept=".xlsx", required=True,
-                              cls="block w-full text-xs text-slate-500 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100"),
+                        Div(
+                            Span("📊", cls="text-4xl block mb-2"),
+                            H3("Upload Excel File", cls="text-base font-bold text-slate-900 mb-1"),
+                            P("Upload wide or long format .xlsx spreadsheet containing student semester grades.", cls="text-xs text-slate-500 mb-4"),
+                            Input(type="file", name="file", accept=".xlsx", required=True, id="file_excel_input",
+                                  cls="block w-full text-xs text-slate-500 file:mr-3 file:py-2.5 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 cursor-pointer"),
+                        ),
+                        Button("Analyze Excel & Preview Mapping →", type="submit", id="btn_analyze_excel",
+                               cls="mt-5 w-full bg-slate-800 hover:bg-slate-900 text-white font-semibold py-3 px-4 rounded-xl text-sm transition-all shadow-md flex items-center justify-center gap-2"),
+
+                        # Stage Progress Container (Hidden by default)
+                        Div(
+                            Div(Span("⏳ Processing Excel Sheet...", cls="text-xs font-bold text-slate-800 block mb-2")),
+                            Div(
+                                Div(Span("✓", cls="text-green-600 font-bold mr-2"), Span("Reading workbook data", cls="text-xs text-slate-700"), cls="flex items-center text-xs py-0.5"),
+                                Div(Span("•", cls="text-emerald-500 font-bold mr-2 animate-pulse"), Span("Cleaning result columns...", cls="text-xs text-slate-700"), cls="flex items-center text-xs py-0.5"),
+                                Div(Span("•", cls="text-slate-300 font-bold mr-2"), Span("Calculating academic metrics...", cls="text-xs text-slate-400"), cls="flex items-center text-xs py-0.5"),
+                                cls="bg-slate-100 p-3 rounded-lg border border-slate-200 mt-3"
+                            ),
+                            id="excel_progress_card", cls="hidden mt-3"
+                        ),
+                        cls="card p-6 border border-slate-200 hover:border-slate-300 transition-all shadow-sm"
                     ),
-                    Button("Analyze Excel & Preview Mapping →", type="submit",
-                           cls="mt-4 w-full bg-slate-800 hover:bg-slate-900 text-white font-semibold py-2.5 px-4 rounded-lg text-sm transition-all shadow-sm"),
-                    cls="card p-5 border-l-4 border-l-emerald-600"
                 ),
                 action="/upload-preview", method="POST", enctype="multipart/form-data",
+                onsubmit="handleUploadFormSubmit(this, 'excel_progress_card', 'Processing Excel...')"
             ),
 
             # Mode C: Dual PDF + Excel Reconciliation
             Form(
                 Div(
                     Div(
-                        Span("🔄", cls="text-3xl mb-2 block"),
-                        H3("Mode C: PDF + Excel Dual Reconciliation", cls="text-sm font-bold text-slate-800 mb-1"),
-                        P("Upload both PDF & Excel to detect discrepancies and verify accuracy.", cls="text-xs text-slate-500 mb-3"),
                         Div(
                             Div(
-                                Label("COE Result PDF:", cls="text-[11px] font-semibold text-slate-600 block mb-1"),
-                                Input(type="file", name="file_pdf", accept=".pdf", required=True,
-                                      cls="block w-full text-xs text-slate-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-[11px] file:bg-purple-50 file:text-purple-700"),
+                                Span("🔄", cls="text-2xl mr-2"),
+                                H3("Mode C: PDF + Excel Dual Reconciliation", cls="text-base font-bold text-slate-900"),
+                                cls="flex items-center mb-1"
                             ),
+                            P("Upload both PDF & Excel to run cross-validation and verify discrepancy accuracy.", cls="text-xs text-slate-500 mb-4"),
                             Div(
-                                Label("Excel File:", cls="text-[11px] font-semibold text-slate-600 block mb-1"),
-                                Input(type="file", name="file_excel", accept=".xlsx", required=True,
-                                      cls="block w-full text-xs text-slate-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-[11px] file:bg-purple-50 file:text-purple-700"),
+                                Div(
+                                    Label("COE Result PDF:", cls="text-[11px] font-semibold text-slate-700 block mb-1"),
+                                    Input(type="file", name="file_pdf", accept=".pdf", required=True,
+                                          cls="block w-full text-xs text-slate-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-[11px] file:bg-purple-50 file:text-purple-700"),
+                                ),
+                                Div(
+                                    Label("Excel File:", cls="text-[11px] font-semibold text-slate-700 block mb-1"),
+                                    Input(type="file", name="file_excel", accept=".xlsx", required=True,
+                                          cls="block w-full text-xs text-slate-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-[11px] file:bg-purple-50 file:text-purple-700"),
+                                ),
+                                cls="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4"
                             ),
-                            cls="grid grid-cols-1 sm:grid-cols-2 gap-3"
                         ),
+                        Button("Reconcile PDF & Excel →", type="submit",
+                               cls="w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold py-2.5 px-4 rounded-xl text-sm transition-all shadow-sm"),
                     ),
-                    Button("Reconcile PDF & Excel →", type="submit",
-                           cls="mt-4 w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold py-2.5 px-4 rounded-lg text-sm transition-all shadow-sm"),
-                    cls="card p-5 border-l-4 border-l-purple-600 sm:col-span-2"
+                    cls="card p-6 border-l-4 border-l-purple-600 sm:col-span-2 shadow-sm"
                 ),
                 action="/upload-dual", method="POST", enctype="multipart/form-data",
             ),
 
-            cls="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-8 max-w-4xl mx-auto"
+            cls="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-12 max-w-4xl mx-auto"
         ),
-        cls="max-w-4xl mx-auto"
+
+        # Section 13: Trust / Capability Cards
+        Div(
+            H3("Platform Capabilities & Academic Features", cls="text-sm font-bold uppercase tracking-wider text-slate-400 text-center mb-6"),
+            Div(
+                Div(
+                    Span("📄", cls="text-2xl mb-2 block"),
+                    H4("Direct COE Extraction", cls="text-sm font-bold text-slate-800 mb-1"),
+                    P("Extracts student & subject results directly from official result PDFs with page provenance traceability.", cls="text-xs text-slate-500 leading-relaxed"),
+                    cls="card p-4 border border-slate-100 hover:shadow-md transition-all"
+                ),
+                Div(
+                    Span("🎓", cls="text-2xl mb-2 block"),
+                    H4("R2024 Syllabus Mapping", cls="text-sm font-bold text-slate-800 mb-1"),
+                    P("Automatically identifies course codes, titles, credits, and semester categories against R2024 catalog.", cls="text-xs text-slate-500 leading-relaxed"),
+                    cls="card p-4 border border-slate-100 hover:shadow-md transition-all"
+                ),
+                Div(
+                    Span("🚨", cls="text-2xl mb-2 block"),
+                    H4("Arrear Intelligence", cls="text-sm font-bold text-slate-800 mb-1"),
+                    P("Identifies U/RA arrears, multiple-arrear students, and active Sem 1-4 foundation backlogs.", cls="text-xs text-slate-500 leading-relaxed"),
+                    cls="card p-4 border border-slate-100 hover:shadow-md transition-all"
+                ),
+                Div(
+                    Span("📊", cls="text-2xl mb-2 block"),
+                    H4("Faculty Analytics", cls="text-sm font-bold text-slate-800 mb-1"),
+                    P("Generates credit-weighted GPA, cohort rankings, risk groups, and PTM advisory briefs.", cls="text-xs text-slate-500 leading-relaxed"),
+                    cls="card p-4 border border-slate-100 hover:shadow-md transition-all"
+                ),
+                cls="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-12 max-w-5xl mx-auto"
+            ),
+        ),
+
+        # Section 14: How It Works
+        Div(
+            H3("How It Works", cls="text-sm font-bold uppercase tracking-wider text-slate-400 text-center mb-2"),
+            P("From result document to faculty action in minutes.", cls="text-xs text-slate-500 text-center mb-6"),
+            Div(
+                Div(Span("01", cls="text-blue-600 font-extrabold text-lg block mb-1"), H4("Upload", cls="text-xs font-bold text-slate-800"), P("Select PDF or Excel file", cls="text-[11px] text-slate-500"), cls="text-center p-3 card border border-slate-100"),
+                Div(Span("→", cls="text-slate-300 hidden sm:block text-xl self-center")),
+                Div(Span("02", cls="text-blue-600 font-extrabold text-lg block mb-1"), H4("Verify", cls="text-xs font-bold text-slate-800"), P("Review preflight mapping", cls="text-[11px] text-slate-500"), cls="text-center p-3 card border border-slate-100"),
+                Div(Span("→", cls="text-slate-300 hidden sm:block text-xl self-center")),
+                Div(Span("03", cls="text-blue-600 font-extrabold text-lg block mb-1"), H4("Analyze", cls="text-xs font-bold text-slate-800"), P("Compute cohort metrics", cls="text-[11px] text-slate-500"), cls="text-center p-3 card border border-slate-100"),
+                Div(Span("→", cls="text-slate-300 hidden sm:block text-xl self-center")),
+                Div(Span("04", cls="text-blue-600 font-extrabold text-lg block mb-1"), H4("Act", cls="text-xs font-bold text-slate-800"), P("Execute remedial plan", cls="text-[11px] text-slate-500"), cls="text-center p-3 card border border-slate-100"),
+                cls="grid grid-cols-2 sm:grid-cols-7 gap-2 max-w-4xl mx-auto items-center mb-12"
+            ),
+        ),
+
+        # Section 15: Data Privacy Message
+        Div(
+            Div(
+                Span("🔒", cls="text-lg mr-2"),
+                Span("Academic Data Protection", cls="font-bold text-slate-800 text-xs mr-2"),
+                Span("• Results are processed locally for academic analysis. AI receives only structured metrics required for advisory generation.", cls="text-xs text-slate-500"),
+                cls="flex items-center justify-center flex-wrap gap-1 p-3 bg-slate-100 border border-slate-200 rounded-xl max-w-3xl mx-auto text-center"
+            ),
+            cls="mb-8"
+        ),
+
+        Script("""
+        function handleUploadFormSubmit(form, cardId, btnText) {
+            var btn = form.querySelector('button[type="submit"]');
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<span class="animate-spin inline-block mr-2">⏳</span> ' + btnText;
+                btn.classList.add('opacity-75', 'cursor-not-allowed');
+            }
+            var card = document.getElementById(cardId);
+            if (card) {
+                card.classList.remove('hidden');
+            }
+        }
+        """),
+        cls="max-w-5xl mx-auto py-4"
     ))
 
 
@@ -3614,7 +3816,22 @@ def page_upload_mapping() -> Tuple:
 
 def page_dashboard(ca: ClassAnalysis) -> Tuple:
     insights_data = generate_deterministic_insights(ca)
-    ai = generate_class_ai_insight(ca)
+    
+    # Non-blocking AI insight: Check cache first, otherwise load asynchronously via HTMX/fetch
+    ai_key = "class:" + _ai_hash(ca.file_name, ca.record_count, ca.class_gpa, sorted(ca.grade_distribution.items()))
+    cached_ai = _cache_get(ai_key)
+    if cached_ai is not None:
+        ai_block = md_block(cached_ai, _AI_CACHE[ai_key]["live"])
+    else:
+        ai_fallback = fallback_class_insight(ca)
+        ai_block = Div(
+            md_block(ai_fallback, "fallback"),
+            hx_get="/ai-insights/class-summary",
+            hx_trigger="load delay:100ms",
+            hx_swap="outerHTML",
+            id="class-ai-advisory"
+        )
+
     grade_dist_fig = fig_grade_distribution(ca)
     subj_avg_fig = fig_subject_avg_gp(ca)
     fail_fig = fig_failure_concentration(ca)
@@ -3625,12 +3842,16 @@ def page_dashboard(ca: ClassAnalysis) -> Tuple:
 
     best_subj = insights_data["best_subject"]
     weakest_subj = insights_data["weakest_subject"]
+    duration = SESSION.get("analysis_duration")
 
     return layout("Dashboard", "dashboard", Div(
         # Page Title & Interactive Report Shortcut (Requirement 6)
         Div(
             Div(
-                H1("Executive Dashboard", cls="text-2xl font-bold text-slate-800"),
+                Div(
+                    H1("Executive Dashboard", cls="text-2xl font-bold text-slate-800 inline-block"),
+                    Span(f"⚡ Analysis completed in {duration}s", cls="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200 ml-3 inline-block") if duration else None,
+                ),
                 P(f"Semester results summary · {ca.student_count} students · {ca.subject_count} subjects evaluated",
                   cls="text-slate-500 text-sm mt-1"),
                 cls="flex-1"
@@ -3646,59 +3867,95 @@ def page_dashboard(ca: ClassAnalysis) -> Tuple:
             cls="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6"
         ),
 
-        # 1. Executive Summary Card
+        # 1. Executive Story & Semester Performance Overview
         Div(
             Div(
                 Div(
-                    Span("Academic Health:", cls="text-xs font-semibold uppercase tracking-wider text-slate-400"),
-                    Span(insights_data["health_status"],
-                         cls=f"ml-2 px-2.5 py-0.5 rounded-full text-xs font-bold border {insights_data['health_bg']} {insights_data['health_color']}"),
-                    cls="flex items-center mb-3"
+                    H3("Semester Performance Overview", cls="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1"),
+                    Div(
+                        Span("Class Health:", cls="text-xs font-medium text-slate-500 mr-2"),
+                        Span(insights_data["health_status"],
+                             cls=f"px-3 py-1 rounded-full text-xs font-bold border shadow-xs {insights_data['health_bg']} {insights_data['health_color']}"),
+                        cls="flex items-center mb-4"
+                    ),
+                    Div(
+                        Div(
+                            P("Average GPA", cls="text-xs text-slate-500 font-medium"),
+                            P(fmt_gpa(ca.class_gpa), cls="text-3xl font-extrabold text-slate-900"),
+                            cls="bg-slate-50 p-4 rounded-xl border border-slate-100"
+                        ),
+                        Div(
+                            P("Pass Rate", cls="text-xs text-slate-500 font-medium"),
+                            P(fmt_np_pct(ca.pass_rate), cls="text-3xl font-extrabold " + ("text-green-600" if (ca.pass_rate or 0) >= 75 else "text-amber-600")),
+                            cls="bg-slate-50 p-4 rounded-xl border border-slate-100"
+                        ),
+                        Div(
+                            P("Students Needing Attention", cls="text-xs text-slate-500 font-medium"),
+                            P(str(len(ca.attention_students)), cls="text-3xl font-extrabold text-red-600"),
+                            cls="bg-slate-50 p-4 rounded-xl border border-slate-100"
+                        ),
+                        cls="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4"
+                    ),
+                    # Key Observations Card
+                    Div(
+                        H4("Key Observations", cls="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2"),
+                        Div(
+                            Div(Span("⚠", cls="text-amber-500 font-bold mr-2 text-base"), Span(f"{ca.multiple_u_count} student(s) have multiple arrears requiring immediate faculty intervention.", cls="text-xs text-slate-700 font-medium"), cls="flex items-center py-1"),
+                            Div(Span("📘", cls="text-blue-500 font-bold mr-2 text-base"), Span(f"'{weakest_subj.subject}' has highest arrear concentration ({weakest_subj.arrear_count} arrears).", cls="text-xs text-slate-700 font-medium"), cls="flex items-center py-1") if weakest_subj else None,
+                            Div(Span("⭐", cls="text-yellow-500 font-bold mr-2 text-base"), Span(f"{ca.grade_distribution.get('O',0) + ca.grade_distribution.get('A+',0)} student(s) achieved distinction (O/A+ grade).", cls="text-xs text-slate-700 font-medium"), cls="flex items-center py-1"),
+                        ),
+                        cls="bg-blue-50/50 p-4 rounded-xl border border-blue-100"
+                    ),
+                    cls="card p-6"
                 ),
-                Div(
-                    Div(
-                        P("Class GPA Average", cls="text-xs text-slate-500"),
-                        P(fmt_gpa(ca.class_gpa), cls="text-2xl font-bold text-slate-800"),
-                        cls="border-r border-slate-100 pr-4"
-                    ),
-                    Div(
-                        P("Pass Rate", cls="text-xs text-slate-500"),
-                        P(fmt_np_pct(ca.pass_rate), cls="text-2xl font-bold text-green-600" if (ca.pass_rate or 0) >= 75 else "text-2xl font-bold text-amber-600"),
-                        cls="border-r border-slate-100 pr-4 pl-2"
-                    ),
-                    Div(
-                        P("Need Attention", cls="text-xs text-slate-500"),
-                        P(str(len(ca.attention_students)), cls="text-2xl font-bold text-red-600"),
-                        cls="border-r border-slate-100 pr-4 pl-2"
-                    ),
-                    Div(
-                        P("Multiple Arrears", cls="text-xs text-slate-500"),
-                        P(str(ca.multiple_u_count), cls="text-2xl font-bold text-red-700"),
-                        cls="pl-2"
-                    ),
-                    cls="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4 py-2 bg-slate-50 rounded-lg px-4"
-                ),
-                Div(
-                    Div(
-                        Span("Best Subject: ", cls="font-semibold text-slate-700"),
-                        A(best_subj.subject, href=f"/subjects/{quote(best_subj.subject, safe='')}", cls="text-blue-600 hover:underline font-medium") if best_subj else Span("—"),
-                        Span(f" ({best_subj.pass_pct:.1f}% pass rate)" if best_subj and best_subj.pass_pct is not None else "", cls="text-slate-500 text-xs"),
-                        cls="text-sm border-r border-slate-200 pr-4"
-                    ),
-                    Div(
-                        Span("Subject Needing Attention: ", cls="font-semibold text-slate-700"),
-                        A(weakest_subj.subject, href=f"/subjects/{quote(weakest_subj.subject, safe='')}", cls="text-red-600 hover:underline font-medium") if weakest_subj else Span("None"),
-                        Span(f" ({weakest_subj.arrear_count} arrears)" if weakest_subj else "", cls="text-slate-500 text-xs"),
-                        cls="text-sm pl-4"
-                    ),
-                    cls="flex flex-col sm:flex-row sm:items-center gap-2 pt-2 border-t border-slate-100"
-                ),
-                cls="card p-5"
             ),
             cls="mb-6"
         ),
 
-        # 2. Academic Attention Summary Grid
+        # 2. Faculty Action Center
+        Div(
+            H3("Faculty Action Center", cls="text-sm font-bold uppercase tracking-wider text-slate-500 mb-3 flex items-center gap-2"),
+            Div(
+                # Card 1: Immediate Attention
+                Div(
+                    Div(
+                        Span("🚨", cls="text-2xl mr-2"),
+                        H4("Immediate Attention", cls="text-sm font-bold text-slate-900"),
+                        cls="flex items-center mb-1"
+                    ),
+                    P(f"{len(ca.attention_students)} Student(s) requiring academic support", cls="text-xs text-slate-500 mb-4"),
+                    A("View Students →", href="/attention", cls="w-full text-center block px-3 py-2 text-xs font-bold bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors shadow-xs"),
+                    cls="card p-5 border-l-4 border-l-red-600 flex flex-col justify-between"
+                ),
+
+                # Card 2: Subject Concern
+                Div(
+                    Div(
+                        Span("📘", cls="text-2xl mr-2"),
+                        H4("Subject Concern", cls="text-sm font-bold text-slate-900"),
+                        cls="flex items-center mb-1"
+                    ),
+                    P(f"'{weakest_subj.subject}' ({weakest_subj.arrear_count} arrears)" if weakest_subj else "No subject concern", cls="text-xs text-slate-500 mb-4"),
+                    A("Analyze Subject →", href=f"/subjects/{quote(weakest_subj.subject, safe='')}" if weakest_subj else "/subjects", cls="w-full text-center block px-3 py-2 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors shadow-xs"),
+                    cls="card p-5 border-l-4 border-l-blue-600 flex flex-col justify-between"
+                ),
+
+                # Card 3: PTM Required
+                Div(
+                    Div(
+                        Span("👨‍👩‍👦", cls="text-2xl mr-2"),
+                        H4("PTM Required", cls="text-sm font-bold text-slate-900"),
+                        cls="flex items-center mb-1"
+                    ),
+                    P(f"{ca.multiple_u_count + ca.backlog_student_count} Student(s) scheduled for parent meeting", cls="text-xs text-slate-500 mb-4"),
+                    A("Generate PTM Brief →", href="/attention", cls="w-full text-center block px-3 py-2 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors shadow-xs"),
+                    cls="card p-5 border-l-4 border-l-indigo-600 flex flex-col justify-between"
+                ),
+                cls="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-6"
+            )
+        ),
+
+        # 3. Academic Attention Summary Grid
         Div(
             stat_card("🔴 Arrears (U/RA)", str(ca.arrear_student_count), "#dc2626"),
             stat_card("🟠 Attendance (SA)", str(ca.sa_student_count), "#d97706"),
@@ -3815,7 +4072,7 @@ def page_dashboard(ca: ClassAnalysis) -> Tuple:
         # 7. AI Advisory Section
         Div(
             H3("AI Academic Advisory Insight", cls="text-sm font-semibold text-slate-700 mb-3"),
-            md_block(ai["text"], ai["live"]),
+            ai_block,
         ),
 
         cls="max-w-7xl mx-auto"
@@ -3858,6 +4115,35 @@ def page_students(ca: ClassAnalysis) -> Tuple:
                 cls="flex-shrink-0"
             ),
             cls="flex flex-col sm:flex-row sm:items-center gap-4 mb-6"
+        ),
+
+        # Analysis Summary Before Table (Student Attention Summary)
+        Div(
+            H3("Student Attention Summary", cls="text-sm font-bold text-slate-800 mb-3"),
+            Div(
+                Div(
+                    P("Total Enrolled", cls="text-xs text-slate-500 font-medium"),
+                    P(str(len(students)), cls="text-2xl font-bold text-slate-800"),
+                    cls="bg-slate-50 p-4 rounded-xl border border-slate-100"
+                ),
+                Div(
+                    P("🟢 Cleared Cleanly", cls="text-xs font-semibold text-green-700"),
+                    P(str(ca.cleared_count), cls="text-2xl font-bold text-green-600"),
+                    cls="bg-green-50/50 p-4 rounded-xl border border-green-100"
+                ),
+                Div(
+                    P("🟡 Needs Support (1 Arrear)", cls="text-xs font-semibold text-amber-700"),
+                    P(str(ca.single_u_count), cls="text-2xl font-bold text-amber-600"),
+                    cls="bg-amber-50/50 p-4 rounded-xl border border-amber-100"
+                ),
+                Div(
+                    P("🔴 Critical (Multi-Arrear)", cls="text-xs font-semibold text-red-700"),
+                    P(str(ca.multiple_u_count), cls="text-2xl font-bold text-red-600"),
+                    cls="bg-red-50/50 p-4 rounded-xl border border-red-100"
+                ),
+                cls="grid grid-cols-2 md:grid-cols-4 gap-4"
+            ),
+            cls="card p-5 mb-6"
         ),
 
         Div(
@@ -3976,6 +4262,30 @@ def page_student_detail(ca: ClassAnalysis, regno: str) -> Tuple:
                 cls="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"
             ),
             cls="card p-5 mb-6"
+        ),
+
+        # Recommended Faculty Action Card
+        Div(
+            Div(
+                Div(
+                    H3("Recommended Faculty Action", cls="text-sm font-bold text-slate-900 mb-1 flex items-center gap-2"),
+                    P("Discuss backlog recovery plan and monitor foundation subject progress.", cls="text-xs text-slate-600 mb-3") if s.arrear_count else P("Good academic standing. Encourage advanced elective options.", cls="text-xs text-slate-600 mb-3"),
+                    cls="flex-1"
+                ),
+                Div(
+                    Form(Button("📥 Download Student Report", type="submit",
+                                cls="px-4 py-2 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors shadow-xs mr-2 inline-block"),
+                         action="/report/student/" + s.regno, method="POST", cls="inline-block"),
+                    Button("👨‍👩‍👦 Generate PTM Brief", type="button",
+                           hx_post=f"/student/{s.regno}/ptm",
+                           hx_target="#ptm-result",
+                           hx_swap="innerHTML",
+                           cls="px-4 py-2 text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors shadow-xs inline-block"),
+                    cls="flex items-center gap-2"
+                ),
+                cls="flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+            ),
+            cls="card p-5 border-l-4 border-l-indigo-600 mb-6 bg-indigo-50/30"
         ),
 
         # Academic Snapshot Grid
@@ -4229,7 +4539,16 @@ def page_subject_detail(ca: ClassAnalysis, subject: str) -> Tuple:
                     Span(subj.course_code or "—", cls="text-sm text-slate-500 font-mono") if subj.course_code else None,
                     Span(f"Credits: {subj.credits}", cls="text-sm text-slate-500"),
                     Span(f"Priority: {subj.priority_level}", cls="text-xs font-bold text-red-600" if subj.priority_level == "High Attention" else "text-xs font-medium text-slate-500"),
-                    cls="flex items-center gap-3 mt-1"
+                    explain_insight_box(
+                        f"Subject Flagged: {subj.subject}",
+                        [
+                            f"{subj.arrear_count} student(s) received U/RA grade",
+                            f"Failure rate ({fmt_np_pct(subj.u_pct)}) is above class average",
+                            f"Average grade point ({subj.avg_gp:.2f}) is lower than cohort average" if subj.gp_diff_vs_class < 0 else "Average grade point is at or near cohort average"
+                        ],
+                        id_suffix=f"subj-{quote(subj.subject, safe='')}"
+                    ) if subj.priority_level == "High Attention" or subj.arrear_count > 0 else None,
+                    cls="flex flex-wrap items-center gap-3 mt-1"
                 ),
                 cls="flex-1"
             ),
@@ -4241,6 +4560,20 @@ def page_subject_detail(ca: ClassAnalysis, subject: str) -> Tuple:
             ),
             cls="flex flex-col sm:flex-row sm:items-center gap-4 mb-6"
         ),
+
+        # Issue Detected Alert Box
+        Div(
+            Div(
+                Span("🚨", cls="text-2xl mr-3"),
+                Div(
+                    H4(f"Issue Detected in {subj.subject}", cls="text-sm font-bold text-red-900"),
+                    P(f"{subj.arrear_count} student(s) received U/RA grade ({fmt_np_pct(subj.u_pct)} failure rate). Remedial coaching advised.", cls="text-xs text-red-700 mt-0.5"),
+                    cls="flex-1"
+                ),
+                cls="flex items-center"
+            ),
+            cls="bg-red-50 p-4 rounded-xl border border-red-200 mb-6"
+        ) if subj.arrear_count > 0 else None,
 
         # Requirement 4: Smarter Deterministic Subject Analysis Card
         Div(
@@ -4652,68 +4985,74 @@ def page_ai_insights(ca: ClassAnalysis) -> Tuple:
 def page_reports(ca: ClassAnalysis) -> Tuple:
     return layout("Reports", "reports", Div(
         Div(
-            H1("Generate Academic Reports", cls="text-2xl font-bold text-slate-800"),
-            P("Download official PDF reports or open interactive web presentation reports.",
+            H1("Faculty Academic Report Center", cls="text-2xl font-bold text-slate-800"),
+            P("Purpose-built PDF reports tailored for Class Coordinators, Subject Teachers, and Parent Meetings.",
               cls="text-slate-500 text-sm mt-1"),
             cls="mb-8"
         ),
 
         Div(
+            # Card 1: Class Coordinator Report
             Div(
                 Div(
                     Span("📊", cls="text-3xl mb-3 block"),
-                    H3("Class Executive Report", cls="text-base font-semibold text-slate-800 mb-2"),
+                    Span("FOR CLASS COORDINATOR / HOD", cls="text-[10px] font-bold tracking-wider uppercase bg-blue-100 text-blue-800 px-2 py-0.5 rounded mb-2 inline-block"),
+                    H3("Class Coordinator Report", cls="text-base font-semibold text-slate-800 mb-2"),
                     P("Comprehensive class overview including executive cover page, grade distribution, "
                       "subject rankings, risk list, and AI advisory.",
                       cls="text-sm text-slate-500 mb-4 leading-relaxed"),
                     Div(
-                        Form(Button("📄 Download Class PDF", type="submit",
+                        Form(Button("📄 Download Class Coordinator PDF", type="submit",
                                     cls="w-full px-4 py-2.5 text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors mb-2"),
                              action="/report/class", method="POST"),
                         A("🌐 Open Interactive Web Report", href="/reports/interactive",
                           cls="block w-full text-center px-4 py-2.5 text-sm font-semibold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg transition-colors"),
                     ),
                 ),
-                cls="card p-6"
+                cls="card p-6 border-t-4 border-t-blue-600"
             ),
 
+            # Card 2: Subject Faculty Report
             Div(
                 Div(
                     Span("📚", cls="text-3xl mb-3 block"),
-                    H3("Subject Report", cls="text-base font-semibold text-slate-800 mb-2"),
-                    P("Detailed subject metrics including grade distribution, top students, "
-                      "arrear list, subject vs class comparison, and AI insight.",
+                    Span("FOR SUBJECT TEACHER", cls="text-[10px] font-bold tracking-wider uppercase bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded mb-2 inline-block"),
+                    H3("Subject Faculty Report", cls="text-base font-semibold text-slate-800 mb-2"),
+                    P("Detailed course performance metrics including grade distribution, failure concentration, "
+                      "top students, arrear list, and remedial action items.",
                       cls="text-sm text-slate-500 mb-4 leading-relaxed"),
                     Form(
                         Select(*[Option(s.subject, value=s.subject) for s in ca.subjects],
                                name="subject", aria_label="Select Subject for Report",
                                cls="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg mb-3 "
                                    "focus:ring-2 focus:ring-blue-500 focus:border-blue-500"),
-                        Button("Generate Subject PDF", type="submit",
+                        Button("Generate Subject Faculty PDF", type="submit",
                                cls="w-full px-4 py-2.5 text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"),
                         action="/report/subject-select", method="POST",
                     ),
                 ),
-                cls="card p-6"
+                cls="card p-6 border-t-4 border-t-emerald-600"
             ),
 
+            # Card 3: Parent Meeting (PTM) Report
             Div(
                 Div(
-                    Span("👤", cls="text-3xl mb-3 block"),
-                    H3("Student Report", cls="text-base font-semibold text-slate-800 mb-2"),
-                    P("Individual student profile including semester result, GPA calculation, "
-                      "rank, strengths, attention areas, and AI brief.",
+                    Span("👨‍👩‍👦", cls="text-3xl mb-3 block"),
+                    Span("FOR PARENT-TEACHER MEETING", cls="text-[10px] font-bold tracking-wider uppercase bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded mb-2 inline-block"),
+                    H3("Parent Meeting (PTM) Report", cls="text-base font-semibold text-slate-800 mb-2"),
+                    P("Individual student report highlighting strengths, challenges, failed courses, "
+                      "and structured discussion points for parent meetings.",
                       cls="text-sm text-slate-500 mb-4 leading-relaxed"),
                     Form(
-                        Input(type="text", name="regno", placeholder="Enter register number", aria_label="Student Register Number for Report",
-                              cls="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg mb-3 "
-                                  "focus:ring-2 focus:ring-blue-500 focus:border-blue-500"),
-                        Button("Generate Student PDF", type="submit",
-                               cls="w-full px-4 py-2.5 text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"),
+                        Input(type="text", name="regno", placeholder="Enter student register number", aria_label="Student Register Number for Report",
+                               cls="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg mb-3 "
+                                   "focus:ring-2 focus:ring-blue-500 focus:border-blue-500"),
+                        Button("Generate PTM Report PDF", type="submit",
+                               cls="w-full px-4 py-2.5 text-sm font-medium bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors"),
                         action="/report/student-select", method="POST",
                     ),
                 ),
-                cls="card p-6"
+                cls="card p-6 border-t-4 border-t-indigo-600"
             ),
 
             cls="grid grid-cols-1 md:grid-cols-3 gap-6"
@@ -5095,7 +5434,7 @@ def page_pdf_preview() -> Tuple:
             Td(item["parsed_regno"], cls="px-3 py-2 text-xs font-mono font-bold text-slate-900 border-b"),
             Td(item["parsed_name"], cls="px-3 py-2 text-xs font-medium text-slate-800 border-b"),
             Td(item["parsed_subject"], cls="px-3 py-2 text-xs text-slate-700 border-b"),
-            Td(Span(item["parsed_grade"], cls=f"px-2 py-0.5 text-xs font-bold rounded {status_badge(item['parsed_grade'])[1]}"), cls="px-3 py-2 border-b"),
+            Td(Span(item["parsed_grade"], cls=f"px-2 py-0.5 text-xs font-bold rounded {grade_badge_cls(item['parsed_grade'])}"), cls="px-3 py-2 border-b"),
             Td(Span(item["confidence"], cls=f"px-2 py-0.5 text-[10px] font-semibold rounded {badge_cls}"), cls="px-3 py-2 border-b"),
         ))
 
@@ -5268,6 +5607,7 @@ async def route_upload_dual(request):
 @app.post("/confirm-pdf")
 async def route_confirm_pdf(request):
     try:
+        start_t = time.time()
         pdf_report: PDFExtractionReport = SESSION.get("preview_pdf_report")
         filename = SESSION.get("preview_pdf_filename", "result.pdf")
         if not pdf_report or not pdf_report.records:
@@ -5281,10 +5621,11 @@ async def route_confirm_pdf(request):
         SESSION["analytics"] = ca
         SESSION["file_name"] = filename
         SESSION["ptm_briefs"] = {}
+        SESSION["analysis_duration"] = round(time.time() - start_t, 2)
 
         push_alert(
             f"Successfully analyzed COE PDF ({pdf_report.doc_metadata.programme}, {pdf_report.doc_metadata.semester}): "
-            f"Processed {ca.student_count} students across {ca.subject_count} subjects with {int(pdf_report.overall_confidence*100)}% extraction confidence.",
+            f"Processed {ca.student_count} students across {ca.subject_count} subjects in {SESSION['analysis_duration']}s.",
             "green"
         )
         return RedirectResponse("/dashboard", status_code=303)
@@ -5353,6 +5694,7 @@ async def route_upload_preview(request):
 @app.post("/upload-confirm")
 async def route_upload_confirm(request):
     try:
+        start_t = time.time()
         data = SESSION.get("preview_raw_bytes")
         filename = SESSION.get("preview_filename", "result.xlsx")
         if not data:
@@ -5386,8 +5728,9 @@ async def route_upload_confirm(request):
         SESSION["file_name"] = filename
         SESSION["validation"] = result.report
         SESSION["ptm_briefs"] = {}
+        SESSION["analysis_duration"] = round(time.time() - start_t, 2)
 
-        msg = f"Successfully processed {result.report.valid_records} records for {ca.student_count} students across {ca.subject_count} subjects."
+        msg = f"Successfully processed {result.report.valid_records} records for {ca.student_count} students across {ca.subject_count} subjects in {SESSION['analysis_duration']}s."
         if result.report.copy_paste_cleaned_count > 0:
             msg += f" (Sanitized {result.report.copy_paste_cleaned_count} PDF copy-paste formatting anomalies)."
         push_alert(msg, "green")
@@ -5538,6 +5881,19 @@ def route_ai_insights():
         push_alert("No data loaded.", "amber")
         return RedirectResponse("/", status_code=303)
     return page_ai_insights(SESSION["analytics"])
+
+
+@app.get("/ai-insights/class-summary")
+def route_class_ai_summary():
+    if not session_ready():
+        return Div()
+    ca = SESSION["analytics"]
+    ai = generate_class_ai_insight(ca)
+    return Div(
+        H3("AI Academic Advisory Insight", cls="text-sm font-semibold text-slate-700 mb-3"),
+        md_block(ai["text"], ai["live"]),
+        id="class-ai-advisory"
+    )
 
 
 @app.get("/reports")
