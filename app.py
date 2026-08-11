@@ -5362,11 +5362,9 @@ def page_upload() -> Tuple:
             }
             var btn = form.querySelector('button[type="submit"]');
             if (btn) {
-                setTimeout(function() {
-                    btn.disabled = true;
-                    btn.innerHTML = '<span class="animate-spin inline-block mr-2">⏳</span> ' + btnText;
-                    btn.classList.add('opacity-75', 'cursor-not-allowed');
-                }, 10);
+                btn.innerHTML = '<span class="animate-spin inline-block mr-2">⏳</span> ' + btnText;
+                btn.style.pointerEvents = 'none';
+                btn.classList.add('opacity-75');
             }
         }
 
@@ -7501,6 +7499,156 @@ def page_pdf_to_excel(pdf_report: "PDFExtractionReport", ca: "ClassAnalysis", fi
         card(actions, cls="p-5"),
         cls="max-w-6xl mx-auto"
     ))
+
+
+@app.post("/upload-pdf")
+async def route_upload_pdf(request):
+    try:
+        form = await request.form()
+        file = form.get("file_pdf")
+        if file is None:
+            push_alert("No PDF file selected.", "red")
+            return RedirectResponse("/upload", status_code=303)
+
+        raw_filename = getattr(file, "filename", "") or "result.pdf"
+        filename = os.path.basename(raw_filename)
+        filename = re.sub(r"[^\w\.\-]", "_", filename)
+
+        if not filename.lower().endswith(".pdf"):
+            push_alert("Only .pdf files are accepted in Mode A.", "red")
+            return RedirectResponse("/upload", status_code=303)
+
+        pdf_bytes = await file.read()
+        if not pdf_bytes:
+            push_alert("Uploaded PDF file is empty.", "red")
+            return RedirectResponse("/upload", status_code=303)
+
+        pdf_report = extract_coe_pdf(pdf_bytes, filename)
+        if not pdf_report.ok:
+            push_alert(pdf_report.fatal_error, "red")
+            return RedirectResponse("/upload", status_code=303)
+
+        SESSION["preview_pdf_bytes"] = pdf_bytes
+        SESSION["preview_pdf_filename"] = filename
+        SESSION["preview_pdf_report"] = pdf_report
+        SESSION["reconciliation_report"] = None
+
+        return page_pdf_preview()
+    except Exception as e:
+        push_alert(f"PDF extraction error: {e}", "red")
+        return RedirectResponse("/upload", status_code=303)
+
+
+@app.post("/upload-dual")
+async def route_upload_dual(request):
+    try:
+        form = await request.form()
+        file_pdf = form.get("file_pdf")
+        file_excel = form.get("file_excel")
+        if not file_pdf or not file_excel:
+            push_alert("Please select both PDF and Excel files for dual reconciliation.", "red")
+            return RedirectResponse("/upload", status_code=303)
+
+        pdf_bytes = await file_pdf.read()
+        excel_bytes = await file_excel.read()
+
+        pdf_filename = os.path.basename(getattr(file_pdf, "filename", "") or "result.pdf")
+        excel_filename = os.path.basename(getattr(file_excel, "filename", "") or "result.xlsx")
+
+        pdf_report = extract_coe_pdf(pdf_bytes, pdf_filename)
+        if not pdf_report.ok:
+            push_alert(f"PDF error: {pdf_report.fatal_error}", "red")
+            return RedirectResponse("/upload", status_code=303)
+
+        excel_res = validate_and_clean(excel_bytes, excel_filename)
+        if not excel_res.ok:
+            push_alert(f"Excel error: {excel_res.report.fatal_error}", "red")
+            return RedirectResponse("/upload", status_code=303)
+
+        reconcil_report = reconcile_pdf_and_excel(pdf_report.records, excel_res.records)
+
+        SESSION["preview_pdf_bytes"] = pdf_bytes
+        SESSION["preview_pdf_filename"] = pdf_filename
+        SESSION["preview_pdf_report"] = pdf_report
+        SESSION["preview_raw_bytes"] = excel_bytes
+        SESSION["preview_filename"] = excel_filename
+        SESSION["preview_report"] = excel_res.report
+        SESSION["reconciliation_report"] = reconcil_report
+
+        push_alert(f"Dual Reconciliation complete: {reconcil_report.matched_count} matched, {reconcil_report.mismatched_count} mismatches.", "blue")
+        return page_pdf_preview()
+    except Exception as e:
+        push_alert(f"Dual upload error: {e}", "red")
+        return RedirectResponse("/upload", status_code=303)
+
+
+@app.post("/confirm-pdf")
+async def route_confirm_pdf(request):
+    try:
+        start_t = time.time()
+        pdf_report: PDFExtractionReport = SESSION.get("preview_pdf_report")
+        filename = SESSION.get("preview_pdf_filename", "result.pdf")
+        if not pdf_report or not pdf_report.records:
+            push_alert("No extracted PDF records found to analyze.", "red")
+            return RedirectResponse("/upload", status_code=303)
+
+        df = pdf_records_to_dataframe(pdf_report.records)
+        ca = compute_class_analysis(df, filename)
+
+        ca.subject_mappings = build_subject_mapping_log(pdf_report.records)
+        ca.quarantined_tokens = pdf_report.quarantined_tokens
+        ca.format_detected = "pdf"
+        ca.metadata["source_page_count"] = pdf_report.doc_metadata.page_count
+        ca.metadata["extraction_confidence"] = pdf_report.overall_confidence
+
+        SESSION["records"] = df
+        SESSION["analytics"] = ca
+        SESSION["file_name"] = filename
+        SESSION["ptm_briefs"] = {}
+        SESSION["analysis_duration"] = round(time.time() - start_t, 2)
+
+        push_alert(
+            f"Successfully analyzed COE PDF ({pdf_report.doc_metadata.programme}, {pdf_report.doc_metadata.semester}): "
+            f"Processed {ca.student_count} students across {ca.subject_count} subjects in {SESSION['analysis_duration']}s.",
+            "green"
+        )
+        return RedirectResponse("/dashboard", status_code=303)
+    except Exception as e:
+        push_alert(f"PDF confirm error: {e}", "red")
+        return RedirectResponse("/upload", status_code=303)
+
+
+@app.get("/pdf-to-excel")
+def route_pdf_to_excel():
+    pdf_report, ca = _get_pdf_to_excel_context()
+    if not pdf_report or not ca:
+        push_alert("Upload a COE PDF first to convert it to a department Excel workbook.", "amber")
+        return RedirectResponse("/upload", status_code=303)
+    return page_pdf_to_excel(pdf_report, ca, SESSION.get("preview_pdf_filename", "coe_result.pdf"))
+
+
+@app.post("/pdf-to-excel/save-staff")
+async def route_pdf_to_excel_save_staff(request):
+    pdf_report, ca = _get_pdf_to_excel_context()
+    if not pdf_report or not ca:
+        push_alert("Upload a COE PDF first to convert it to a department Excel workbook.", "amber")
+        return RedirectResponse("/upload", status_code=303)
+    form = await request.form()
+    directory = SESSION.setdefault("staff_directory", {})
+    for m in (ca.subject_mappings or []):
+        code = m["course_code"]
+        key = f"staff__{code}"
+        if key in form:
+            directory[code] = str(form[key]).strip()
+    push_alert("Staff names saved.", "green")
+    return page_pdf_to_excel(pdf_report, ca, SESSION.get("preview_pdf_filename", "coe_result.pdf"))
+
+
+@app.post("/pdf-to-excel/clear-mappings")
+def route_pdf_to_excel_clear_mappings():
+    SESSION["staff_directory"] = {}
+    push_alert("Saved staff mappings cleared.", "blue")
+    return RedirectResponse("/pdf-to-excel", status_code=303)
 
 
 @app.post("/pdf-to-excel/upload-ia")
