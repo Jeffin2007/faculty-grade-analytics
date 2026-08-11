@@ -626,7 +626,7 @@ def extract_coe_pdf(pdf_bytes: bytes, filename: str) -> PDFExtractionReport:
     inspector_items: List[Dict[str, Any]] = []
     quarantined_tokens: List[Dict[str, Any]] = []
     course_headers_detected = []
-    student_reg_pattern = re.compile(r"^(8138\d{8}|\d{12})\b")
+    student_reg_pattern = re.compile(r"\b(8138\d{8}|\d{10,12})\b")
 
     for page_idx in range(len(doc)):
         page = doc[page_idx]
@@ -634,8 +634,8 @@ def extract_coe_pdf(pdf_bytes: bytes, filename: str) -> PDFExtractionReport:
         page_lines = page_texts[page_idx].split("\n")
 
         # Scan for course codes in page header
-        for line in page_lines[:15]:
-            codes = re.findall(r"\b([A-Z]{2}\d{5}|24[A-Z]{2}\d{3}|[A-Z]{2}24\d{3}|24[-_][A-Z]{2}[-_]\d{3})\b", line.upper())
+        for line in page_lines[:25]:
+            codes = re.findall(r"\b(?:24[-_]?)?([A-Z]{2,4}[-_]?\d{3,5})\b", line.upper())
             for ccode in codes:
                 can_name, code, cred, sem, cat, conf, amb = resolve_subject_info(ccode)
                 if code not in [ch["code"] for ch in course_headers_detected]:
@@ -648,84 +648,140 @@ def extract_coe_pdf(pdf_bytes: bytes, filename: str) -> PDFExtractionReport:
                         "confidence": conf
                     })
 
-        # Process text blocks from page
-        blocks = page.get_text("blocks")
-        for b in blocks:
-            b_text = b[4].strip()
-            if not b_text:
-                continue
+        # 1. Native PyMuPDF fast table extraction
+        try:
+            tabs = page.find_tables()
+            if tabs and tabs.tables:
+                for tab in tabs.tables:
+                    raw_matrix = tab.extract()
+                    if not raw_matrix or len(raw_matrix) < 2:
+                        continue
+                    headers = [str(c or "").strip() for c in raw_matrix[0]]
+                    for row in raw_matrix[1:]:
+                        if not row:
+                            continue
+                        row_str = " ".join(str(c or "") for c in row)
+                        m = student_reg_pattern.search(row_str)
+                        if m:
+                            regno = m.group(1)
+                            name_val = str(row[1]).strip() if len(row) > 1 and row[1] else ""
+                            for c_idx in range(len(row)):
+                                cell_v = str(row[c_idx] or "").strip()
+                                norm_g = _grade_normalize(cell_v)
+                                if norm_g and cell_v.upper() != regno:
+                                    subj_hdr = headers[c_idx] if c_idx < len(headers) else f"Column_{c_idx}"
+                                    can_name, code, cred, sem, cat, conf, amb = resolve_subject_info(subj_hdr)
+                                    rec = StudentResultRecord(
+                                        register_number=regno,
+                                        student_name=name_val,
+                                        subject_code=code or subj_hdr,
+                                        subject_name=can_name,
+                                        original_subject_text=subj_hdr,
+                                        credits=cred if cred > 0 else 3.0,
+                                        result_status=norm_g,
+                                        raw_result_status=cell_v,
+                                        source_type="PDF",
+                                        source_page=src_page,
+                                        extraction_confidence=0.95
+                                    )
+                                    extracted_records.append(rec)
+                                    inspector_items.append({
+                                        "source_page": src_page,
+                                        "raw_text": row_str,
+                                        "parsed_regno": regno,
+                                        "parsed_name": name_val or "—",
+                                        "parsed_subject": can_name,
+                                        "parsed_grade": norm_g,
+                                        "confidence": "HIGH"
+                                    })
+        except Exception:
+            pass
 
-            lines_in_block = b_text.split("\n")
-            for line_str in lines_in_block:
-                line_clean = line_str.strip()
-                if not line_clean:
+        # 2. Process text blocks from page if table extraction didn't populate records for this page
+        if len(extracted_records) == 0:
+            blocks = page.get_text("blocks")
+            for b in blocks:
+                b_text = b[4].strip()
+                if not b_text:
                     continue
-                if any(re.search(p, line_clean.upper()) for p in noise_patterns):
-                    continue
-                m = student_reg_pattern.match(line_clean)
-                if m:
-                    regno = m.group(1)
-                    after_reg = line_clean[len(regno):].strip()
 
-                    tokens = [t.strip().upper() for t in re.split(r"[\s\t,]+", after_reg) if t.strip()]
-                    name_parts = []
-                    grades_found = []
-                    for tok in tokens:
-                        g_norm = _grade_normalize(tok)
-                        if g_norm:
-                            grades_found.append((tok, g_norm))
-                        elif tok in ["UA", "AB", "NR", "NE", "FAIL", "F", "ABSENT", "WITHHELD"]:
-                            quarantined_tokens.append({
-                                "row": f"Page {src_page}",
-                                "regno": regno,
-                                "column": "PDF Text Stream",
-                                "raw_value": tok,
-                                "reason": f"Unrecognized PDF result status '{tok}' quarantined requiring faculty review."
+                lines_in_block = b_text.split("\n")
+                for line_idx, line_str in enumerate(lines_in_block):
+                    line_clean = line_str.strip()
+                    if not line_clean:
+                        continue
+                    if any(re.search(p, line_clean.upper()) for p in noise_patterns):
+                        continue
+                    m = student_reg_pattern.search(line_clean)
+                    if m:
+                        regno = m.group(1)
+                        reg_pos = line_clean.find(regno)
+                        after_reg = line_clean[reg_pos + len(regno):].strip()
+
+                        # Collect potential multi-line text if grades are on subsequent lines in block
+                        combined_line = after_reg
+                        if not combined_line and line_idx + 1 < len(lines_in_block):
+                            combined_line = " ".join(lines_in_block[line_idx + 1 : line_idx + 4])
+
+                        tokens = [t.strip().upper() for t in re.split(r"[\s\t,]+", combined_line) if t.strip()]
+                        name_parts = []
+                        grades_found = []
+                        for tok in tokens:
+                            g_norm = _grade_normalize(tok)
+                            if g_norm:
+                                grades_found.append((tok, g_norm))
+                            elif tok in ["UA", "AB", "NR", "NE", "FAIL", "F", "ABSENT", "WITHHELD"]:
+                                quarantined_tokens.append({
+                                    "row": f"Page {src_page}",
+                                    "regno": regno,
+                                    "column": "PDF Text Stream",
+                                    "raw_value": tok,
+                                    "reason": f"Unrecognized PDF result status '{tok}' quarantined requiring faculty review."
+                                })
+                            elif re.match(r"^[A-Z\.]+$", tok) and len(grades_found) == 0:
+                                name_parts.append(tok)
+
+                        raw_name = " ".join(name_parts)
+
+                        for idx, (raw_g, norm_g) in enumerate(grades_found):
+                            if idx < len(course_headers_detected):
+                                ch = course_headers_detected[idx]
+                                subj_code = ch["code"]
+                                subj_name = ch["canonical_name"]
+                                credits_val = ch["credits"]
+                                subj_sem = ch["semester"]
+                            else:
+                                subj_code = f"SUBJ_{idx+1}"
+                                subj_name = f"Subject {idx+1}"
+                                credits_val = 3.0
+                                subj_sem = 3
+
+                            rec = StudentResultRecord(
+                                register_number=regno,
+                                student_name=raw_name,
+                                subject_code=subj_code,
+                                subject_name=subj_name,
+                                original_subject_text=subj_code,
+                                credits=credits_val,
+                                result_status=norm_g,
+                                raw_result_status=raw_g,
+                                result_semester=3,
+                                subject_semester=subj_sem,
+                                source_type="PDF",
+                                source_page=src_page,
+                                extraction_confidence=0.95
+                            )
+                            extracted_records.append(rec)
+
+                            inspector_items.append({
+                                "source_page": src_page,
+                                "raw_text": line_clean,
+                                "parsed_regno": regno,
+                                "parsed_name": raw_name or "—",
+                                "parsed_subject": subj_name,
+                                "parsed_grade": norm_g,
+                                "confidence": "HIGH" if ch.get("confidence", 1.0) >= 0.8 else "REVIEW"
                             })
-                        elif re.match(r"^[A-Z\.]+$", tok) and len(grades_found) == 0:
-                            name_parts.append(tok)
-
-                    raw_name = " ".join(name_parts)
-
-                    for idx, (raw_g, norm_g) in enumerate(grades_found):
-                        if idx < len(course_headers_detected):
-                            ch = course_headers_detected[idx]
-                            subj_code = ch["code"]
-                            subj_name = ch["canonical_name"]
-                            credits_val = ch["credits"]
-                            subj_sem = ch["semester"]
-                        else:
-                            subj_code = f"SUBJ_{idx+1}"
-                            subj_name = f"Subject {idx+1}"
-                            credits_val = 3.0
-                            subj_sem = 3
-
-                        rec = StudentResultRecord(
-                            register_number=regno,
-                            student_name=raw_name,
-                            subject_code=subj_code,
-                            subject_name=subj_name,
-                            original_subject_text=subj_code,
-                            credits=credits_val,
-                            result_status=norm_g,
-                            raw_result_status=raw_g,
-                            result_semester=3,
-                            subject_semester=subj_sem,
-                            source_type="PDF",
-                            source_page=src_page,
-                            extraction_confidence=0.95
-                        )
-                        extracted_records.append(rec)
-
-                        inspector_items.append({
-                            "source_page": src_page,
-                            "raw_text": line_clean,
-                            "parsed_regno": regno,
-                            "parsed_name": raw_name or "—",
-                            "parsed_subject": subj_name,
-                            "parsed_grade": norm_g,
-                            "confidence": "HIGH" if ch.get("confidence", 1.0) >= 0.8 else "REVIEW"
-                        })
 
     # Secondary fallback using pdfplumber if PyMuPDF blocks were plain structured grid tables
     if len(extracted_records) == 0:
@@ -3444,15 +3500,34 @@ def page_upload() -> Tuple:
                 Div(
                     Div(
                         Div(
-                            Span("📄", cls="text-4xl block mb-2"),
-                            Span("RECOMMENDED: COE PDF", cls="inline-block text-[10px] font-bold bg-blue-600 text-white px-2 py-0.5 rounded shadow-xs uppercase tracking-wide mb-2"),
-                            H3("Upload COE Result PDF", cls="text-base font-bold text-slate-900 mb-1"),
-                            P("Drop your official result PDF here or click to browse. Automatically extracts grades & verifies page provenance.", cls="text-xs text-slate-500 mb-4"),
-                            Input(type="file", name="file_pdf", accept=".pdf", required=True, id="file_pdf_input",
-                                  cls="block w-full text-xs text-slate-500 file:mr-3 file:py-2.5 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer"),
+                            Div(
+                                Span("📄", cls="text-3xl mr-2"),
+                                Div(
+                                    Span("RECOMMENDED: COE PDF", cls="inline-block text-[10px] font-bold bg-blue-600 text-white px-2 py-0.5 rounded uppercase tracking-wider mb-0.5"),
+                                    H3("Upload COE Result PDF", cls="text-base font-bold text-slate-900 leading-tight"),
+                                ),
+                                cls="flex items-center"
+                            ),
+                            cls="mb-3"
                         ),
+                        P("Drop your official result PDF here or click to browse. Automatically extracts grades & verifies page provenance.", cls="text-xs text-slate-500 mb-4 leading-relaxed"),
+
+                        # PDF Input & Select
+                        Div(
+                            Input(type="file", name="file_pdf", accept=".pdf", required=True, id="file_pdf_input",
+                                  cls="block w-full text-xs text-slate-500 file:mr-3 file:py-2.5 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer border border-slate-200 rounded-lg p-1 bg-white",
+                                  onchange="handlePdfFileSelect(this)"),
+                            Div(
+                                Span("✓ Selected PDF:", cls="text-xs font-bold text-blue-700 block mb-0.5"),
+                                Span("", id="pdf_file_name", cls="text-xs font-mono font-semibold text-slate-800 break-all block"),
+                                id="pdf_file_selected_info",
+                                cls="hidden mt-2 p-2.5 bg-blue-50 border border-blue-200 rounded-lg text-center"
+                            ),
+                            cls="mb-4"
+                        ),
+
                         Button("Analyze PDF & Preview Extraction →", type="submit", id="btn_analyze_pdf",
-                               cls="mt-5 w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-xl text-sm transition-all shadow-md flex items-center justify-center gap-2"),
+                               cls="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-xl text-sm transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2"),
 
                         # Stage Progress Container (Hidden by default)
                         Div(
@@ -3466,39 +3541,96 @@ def page_upload() -> Tuple:
                             ),
                             id="pdf_progress_card", cls="hidden mt-3"
                         ),
-                        cls="card p-6 border-2 border-blue-500/20 hover:border-blue-500/50 transition-all shadow-sm"
+                        cls="card p-6 border-2 border-blue-500/20 hover:border-blue-500/50 transition-all shadow-sm flex flex-col justify-between h-full"
                     ),
                 ),
                 action="/upload-pdf", method="POST", enctype="multipart/form-data",
                 onsubmit="handleUploadFormSubmit(this, 'pdf_progress_card', 'Analyzing COE PDF...')"
             ),
 
-            # Mode B: Excel Upload (Secondary)
+            # Mode B: Excel Upload (Secondary - Fully Redesigned Dropzone & Structure Guidance)
             Form(
                 Div(
                     Div(
+                        # Top Header & Badge
                         Div(
-                            Span("📊", cls="text-4xl block mb-2"),
-                            H3("Upload Excel File", cls="text-base font-bold text-slate-900 mb-1"),
-                            P("Upload wide or long format .xlsx spreadsheet containing student semester grades.", cls="text-xs text-slate-500 mb-4"),
-                            Input(type="file", name="file", accept=".xlsx", required=True, id="file_excel_input",
-                                  cls="block w-full text-xs text-slate-500 file:mr-3 file:py-2.5 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 cursor-pointer"),
+                            Div(
+                                Span("📊", cls="text-3xl mr-2"),
+                                Div(
+                                    Span("MODE B: EXCEL SPREADSHEET", cls="inline-block text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded uppercase tracking-wider mb-0.5"),
+                                    H3("Upload Excel Grade Sheet", cls="text-base font-bold text-slate-900 leading-tight"),
+                                ),
+                                cls="flex items-center"
+                            ),
+                            cls="mb-3"
                         ),
+                        P("Upload .xlsx or .xls files. Supports wide or long tabular format containing semester result grades.", cls="text-xs text-slate-500 mb-4 leading-relaxed"),
+
+                        # Drag and Drop Zone
+                        Div(
+                            Input(type="file", name="file", accept=".xlsx, .xls", required=True, id="file_excel_input", cls="hidden", onchange="handleExcelFileSelect(this)"),
+                            Label(
+                                Div(
+                                    Div(
+                                        Span("📥", cls="text-3xl block mb-1 group-hover:scale-110 transition-transform"),
+                                        Span("Drag & drop Excel file here, or ", cls="text-xs font-semibold text-slate-700"),
+                                        Span("browse", cls="text-xs font-bold text-emerald-600 underline hover:text-emerald-700"),
+                                        cls="text-center"
+                                    ),
+                                    Span("Supports .xlsx, .xls spreadsheets up to 50MB", cls="text-[10px] text-slate-400 mt-1 block text-center"),
+                                    id="excel_dropzone_prompt",
+                                    cls="flex flex-col items-center justify-center p-3"
+                                ),
+                                Div(
+                                    Span("✓ Selected File:", cls="text-xs font-bold text-emerald-700 block mb-0.5"),
+                                    Span("", id="excel_file_name", cls="text-xs font-mono font-semibold text-slate-800 break-all block"),
+                                    Span("", id="excel_file_size", cls="text-[10px] text-slate-500 block mt-0.5"),
+                                    Span("Click to change file", cls="text-[10px] font-medium text-emerald-600 underline mt-1 block"),
+                                    id="excel_file_selected_info",
+                                    cls="hidden p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-center w-full"
+                                ),
+                                htmlFor="file_excel_input",
+                                id="excel_dropzone",
+                                cls="group flex flex-col items-center justify-center border-2 border-dashed border-emerald-300 hover:border-emerald-500 bg-emerald-50/30 hover:bg-emerald-50/60 rounded-xl p-3 cursor-pointer transition-all min-h-[110px]"
+                            ),
+                            cls="mb-3"
+                        ),
+
+                        # Structure Format Guidance Pills
+                        Div(
+                            Span("Supported Excel Structures:", cls="text-[11px] font-bold text-slate-700 block mb-1"),
+                            Div(
+                                Div(
+                                    Span("🟢 Wide Format", cls="text-[10px] font-bold text-emerald-800 bg-emerald-100 px-1.5 py-0.5 rounded mr-1 whitespace-nowrap"),
+                                    Span("RegNo | Name | CS3351 | MA3354...", cls="text-[10px] text-slate-600 font-mono truncate"),
+                                    cls="bg-slate-50 p-1.5 rounded border border-slate-200 text-xs mb-1 flex items-center justify-between overflow-hidden"
+                                ),
+                                Div(
+                                    Span("🔵 Long Format", cls="text-[10px] font-bold text-blue-800 bg-blue-100 px-1.5 py-0.5 rounded mr-1 whitespace-nowrap"),
+                                    Span("RegNo | Subject Code | Grade", cls="text-[10px] text-slate-600 font-mono truncate"),
+                                    cls="bg-slate-50 p-1.5 rounded border border-slate-200 text-xs flex items-center justify-between overflow-hidden"
+                                ),
+                                cls="space-y-1"
+                            ),
+                            cls="mb-4"
+                        ),
+
+                        # Action Button
                         Button("Analyze Excel & Preview Mapping →", type="submit", id="btn_analyze_excel",
-                               cls="mt-5 w-full bg-slate-800 hover:bg-slate-900 text-white font-semibold py-3 px-4 rounded-xl text-sm transition-all shadow-md flex items-center justify-center gap-2"),
+                               cls="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-3 px-4 rounded-xl text-sm transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2"),
 
                         # Stage Progress Container (Hidden by default)
                         Div(
-                            Div(Span("⏳ Processing Excel Sheet...", cls="text-xs font-bold text-slate-800 block mb-2")),
+                            Div(Span("⏳ Processing Excel Sheet...", cls="text-xs font-bold text-emerald-900 block mb-2")),
                             Div(
-                                Div(Span("✓", cls="text-green-600 font-bold mr-2"), Span("Reading workbook data", cls="text-xs text-slate-700"), cls="flex items-center text-xs py-0.5"),
+                                Div(Span("✓", cls="text-emerald-600 font-bold mr-2"), Span("Reading workbook data", cls="text-xs text-slate-700"), cls="flex items-center text-xs py-0.5"),
                                 Div(Span("•", cls="text-emerald-500 font-bold mr-2 animate-pulse"), Span("Cleaning result columns...", cls="text-xs text-slate-700"), cls="flex items-center text-xs py-0.5"),
                                 Div(Span("•", cls="text-slate-300 font-bold mr-2"), Span("Calculating academic metrics...", cls="text-xs text-slate-400"), cls="flex items-center text-xs py-0.5"),
-                                cls="bg-slate-100 p-3 rounded-lg border border-slate-200 mt-3"
+                                cls="bg-emerald-50 p-3 rounded-lg border border-emerald-100 mt-3"
                             ),
                             id="excel_progress_card", cls="hidden mt-3"
                         ),
-                        cls="card p-6 border border-slate-200 hover:border-slate-300 transition-all shadow-sm"
+                        cls="card p-6 border border-emerald-500/30 hover:border-emerald-500/60 transition-all shadow-sm flex flex-col justify-between h-full"
                     ),
                 ),
                 action="/upload-preview", method="POST", enctype="multipart/form-data",
@@ -3520,12 +3652,12 @@ def page_upload() -> Tuple:
                                 Div(
                                     Label("COE Result PDF:", cls="text-[11px] font-semibold text-slate-700 block mb-1"),
                                     Input(type="file", name="file_pdf", accept=".pdf", required=True,
-                                          cls="block w-full text-xs text-slate-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-[11px] file:bg-purple-50 file:text-purple-700"),
+                                          cls="block w-full text-xs text-slate-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-[11px] file:bg-purple-50 file:text-purple-700 border border-slate-200 rounded-lg p-1 bg-white"),
                                 ),
                                 Div(
                                     Label("Excel File:", cls="text-[11px] font-semibold text-slate-700 block mb-1"),
-                                    Input(type="file", name="file_excel", accept=".xlsx", required=True,
-                                          cls="block w-full text-xs text-slate-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-[11px] file:bg-purple-50 file:text-purple-700"),
+                                    Input(type="file", name="file_excel", accept=".xlsx, .xls", required=True,
+                                          cls="block w-full text-xs text-slate-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-[11px] file:bg-purple-50 file:text-purple-700 border border-slate-200 rounded-lg p-1 bg-white"),
                                 ),
                                 cls="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4"
                             ),
@@ -3536,6 +3668,7 @@ def page_upload() -> Tuple:
                     cls="card p-6 border-l-4 border-l-purple-600 sm:col-span-2 shadow-sm"
                 ),
                 action="/upload-dual", method="POST", enctype="multipart/form-data",
+                onsubmit="handleUploadFormSubmit(this, null, 'Reconciling Documents...')"
             ),
 
             cls="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-12 max-w-4xl mx-auto"
@@ -3601,18 +3734,79 @@ def page_upload() -> Tuple:
         ),
 
         Script("""
-        function handleUploadFormSubmit(form, cardId, btnText) {
-            var btn = form.querySelector('button[type="submit"]');
-            if (btn) {
-                btn.disabled = true;
-                btn.innerHTML = '<span class="animate-spin inline-block mr-2">⏳</span> ' + btnText;
-                btn.classList.add('opacity-75', 'cursor-not-allowed');
-            }
-            var card = document.getElementById(cardId);
-            if (card) {
-                card.classList.remove('hidden');
+        function handlePdfFileSelect(input) {
+            if (input.files && input.files[0]) {
+                var file = input.files[0];
+                var info = document.getElementById('pdf_file_selected_info');
+                if (info) {
+                    info.classList.remove('hidden');
+                    document.getElementById('pdf_file_name').innerText = file.name;
+                }
             }
         }
+
+        function handleExcelFileSelect(input) {
+            if (input.files && input.files[0]) {
+                var file = input.files[0];
+                var promptEl = document.getElementById('excel_dropzone_prompt');
+                if (promptEl) promptEl.classList.add('hidden');
+                var info = document.getElementById('excel_file_selected_info');
+                if (info) {
+                    info.classList.remove('hidden');
+                    document.getElementById('excel_file_name').innerText = file.name;
+                    var sizeMB = (file.size / (1024 * 1024)).toFixed(2);
+                    document.getElementById('excel_file_size').innerText = sizeMB + ' MB';
+                }
+            }
+        }
+
+        function handleUploadFormSubmit(form, cardId, btnText) {
+            if (cardId) {
+                var card = document.getElementById(cardId);
+                if (card) {
+                    card.classList.remove('hidden');
+                }
+            }
+            var btn = form.querySelector('button[type="submit"]');
+            if (btn) {
+                setTimeout(function() {
+                    btn.disabled = true;
+                    btn.innerHTML = '<span class="animate-spin inline-block mr-2">⏳</span> ' + btnText;
+                    btn.classList.add('opacity-75', 'cursor-not-allowed');
+                }, 10);
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            var dropzone = document.getElementById('excel_dropzone');
+            if (dropzone) {
+                ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(function(eventName) {
+                    dropzone.addEventListener(eventName, function(e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                    }, false);
+                });
+                ['dragenter', 'dragover'].forEach(function(eventName) {
+                    dropzone.addEventListener(eventName, function() {
+                        dropzone.classList.add('border-emerald-600', 'bg-emerald-100/50');
+                    }, false);
+                });
+                ['dragleave', 'drop'].forEach(function(eventName) {
+                    dropzone.addEventListener(eventName, function() {
+                        dropzone.classList.remove('border-emerald-600', 'bg-emerald-100/50');
+                    }, false);
+                });
+                dropzone.addEventListener('drop', function(e) {
+                    var dt = e.dataTransfer;
+                    var files = dt.files;
+                    if (files && files.length > 0) {
+                        var fileInput = document.getElementById('file_excel_input');
+                        fileInput.files = files;
+                        handleExcelFileSelect(fileInput);
+                    }
+                }, false);
+            }
+        });
         """),
         cls="max-w-5xl mx-auto py-4"
     ))
