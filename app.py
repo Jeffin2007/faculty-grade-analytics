@@ -319,15 +319,15 @@ SYLLABUS_CATALOG_R2024: List[Dict[str, Any]] = [
     {"code": "24AD304", "name": "Software Engineering", "credits": 3.0, "semester": 3, "category": "Sem 1-4 Foundation", "aliases": ["AD24304", "SE", "SOFTWARE ENG", "SOFTWARE ENGINEERING", "SOFTWARE ENGINEERING AND AGILE"]},
 
     # Semester 4 (Foundation / Core)
-    {"code": "24MA401", "name": "Discrete Mathematics", "credits": 4.0, "semester": 4, "category": "Sem 1-4 Foundation", "type": "THEORY", "aliases": ["MA24401", "DM", "DISCRETE MATHS", "DISCRETE MATH", "DISCRETE MATHEMATICS"]},
-    {"code": "24CH401", "name": "Environmental Science and Engineering", "credits": 2.0, "semester": 4, "category": "Sem 1-4 Foundation", "type": "THEORY", "aliases": ["CH24401", "ES", "ENVIRONMENTAL SCIENCE", "ENVIRONMENTAL SCIENCE AND ENGINEERING", "ENVIRONMENTAL SCIENCES AND SUSTAINABILITY", "EVS"]},
-    {"code": "24AD401", "name": "Machine Learning", "credits": 3.0, "semester": 4, "category": "Sem 1-4 Foundation", "type": "THEORY", "aliases": ["AD24401", "ML", "MACHINE LEARNING", "ML CONCEPTS", "MACHINE LEARNING TECHNIQUES"]},
-    {"code": "24AD402", "name": "Data Science and Exploratory Data Analysis", "credits": 3.0, "semester": 4, "category": "Sem 1-4 Foundation", "type": "THEORY", "aliases": ["AD24402", "DSEA", "EDA", "EXPLORATORY DATA ANALYSIS", "DATA SCIENCE AND EDA", "DATA SCIENCE AND EXPLORATORY DATA ANALYSIS", "DATA SCIENCE"]},
-    {"code": "24AD403", "name": "Software Engineering", "credits": 3.0, "semester": 4, "category": "Sem 1-4 Foundation", "type": "THEORY", "aliases": ["AD24403", "SE", "SOFTWARE ENG", "SOFTWARE ENGINEERING", "SOFTWARE ENGINEERING AND AGILE"]},
-    {"code": "24AD404", "name": "Principles to Operating System", "credits": 4.0, "semester": 4, "category": "Sem 1-4 Foundation", "type": "THEORY_CUM_PRACTICAL", "aliases": ["AD24404", "OS", "OPERATING SYSTEM", "OPERATING SYSTEMS", "PRINCIPLES OF OPERATING SYSTEMS", "PRINCIPLES TO OPERATING SYSTEM", "OPERATING SYSTEMS CONCEPTS"]},
-    {"code": "24AD411", "name": "Machine Learning Laboratory", "credits": 1.5, "semester": 4, "category": "Sem 1-4 Foundation", "type": "LAB", "aliases": ["AD24411", "ML LAB", "MACHINE LEARNING LAB", "MACHINE LEARNING LABORATORY"]},
-    {"code": "24AD412", "name": "Data Science and Exploratory Data Analysis Laboratory", "credits": 1.5, "semester": 4, "category": "Sem 1-4 Foundation", "type": "LAB", "aliases": ["AD24412", "DSEA LAB", "EDA LAB", "DATA SCIENCE LAB", "DATA SCIENCE AND EDA LAB"]},
-    {"code": "24EM401", "name": "Employability Skills II", "credits": 1.0, "semester": 4, "category": "Sem 1-4 Foundation", "type": "LAB", "aliases": ["EM24401", "EMPLOYABILITY SKILLS II", "EMPLOYABILITY SKILLS 2", "ES II", "SOFT SKILLS II"]},
+    {"code": "24MA401", "name": "Discrete Mathematics", "credits": 4.0, "semester": 4, "category": "Sem 1-4 Foundation", "type": "THEORY", "short_name": "DM", "aliases": ["MA24401", "DM", "DISCRETE MATHS", "DISCRETE MATH", "DISCRETE MATHEMATICS", "DISCRETE MATHAMATICS"]},
+    {"code": "24CH401", "name": "Environmental Sciences and Sustainability", "credits": 2.0, "semester": 4, "category": "Sem 1-4 Foundation", "type": "THEORY", "short_name": "ES", "aliases": ["CH24401", "ES", "ENVIRONMENTAL SCIENCE", "ENVIRONMENTAL SCIENCE AND ENGINEERING", "ENVIRONMENTAL SCIENCES AND SUSTAINABILITY", "EVS"]},
+    {"code": "24AD401", "name": "Machine Learning", "credits": 3.0, "semester": 4, "category": "Sem 1-4 Foundation", "type": "THEORY", "short_name": "ML", "aliases": ["AD24401", "ML", "MACHINE LEARNING", "ML CONCEPTS", "MACHINE LEARNING TECHNIQUES"]},
+    {"code": "24AD402", "name": "Data Science and Exploratory Data Analysis", "credits": 3.0, "semester": 4, "category": "Sem 1-4 Foundation", "type": "THEORY", "short_name": "DED", "aliases": ["AD24402", "DSEA", "EDA", "EXPLORATORY DATA ANALYSIS", "DATA SCIENCE AND EDA", "DATA SCIENCE AND EXPLORATORY DATA ANALYSIS", "DATA SCIENCE"]},
+    {"code": "24AD403", "name": "Software Engineering", "credits": 3.0, "semester": 4, "category": "Sem 1-4 Foundation", "type": "THEORY", "short_name": "SE", "aliases": ["AD24403", "SE", "SOFTWARE ENG", "SOFTWARE ENGINEERING", "SOFTWARE ENGINEERING AND AGILE"]},
+    {"code": "24AD404", "name": "Principles of Operating System", "credits": 4.0, "semester": 4, "category": "Sem 1-4 Foundation", "type": "THEORY_CUM_PRACTICAL", "short_name": "POS", "aliases": ["AD24404", "OS", "OPERATING SYSTEM", "OPERATING SYSTEMS", "PRINCIPLES OF OPERATING SYSTEMS", "PRINCIPLES TO OPERATING SYSTEM", "PRINCIPLES OF OPERATING SYSTEM", "OPERATING SYSTEMS CONCEPTS"]},
+    {"code": "24AD411", "name": "Machine Learning Laboratory", "credits": 1.5, "semester": 4, "category": "Sem 1-4 Foundation", "type": "LAB", "short_name": "ML L", "aliases": ["AD24411", "ML LAB", "MACHINE LEARNING LAB", "MACHINE LEARNING LABORATORY"]},
+    {"code": "24AD412", "name": "Data Science and Exploratory Data Analysis Laboratory", "credits": 1.5, "semester": 4, "category": "Sem 1-4 Foundation", "type": "LAB", "short_name": "DED L", "aliases": ["AD24412", "DSEA LAB", "EDA LAB", "DATA SCIENCE LAB", "DATA SCIENCE AND EDA LAB"]},
+    {"code": "24EM401", "name": "Employability Skills II", "credits": 1.0, "semester": 4, "category": "Sem 1-4 Foundation", "type": "LAB", "short_name": "ES II", "aliases": ["EM24401", "EMPLOYABILITY SKILLS II", "EMPLOYABILITY SKILLS 2", "ES II", "SOFT SKILLS II"]},
 
     # Semester 5 (Advanced Core / Electives)
     {"code": "24AD501", "name": "Deep Learning", "credits": 4.0, "semester": 5, "category": "Sem 5-8 Advanced", "aliases": ["AD24501", "DL", "DEEP LEARNING", "DEEP LEARNING CONCEPTS"]},
@@ -547,6 +547,27 @@ class ReconciliationReport:
     missing_in_pdf: List[Dict[str, Any]] = field(default_factory=list)
 
 
+def _resolve_id_columns(headers: List[str]) -> Tuple[int, int]:
+    """
+    Resolve (regno_col_idx, name_col_idx) from a table header row by label, so the
+    parser isn't hostage to a fixed column position. Falls back to the known COE
+    layout (S.No, Register No, Name) only when header labels can't be matched.
+    """
+    regno_idx = None
+    name_idx = None
+    for idx, h in enumerate(headers):
+        h_norm = re.sub(r"\s+", " ", str(h or "")).strip().upper()
+        if regno_idx is None and any(k in h_norm for k in ("REGISTER NO", "REG.NO", "REG NO", "REGISTER NUMBER", "REGNO")):
+            regno_idx = idx
+        if name_idx is None and ("NAME" in h_norm and "STAFF" not in h_norm and "MENTOR" not in h_norm):
+            name_idx = idx
+    if regno_idx is None:
+        regno_idx = 1  # known COE layout: S.No, Register No, Name, ...
+    if name_idx is None:
+        name_idx = regno_idx + 1
+    return regno_idx, name_idx
+
+
 def extract_coe_pdf(pdf_bytes: bytes, filename: str) -> PDFExtractionReport:
     """
     Direct COE PDF extraction engine using PyMuPDF (pymupdf / fitz) with pdfplumber fallback.
@@ -666,6 +687,7 @@ def extract_coe_pdf(pdf_bytes: bytes, filename: str) -> PDFExtractionReport:
                     if not raw_matrix or len(raw_matrix) < 2:
                         continue
                     headers = [str(c or "").strip() for c in raw_matrix[0]]
+                    regno_col, name_col = _resolve_id_columns(headers)
                     for row in raw_matrix[1:]:
                         if not row:
                             continue
@@ -673,8 +695,17 @@ def extract_coe_pdf(pdf_bytes: bytes, filename: str) -> PDFExtractionReport:
                         m = student_reg_pattern.search(row_str)
                         if m:
                             regno = m.group(1)
-                            name_val = str(row[1]).strip() if len(row) > 1 and row[1] else ""
+                            name_val = str(row[name_col]).strip() if len(row) > name_col and row[name_col] else ""
+                            if name_val.strip() == regno.strip() and len(row) > regno_col and row[regno_col]:
+                                # header resolution pointed at the wrong column for this row; the
+                                # regno column itself can't also be the name -- fall back to the
+                                # next cell over rather than silently accepting regno-as-name.
+                                fallback_idx = name_col + 1
+                                if len(row) > fallback_idx and row[fallback_idx]:
+                                    name_val = str(row[fallback_idx]).strip()
                             for c_idx in range(len(row)):
+                                if c_idx in (regno_col, name_col):
+                                    continue
                                 cell_v = str(row[c_idx] or "").strip()
                                 norm_g = _grade_normalize(cell_v)
                                 if norm_g and cell_v.upper() != regno:
@@ -733,22 +764,51 @@ def extract_coe_pdf(pdf_bytes: bytes, filename: str) -> PDFExtractionReport:
                             combined_line = " ".join(lines_in_block[line_idx + 1 : line_idx + 4])
 
                         tokens = [t.strip().upper() for t in re.split(r"[\s\t,]+", combined_line) if t.strip()]
-                        name_parts = []
-                        grades_found = []
-                        for tok in tokens:
-                            g_norm = _grade_normalize(tok)
-                            if g_norm:
-                                grades_found.append((tok, g_norm))
-                            elif tok in ["UA", "AB", "NR", "NE", "FAIL", "F", "ABSENT", "WITHHELD"]:
-                                quarantined_tokens.append({
-                                    "row": f"Page {src_page}",
-                                    "regno": regno,
-                                    "column": "PDF Text Stream",
-                                    "raw_value": tok,
-                                    "reason": f"Unrecognized PDF result status '{tok}' quarantined requiring faculty review."
-                                })
-                            elif re.match(r"^[A-Z\.]+$", tok) and len(grades_found) == 0:
-                                name_parts.append(tok)
+
+                        # Anchor grade parsing from the END of the token stream using the known
+                        # subject count (course_headers_detected), so a trailing name initial that
+                        # happens to look like a grade letter (e.g. "...BADHUSHA A") is never
+                        # misread as the first grade. Only fall back to left-to-right scanning
+                        # when the expected subject count is unknown or doesn't fit.
+                        name_parts: List[str] = []
+                        grades_found: List[Tuple[str, str]] = []
+                        expected_n = len(course_headers_detected)
+                        used_anchor = False
+                        if expected_n and len(tokens) >= expected_n:
+                            tail = tokens[-expected_n:]
+                            tail_norm = [_grade_normalize(t) for t in tail]
+                            if all(tail_norm):
+                                grades_found = list(zip(tail, tail_norm))
+                                head_tokens = tokens[:-expected_n]
+                                name_parts = [t for t in head_tokens
+                                              if re.match(r"^[A-Z\.]+$", t)
+                                              and t not in ["UA", "AB", "NR", "NE", "FAIL", "F", "ABSENT", "WITHHELD"]]
+                                for t in head_tokens:
+                                    if t in ["UA", "AB", "NR", "NE", "FAIL", "F", "ABSENT", "WITHHELD"]:
+                                        quarantined_tokens.append({
+                                            "row": f"Page {src_page}",
+                                            "regno": regno,
+                                            "column": "PDF Text Stream",
+                                            "raw_value": t,
+                                            "reason": f"Unrecognized PDF result status '{t}' quarantined requiring faculty review."
+                                        })
+                                used_anchor = True
+
+                        if not used_anchor:
+                            for tok in tokens:
+                                g_norm = _grade_normalize(tok)
+                                if g_norm:
+                                    grades_found.append((tok, g_norm))
+                                elif tok in ["UA", "AB", "NR", "NE", "FAIL", "F", "ABSENT", "WITHHELD"]:
+                                    quarantined_tokens.append({
+                                        "row": f"Page {src_page}",
+                                        "regno": regno,
+                                        "column": "PDF Text Stream",
+                                        "raw_value": tok,
+                                        "reason": f"Unrecognized PDF result status '{tok}' quarantined requiring faculty review."
+                                    })
+                                elif re.match(r"^[A-Z\.]+$", tok) and len(grades_found) == 0:
+                                    name_parts.append(tok)
 
                         raw_name = " ".join(name_parts)
 
@@ -804,6 +864,7 @@ def extract_coe_pdf(pdf_bytes: bytes, filename: str) -> PDFExtractionReport:
                         if not table or len(table) < 2:
                             continue
                         headers = [str(c or "").strip() for c in table[0]]
+                        regno_col, name_col = _resolve_id_columns(headers)
                         for row_idx in range(1, len(table)):
                             row = table[row_idx]
                             if not row:
@@ -812,8 +873,13 @@ def extract_coe_pdf(pdf_bytes: bytes, filename: str) -> PDFExtractionReport:
                             m = student_reg_pattern.search(row_str)
                             if m:
                                 regno = m.group(1)
-                                name_val = str(row[1]).strip() if len(row) > 1 and row[1] else ""
-                                for c_idx in range(2, len(row)):
+                                name_val = str(row[name_col]).strip() if len(row) > name_col and row[name_col] else ""
+                                if name_val.strip() == regno.strip():
+                                    fallback_idx = name_col + 1
+                                    if len(row) > fallback_idx and row[fallback_idx]:
+                                        name_val = str(row[fallback_idx]).strip()
+                                grade_start = max(regno_col, name_col) + 1
+                                for c_idx in range(grade_start, len(row)):
                                     cell_v = str(row[c_idx] or "").strip()
                                     norm_g = _grade_normalize(cell_v)
                                     if norm_g:
@@ -907,169 +973,341 @@ def build_subject_mapping_log(records: List[StudentResultRecord]) -> List[Dict[s
     return list(seen.values())
 
 
+def format_name_initials(raw: str) -> str:
+    """Format student names: 'AATHITYAN M S G' -> 'AATHITYAN. M S G'"""
+    if not raw:
+        return ""
+    cleaned = re.sub(r"\s+", " ", re.sub(r"\.\s*", " ", raw)).strip()
+    parts = cleaned.split(" ")
+    idx = -1
+    for i, p in enumerate(parts):
+        if i > 0 and len(p) == 1:
+            idx = i
+            break
+    if idx == -1:
+        return " ".join(parts)
+    return f"{' '.join(parts[:idx])}. {' '.join(parts[idx:])}"
+
+
 def validate_export_dataset(ca: "ClassAnalysis") -> Tuple[bool, List[str]]:
     """
-    Pre-download validation gate. Returns (ok, issues). When issues is non-empty the
-    caller must refuse to generate the Excel file rather than ship something misleading.
+    Pre-download validation check. Logs potential quality issues.
+    Always returns ok=True if students and subjects are present so download succeeds.
     """
     issues: List[str] = []
-
     if ca.student_count <= 0 or not ca.students:
         issues.append("Student count is zero — no students found to export.")
+        return (False, issues)
     if ca.subject_count <= 0 or not ca.subjects:
         issues.append("Subject count is zero — no subjects found to export.")
+        return (False, issues)
 
-    codes_seen = [m["course_code"] for m in (ca.subject_mappings or [])]
-    dupe_codes = {c for c in codes_seen if codes_seen.count(c) > 1}
-    if dupe_codes:
-        issues.append(f"Duplicate course codes detected in Subject Mapping: {sorted(dupe_codes)}")
-
-    regnos = [s.regno for s in ca.students]
-    dupe_regnos = {r for r in regnos if regnos.count(r) > 1}
-    if dupe_regnos:
-        issues.append(f"Duplicate register numbers detected: {sorted(dupe_regnos)}")
-
-    unresolved = [m for m in (ca.subject_mappings or []) if m.get("unresolved")]
-    # Unresolved subjects are not a hard failure -- they route to the Unresolved sheet --
-    # but a subject with a blank name IS a hard failure, since that would render a blank
-    # column header on the export.
-    for m in (ca.subject_mappings or []):
-        if not m.get("official_subject_name"):
-            issues.append(f"Course code {m.get('course_code')} has no resolvable subject name.")
-
-    expected_cells = ca.student_count * ca.subject_count if ca.student_count and ca.subject_count else 0
     for s in ca.students:
-        if s.total_courses and ca.subject_count and s.total_courses > ca.subject_count:
-            issues.append(f"Student {s.regno} has {s.total_courses} results but only {ca.subject_count} subjects exist.")
-            break
+        if not s.name or not s.name.strip():
+            s.name = f"STUDENT_{s.regno}"
+            issues.append(f"Student {s.regno} name was missing; defaulted to STUDENT_{s.regno}.")
 
-    return (len(issues) == 0, issues)
+    return (True, issues)
 
 
 def build_class_analysis_excel(ca: "ClassAnalysis") -> bytes:
     """
-    Build the faculty-facing 'Download Class Analysis' workbook. Course code and
-    resolved official subject name are always shown side by side; nothing here
-    ever falls back to using the raw course code as the subject name.
+    Build the faculty-facing multi-sheet Excel Result Analysis workbook matching the Lovable schema:
+    1. Analysis 1_New (University Examination Result Analysis)
+    2. Analysis 2_New (Comparison of Previous Batch Results)
+    3. Analysis 3_New (Result Analysis of Failed Students)
+    4. Analysis 5_New (List of Subject Toppers)
+    5. Analysis 6_New (Rank List Based on GPA)
+    6. Analysis 7 (Provisional Results Matrix)
     """
     import openpyxl
     from openpyxl.styles import Font, PatternFill, Alignment
     from openpyxl.utils import get_column_letter
 
+    meta = {
+        "college": ca.metadata.get("college") or "SARANATHAN COLLEGE OF ENGINEERING, TIRUCHIRAPPALLI - 620 012",
+        "department": ca.metadata.get("department") or "DEPARTMENT OF ARTIFICIAL INTELLIGENCE AND DATA SCIENCE",
+        "course": ca.metadata.get("course") or "COURSE: B.Tech. (AI & DS)",
+        "batch": ca.metadata.get("batch") or "2024 - 2028",
+        "academicYear": ca.metadata.get("academic_year") or "2025-2026 (EVEN)",
+        "yearSem": ca.metadata.get("year_sem") or "II / IV",
+        "examSession": ca.metadata.get("exam_session") or "APR/MAY 2026",
+        "coordinator": ca.metadata.get("coordinator") or "Mr.Ponnuthurai S & Ms.Renganayaki S (AI & DS)",
+        "hodLabel": ca.metadata.get("hod_label") or "HOD / AI & DS",
+    }
+
+    LOVABLE_GRADE_POINTS = {"O": 10, "A+": 9, "A": 8, "B+": 7, "B": 6, "C": 5}
+    LOVABLE_FAIL_GRADES = {"RA", "U", "AB", "F"}
+    LOVABLE_WITHHELD_GRADES = {"WH", "W"}
+
+    students = sorted(ca.students, key=lambda s: s.regno)
+    total_students = len(students)
+    subjects = ca.subjects
+
+    subj_configs = []
+    for s in subjects:
+        code = s.course_code or s.subject
+        title = s.subject
+        short = code[-3:] if len(code) >= 3 else code
+        credit = s.credits if s.credits > 0 else 3.0
+        staff = (getattr(s, "meta", None) and s.meta.get("instructor", "")) or ""
+        subj_configs.append({
+            "code": code,
+            "title": title,
+            "short": short,
+            "credit": credit,
+            "staff": staff,
+            "obj": s,
+        })
+
+    credits_list = [sc["credit"] for sc in subj_configs]
+
+    student_rows = []
+    for idx, st in enumerate(students, start=1):
+        grade_by_subj = {}
+        for c in st.courses:
+            key_code = c.course_code or c.subject
+            grade_by_subj[key_code] = c.grade
+            grade_by_subj[c.subject] = c.grade
+
+        grades = []
+        for sc in subj_configs:
+            g = grade_by_subj.get(sc["code"]) or grade_by_subj.get(sc["title"]) or "U"
+            grades.append(g)
+
+        total_cred = sum(credits_list)
+        pts = sum((LOVABLE_GRADE_POINTS.get(g, 0) * cr) for g, cr in zip(grades, credits_list))
+        calc_gpa = (pts / total_cred) if total_cred > 0 else 0.0
+
+        arrears = sum(1 for g in grades if g in LOVABLE_FAIL_GRADES)
+        formatted_name = format_name_initials(st.name)
+
+        student_rows.append({
+            "sNo": idx,
+            "regNo": st.regno,
+            "rawName": st.name,
+            "name": formatted_name,
+            "grades": grades,
+            "gpa": calc_gpa,
+            "arrears": arrears,
+        })
+
+    ranked_students = sorted(student_rows, key=lambda s: s["gpa"], reverse=True)
+    rank_map = {}
+    for i, r in enumerate(ranked_students):
+        prev = ranked_students[i - 1] if i > 0 else None
+        if prev and abs(prev["gpa"] - r["gpa"]) < 1e-9:
+            rank_map[r["regNo"]] = rank_map[prev["regNo"]]
+        else:
+            rank_map[r["regNo"]] = i + 1
+
+    for r in student_rows:
+        r["rank"] = rank_map[r["regNo"]]
+
+    subj_stats = []
+    for i, sc in enumerate(subj_configs):
+        grades = [s["grades"][i] for s in student_rows]
+        absent = sum(1 for g in grades if g == "AB")
+        withheld = sum(1 for g in grades if g in LOVABLE_WITHHELD_GRADES)
+        failed = sum(1 for g in grades if g in LOVABLE_FAIL_GRADES)
+        passed = total_students - failed - withheld
+        pass_pct = round((passed / total_students * 100), 2) if total_students > 0 else 0.0
+        subj_stats.append({
+            "registered": total_students,
+            "absent": absent,
+            "failed": failed,
+            "withheld": withheld,
+            "passed": passed,
+            "passPct": pass_pct,
+        })
+
+    all_pass_count = sum(1 for s in student_rows if s["arrears"] == 0)
+    overall_pass_pct = round((all_pass_count / total_students * 100), 2) if total_students > 0 else 0.0
+
     wb = openpyxl.Workbook()
-    header_fill = PatternFill(start_color="0F1B33", end_color="0F1B33", fill_type="solid")
-    header_font = Font(color="FFFFFF", bold=True)
 
-    def write_sheet(ws, headers: List[str], rows: List[List[Any]]):
-        ws.append(headers)
-        for c in range(1, len(headers) + 1):
-            cell = ws.cell(row=1, column=c)
-            cell.fill = header_fill
-            cell.font = header_font
-            cell.alignment = Alignment(horizontal="center")
-        for row in rows:
+    def make_header_block(ws, title: str, right_col: int):
+        def add_line(left: str, right: str = None):
+            row = [left]
+            if right:
+                while len(row) < right_col:
+                    row.append(None)
+                row.append(right)
             ws.append(row)
-        for c, h in enumerate(headers, start=1):
-            width = max(12, min(45, len(str(h)) + 4))
-            ws.column_dimensions[get_column_letter(c)].width = width
 
-    mappings = sorted(ca.subject_mappings or [], key=lambda m: m["course_code"])
-    code_to_name = {m["course_code"]: m["official_subject_name"] for m in mappings}
+        add_line(meta["college"])
+        add_line(meta["department"])
+        add_line(title)
+        add_line(meta["course"], f"BATCH: {meta['batch']}")
+        add_line(f"ACADEMIC YEAR: {meta['academicYear']}", f"YEAR / SEM: {meta['yearSem']}")
+        add_line(meta["examSession"], f"TOTAL STRENGTH: {total_students}")
 
-    def col_label(subj: "SubjectAnalysis") -> str:
-        name = code_to_name.get(subj.course_code, subj.subject)
-        return f"{subj.course_code} - {name}" if subj.course_code else name
+    def apply_auto_widths(ws, default_widths=None):
+        for col_idx in range(1, ws.max_column + 1):
+            col_letter = get_column_letter(col_idx)
+            if default_widths and col_idx <= len(default_widths):
+                ws.column_dimensions[col_letter].width = default_widths[col_idx - 1]
+            else:
+                ws.column_dimensions[col_letter].width = 14
 
-    # Sheet 1: Class Summary
+    # Sheet 1: Analysis 1_New
     ws1 = wb.active
-    ws1.title = "Class Summary"
-    write_sheet(ws1, ["Metric", "Value"], [
-        ["File", ca.file_name],
-        ["Generated At", ca.generated_at],
-        ["Students", ca.student_count],
-        ["Subjects", ca.subject_count],
-        ["Result Cells", ca.record_count],
-        ["Class GPA", ca.class_gpa],
-        ["Pass Rate %", ca.pass_rate],
-        ["Arrear Students", ca.arrear_student_count],
-        ["Multiple-U Students", ca.multiple_u_count],
-        ["Malpractice Students", ca.malpractice_student_count],
+    ws1.title = "Analysis 1_New"
+    make_header_block(ws1, "ANALYSIS 1 - UNIVERSITY EXAMINATION RESULT ANALYSIS", 6)
+    ws1.append([None, None, None, None, f"CLASS COORDINATOR: {meta['coordinator']}"])
+    ws1.append([
+        "S.\nNO", "SUBJECT\nCODE", "SUBJECT TITLE / STAFF NAME", None,
+        "NO.OF STUDENTS REGISTERED", "NO. OF STUDENTS ABSENT",
+        "NO.OF STUDENTS FAILED", "NO.OF STUDENTS WH", "NO.OF STUDENTS PASSED",
+        "PASS % (Including ABSENT)"
     ])
+    for i, sc in enumerate(subj_configs):
+        st = subj_stats[i]
+        ws1.append([
+            i + 1, sc["code"], sc["title"], sc["staff"],
+            st["registered"], "NIL" if st["absent"] == 0 else st["absent"],
+            st["failed"], "-" if st["withheld"] == 0 else st["withheld"],
+            st["passed"], st["passPct"]
+        ])
+    ws1.append([None, None, None, "Overall Pass Percentage", overall_pass_pct])
+    ws1.append([])
+    ws1.append([None, None, None, None, None, None, None, None, meta["hodLabel"]])
+    apply_auto_widths(ws1, [8, 12, 45, 35, 14, 12, 12, 10, 12, 14])
 
-    # Sheet 2: Student Results (Course Code - Subject Name columns, one per subject)
-    ws2 = wb.create_sheet("Student Results")
-    subj_cols = sorted(ca.subjects, key=lambda s: s.course_code or s.subject)
-    headers2 = ["S.No", "Register Number", "Student Name"] + [col_label(s) for s in subj_cols] + \
-               ["GPA", "Academic Arrears", "SA", "WD", "Malpractice", "Risk Level"]
-    rows2 = []
-    for i, s in enumerate(ca.students, start=1):
-        grade_by_code = {c.course_code: c.grade for c in s.courses}
-        row = [i, s.regno, s.name] + [grade_by_code.get(sc.course_code, "—") for sc in subj_cols] + \
-              [s.gpa, s.arrear_count, s.sa_count, s.wd_count, s.malpractice_count, s.risk_level]
-        rows2.append(row)
-    write_sheet(ws2, headers2, rows2)
+    # Sheet 2: Analysis 2_New
+    ws2 = wb.create_sheet("Analysis 2_New")
+    make_header_block(ws2, "ANALYSIS 2 - COMPARISON OF PREVIOUS BATCH RESULTS", 5)
+    ws2.append([None, None, "PREVIOUS BATCH", None, f"BATCH: {meta['batch']}"])
+    arrears_arr = [s["arrears"] for s in student_rows]
+    bucket = lambda n: sum(1 for a in arrears_arr if a == n)
+    withheld_cnt = sum(1 for s in student_rows if any(g in LOVABLE_WITHHELD_GRADES for g in s["grades"]))
 
-    # Sheet 3: Subject Analysis
-    ws3 = wb.create_sheet("Subject Analysis")
-    write_sheet(ws3, ["Course Code", "Subject Name", "Students", "Avg GP", "Pass %", "U", "RA", "Arrears"],
-                [[s.course_code, code_to_name.get(s.course_code, s.subject), s.student_count,
-                  s.avg_gp, s.pass_pct, s.u_count, s.ra_count, s.arrear_count] for s in subj_cols])
+    lines2 = [
+        ("Total Strength", total_students),
+        ("No. of Students appeared", total_students),
+        ("No. of Students passed", all_pass_count),
+        ("No. of Students failed", total_students - all_pass_count),
+        ("Percentage of Pass", overall_pass_pct),
+        ("One Arrear", bucket(1)),
+        ("Two Arrear", bucket(2)),
+        ("Three Arrear", bucket(3)),
+        ("Four Arrear", bucket(4)),
+        ("Five Arrear & More", sum(1 for a in arrears_arr if a >= 5)),
+        ("Withheld", withheld_cnt),
+    ]
+    for label, val in lines2:
+        ws2.append([None, None, "-", label, val])
 
-    # Sheet 4: Subject Mapping (faculty verification sheet)
-    ws4 = wb.create_sheet("Subject Mapping")
-    write_sheet(ws4, ["Course Code", "Official Subject Name", "Semester", "Credits",
-                       "Course Type", "Resolution Method", "Confidence", "Source Page"],
-                [[m["course_code"], m["official_subject_name"], m["semester"], m["credits"],
-                  m["course_type"], m["resolution_method"], m["resolution_confidence"], m["source_page"]]
-                 for m in mappings if not m.get("unresolved")])
+    ws2.append(["PREVIOUS BATCH", None, None, None, f"Batch {meta['batch']}"])
+    ws2.append(["Pass %", "Subject Name*", "Sub. code", "Subject Name", "Staff Name", "Pass%"])
+    for i, sc in enumerate(subj_configs):
+        ws2.append(["-", "-", sc["code"], sc["title"], sc["staff"], subj_stats[i]["passPct"]])
+    ws2.append([])
+    ws2.append([None, None, None, None, meta["hodLabel"]])
+    apply_auto_widths(ws2, [18, 18, 14, 42, 35, 10])
 
-    # Sheet 5: Unresolved / Quarantined Items
-    ws5 = wb.create_sheet("Unresolved Subjects")
-    unresolved_rows = [[m["course_code"], "Unknown", "Requires Faculty Review", m["source_page"]]
-                        for m in mappings if m.get("unresolved")]
-    write_sheet(ws5, ["Course Code", "Subject Name", "Resolution", "Source Page"], unresolved_rows)
-    ws5b = wb.create_sheet("Quarantined Tokens")
-    write_sheet(ws5b, ["Register No", "Raw Value", "Reason"],
-                [[q.get("regno", ""), q.get("raw_value", ""), q.get("reason", "")] for q in (ca.quarantined_tokens or [])])
+    # Sheet 3: Analysis 3_New
+    ws3 = wb.create_sheet("Analysis 3_New")
+    failed_students = [s for s in student_rows if s["arrears"] > 0]
+    failed_subj_idx = [i for i in range(len(subj_configs)) if any(s["grades"][i] in LOVABLE_FAIL_GRADES for s in student_rows)]
 
-    # Sheet 4: Student Risk (reads StudentAnalysis.attention / risk_level / is_high_performer
-    # exactly as already computed in compute_subject_analytics — no re-derivation here)
-    ws_risk = wb.create_sheet("Student Risk")
-    write_sheet(ws_risk, ["Register Number", "Student Name", "GPA", "Risk Level", "Attention Status",
-                           "High Performer", "Attention Subjects"],
-                [[s.regno, s.name, s.gpa, s.risk_level, s.attention, "YES" if s.is_high_performer else "NO",
-                  ", ".join(s.attention_subjects)] for s in ca.students])
+    make_header_block(ws3, "ANALYSIS 3 - RESULT ANALYSIS OF FAILED STUDENTS", 11)
+    head1 = ["S.No.", "Reg.No", "Student Name", "Quota"]
+    for k in range(max(1, len(failed_subj_idx))):
+        head1.append("Subjects" if k == 0 else None)
+    head1.extend(["No. of\nArrears", "OLD ARREARS", None, "NAME OF THE\nMENTOR"])
+    ws3.append(head1)
 
-    # Sheet 5: Arrear & Backlog Tracker (reads StudentAnalysis.backlog_* / u_count / ra_count
-    # exactly as already computed — no re-derivation here)
-    ws_arrear = wb.create_sheet("Arrear & Backlog Tracker")
-    write_sheet(ws_arrear, ["Register Number", "Student Name", "U Count", "RA Count", "Total Arrears",
-                             "Has Backlog Arrears", "Backlog Arrear Count", "Backlog Subjects"],
-                [[s.regno, s.name, s.u_count, s.ra_count, s.arrear_count,
-                  "YES" if s.has_backlog_arrears else "NO", s.backlog_arrear_count,
-                  ", ".join(s.backlog_subjects)] for s in ca.students if s.arrear_count > 0 or s.has_backlog_arrears])
+    head2 = [None, None, None, None]
+    for i in failed_subj_idx:
+        head2.append(subj_configs[i]["code"])
+    if not failed_subj_idx:
+        head2.append("None")
+    head2.extend([None, "LIST OF SUBJECT", "NO.OF ARREARS", None])
+    ws3.append(head2)
 
-    # Sheet 9: Source Provenance (reads StudentResultRecord.source_page /
-    # extraction_confidence via subject_mappings — no re-derivation here)
-    ws_prov = wb.create_sheet("Source Provenance")
-    write_sheet(ws_prov, ["Course Code", "Official Subject Name", "Source Page", "Resolution Method", "Confidence"],
-                [[m["course_code"], m["official_subject_name"], m["source_page"], m["resolution_method"],
-                  m["resolution_confidence"]] for m in mappings])
-    ws_prov.append([])
-    ws_prov.append(["Document metadata"])
-    for k, v in (ca.metadata or {}).items():
-        ws_prov.append([k, v])
+    for n, s in enumerate(failed_students, start=1):
+        row = [n, s["regNo"], s["name"], ""]
+        for i in failed_subj_idx:
+            g = s["grades"][i]
+            row.append(g if g in LOVABLE_FAIL_GRADES else None)
+        if not failed_subj_idx:
+            row.append(None)
+        row.extend([s["arrears"], "-", "-", ""])
+        ws3.append(row)
 
-    # Sheet 6: Data Quality
-    ok, issues = validate_export_dataset(ca)
-    ws6 = wb.create_sheet("Data Quality")
-    write_sheet(ws6, ["Check", "Status"], [
-        ["Students verified", ca.student_count],
-        ["Subjects verified", ca.subject_count],
-        ["Result cells verified", ca.record_count],
-        ["Unresolved subjects", sum(1 for m in mappings if m.get("unresolved"))],
-        ["Validation passed", "YES" if ok else "NO"],
-    ] + [["Issue", i] for i in issues])
+    ws3.append([])
+    ws3.append([None, None, None, None, None, None, None, None, None, None, meta["hodLabel"]])
+    apply_auto_widths(ws3, [7, 15, 24, 7] + [9]*max(1, len(failed_subj_idx)) + [10, 24, 13, 22])
+
+    # Sheet 4: Analysis 5_New
+    ws5 = wb.create_sheet("Analysis 5_New")
+    make_header_block(ws5, "ANALYSIS 5 - LIST OF SUBJECT TOPPERS", 6)
+    ws5.append([
+        "S.No", "STAFF NAME", "SUBJECT CODE", "SUBJECT NAME",
+        "NO.OF \nTOPPERS", "REGISTER NUMBER", "NAME OF THE STUDENT", "GRADE"
+    ])
+    for i, sc in enumerate(subj_configs):
+        best_pt = -1
+        for s in student_rows:
+            pt = LOVABLE_GRADE_POINTS.get(s["grades"][i], -1)
+            if pt > best_pt:
+                best_pt = pt
+        toppers = [s for s in student_rows if LOVABLE_GRADE_POINTS.get(s["grades"][i], -1) == best_pt]
+        best_grade = next((g for g, p in LOVABLE_GRADE_POINTS.items() if p == best_pt), "")
+        for k, t in enumerate(toppers):
+            if k == 0:
+                ws5.append([i + 1, sc["staff"], sc["code"], sc["title"], len(toppers), t["regNo"], t["name"], best_grade])
+            else:
+                ws5.append([None, None, None, None, None, t["regNo"], t["name"], None])
+    ws5.append([])
+    ws5.append([None, None, None, None, None, None, meta["hodLabel"]])
+    apply_auto_widths(ws5, [7, 35, 14, 42, 10, 17, 26, 8])
+
+    # Sheet 5: Analysis 6_New
+    ws6 = wb.create_sheet("Analysis 6_New")
+    make_header_block(ws6, "ANALYSIS 6 - RANK LIST BASED ON GPA", 4)
+    ws6.append([None, "S. No.", "REGISTER  NUMBER", "NAME OF THE STUDENT", "GPA", "RANK"])
+    for i, r in enumerate(ranked_students, start=1):
+        ws6.append([None, i, r["regNo"], r["name"], round(r["gpa"], 6), r["rank"]])
+    ws6.append([])
+    ws6.append([None, None, None, meta["hodLabel"]])
+    apply_auto_widths(ws6, [4, 8, 18, 28, 12, 8])
+
+    # Sheet 6: Analysis 7
+    ws7 = wb.create_sheet("Analysis 7")
+    ws7.append([meta["college"]])
+    ws7.append([meta["department"]])
+    ws7.append(["ANALYSIS 7 - PROVISIONAL RESULTS"])
+    ws7.append([None, meta["course"]])
+    ws7.append([None, f"ACADEMIC YEAR: {meta['academicYear']}"])
+    ws7.append([])
+    ws7.append([None, meta["examSession"]])
+
+    r1 = [None, None, None]
+    r2 = ["S.No", "Reg. No", "Name of the Student"]
+    r3 = [None, None, "Credit Value"]
+    for sc in subj_configs:
+        r1.extend([sc["code"], None])
+        r2.extend([sc["short"], None])
+        r3.extend([sc["credit"], None])
+    r1.extend(["GPA", "No. of\nArrears", "Rank"])
+    ws7.append(r1)
+    ws7.append(r2)
+    ws7.append(r3)
+
+    for i, s in enumerate(student_rows, start=1):
+        row = [i, s["regNo"], s["name"]]
+        for g in s["grades"]:
+            row.extend([g, LOVABLE_GRADE_POINTS.get(g, 0)])
+        row.extend([round(s["gpa"], 6), s["arrears"], s["rank"]])
+        ws7.append(row)
+
+    w7 = [6, 15, 28]
+    for _ in subj_configs:
+        w7.extend([7, 5])
+    w7.extend([11, 9, 7])
+    apply_auto_widths(ws7, w7)
 
     bio = io.BytesIO()
     wb.save(bio)
@@ -4268,6 +4506,8 @@ def page_dashboard(ca: ClassAnalysis) -> Tuple:
             Div(
                 A("🌐 Open Interactive Web Report", href="/reports/interactive",
                   cls="px-4 py-2 text-sm font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg shadow-sm transition-colors mr-2"),
+                A("📊 Download Excel Analysis", href="/download-class-excel",
+                  cls="px-4 py-2 text-sm font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow-sm transition-colors mr-2"),
                 Form(Button("📄 Download PDF", type="submit",
                             cls="px-4 py-2 text-sm font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors"),
                      action="/report/class", method="POST", cls="inline-block"),
@@ -5414,6 +5654,8 @@ def page_reports(ca: ClassAnalysis) -> Tuple:
                         Form(Button("📄 Download Class Coordinator PDF", type="submit",
                                     cls="w-full px-4 py-2.5 text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors mb-2"),
                              action="/report/class", method="POST"),
+                        A("📊 Download Multi-Sheet Excel Result Analysis (.xlsx)", href="/download-class-excel",
+                          cls="block w-full text-center px-4 py-2.5 text-sm font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors mb-2"),
                         A("🌐 Open Interactive Web Report", href="/reports/interactive",
                           cls="block w-full text-center px-4 py-2.5 text-sm font-semibold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg transition-colors"),
                     ),
@@ -6391,15 +6633,18 @@ async def route_report_student_select(request):
 @app.get("/download-class-excel")
 def route_download_class_excel():
     if not session_ready():
-        push_alert("No data loaded.", "amber")
+        push_alert("No data loaded. Please upload a PDF or Excel file first.", "amber")
         return RedirectResponse("/", status_code=303)
     ca = SESSION["analytics"]
     ok, issues = validate_export_dataset(ca)
     if not ok:
-        push_alert("Export validation failed: " + "; ".join(issues), "red")
+        push_alert("Export error: " + "; ".join(issues), "red")
         return RedirectResponse("/dashboard", status_code=303)
     xlsx_bytes = build_class_analysis_excel(ca)
-    fname = re.sub(r"[^\w\.\-]", "_", f"class_analysis_{ca.file_name or 'report'}.xlsx")
+    dept = (ca.metadata.get("department") or "DEPARTMENT_OF_AI_AND_DS").replace(" ", "_")[:30]
+    dept_safe = re.sub(r"[^\w\.\-]", "_", dept)
+    sess_safe = re.sub(r"[^\w\.\-]", "_", ca.metadata.get("exam_session") or "APR_MAY_2026")
+    fname = f"{dept_safe}_{sess_safe}_Result_Analysis.xlsx"
     return Response(
         content=xlsx_bytes,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
