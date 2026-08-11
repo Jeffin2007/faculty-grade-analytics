@@ -1000,6 +1000,108 @@ def extract_coe_pdf(pdf_bytes: bytes, filename: str) -> PDFExtractionReport:
     return report
 
 
+def parse_ia_marks_content(raw_bytes: bytes, filename: str) -> Tuple[Dict[str, Dict[str, Any]], Dict[str, str]]:
+    """
+    Parses Internal Assessment / Cycle Test mark sheets uploaded as .mhtml, .html, .xlsx, or .csv.
+    Returns (student_marks, course_titles).
+    student_marks schema:
+      {
+        "813824243001": {
+          "batch_no": "278001",
+          "name": "AATHITYAN. M S G",
+          "marks": {
+            "24AD401": "52",
+            "24AD402": "32", ...
+          }
+        }
+      }
+    """
+    import quopri
+    from bs4 import BeautifulSoup
+
+    student_marks: Dict[str, Dict[str, Any]] = {}
+    course_titles: Dict[str, str] = {}
+
+    if not raw_bytes:
+        return student_marks, course_titles
+
+    # Decode HTML / MHTML bytes
+    if filename.lower().endswith(('.mhtml', '.mht')):
+        try:
+            decoded = quopri.decodestring(raw_bytes).decode('utf-8', errors='ignore')
+        except Exception:
+            decoded = raw_bytes.decode('utf-8', errors='ignore')
+    else:
+        decoded = raw_bytes.decode('utf-8', errors='ignore')
+
+    if "<table" in decoded.lower():
+        try:
+            soup = BeautifulSoup(decoded, 'html.parser')
+            tables = soup.find_all('table')
+            regno_pattern = re.compile(r"\b(\d{10,12})\b")
+
+            for table in tables:
+                rows = table.find_all('tr')
+                if not rows:
+                    continue
+
+                header_cells = [re.sub(r"\s+", " ", c.get_text()).strip() for c in rows[0].find_all(['th', 'td'])]
+                header_norm = [h.upper() for h in header_cells]
+
+                # Check if course catalog table (Subcode | Title | Faculty Name)
+                if any("SUBCODE" in h or "COURSE CODE" in h for h in header_norm) and any("TITLE" in h or "SUBJECT" in h for h in header_norm):
+                    subcode_col = next((i for i, h in enumerate(header_norm) if "SUBCODE" in h or "CODE" in h), 0)
+                    title_col = next((i for i, h in enumerate(header_norm) if "TITLE" in h or "SUBJECT" in h), 1)
+                    for r in rows[1:]:
+                        cells = [re.sub(r"\s+", " ", c.get_text()).strip() for c in r.find_all(['th', 'td'])]
+                        if len(cells) > max(subcode_col, title_col):
+                            code_tok = re.sub(r"[^A-Z0-9]", "", cells[subcode_col].upper())
+                            if code_tok:
+                                course_titles[code_tok] = cells[title_col]
+                    continue
+
+                # Main Marks Table
+                if any("REGNO" in h or "REGISTER" in h for h in header_norm):
+                    regno_col = next((i for i, h in enumerate(header_norm) if "REGNO" in h or "REGISTER" in h), 1)
+                    batch_col = next((i for i, h in enumerate(header_norm) if "BATCH" in h), -1)
+                    name_col = next((i for i, h in enumerate(header_norm) if "NAME" in h and "STAFF" not in h), -1)
+
+                    code_cols: Dict[int, str] = {}
+                    for col_idx, h_text in enumerate(header_cells):
+                        clean_h = re.sub(r"\s+", "", h_text.upper())
+                        m_code = re.search(r"((?:24[-_]?)?[A-Z]{2,4}[-_]?\d{3,5})", clean_h)
+                        if m_code and clean_h not in ("TOTAL", "AVG", "ATT%", "S.NO", "REGNO", "BATCHNO", "NAME"):
+                            code_cols[col_idx] = m_code.group(1)
+
+                    for r in rows[1:]:
+                        cells = [re.sub(r"\s+", " ", c.get_text()).strip() for c in r.find_all(['th', 'td'])]
+                        if not cells:
+                            continue
+                        row_str = " ".join(cells)
+                        m_reg = regno_pattern.search(row_str)
+                        if not m_reg:
+                            continue
+
+                        regno = m_reg.group(1)
+                        batch_no = cells[batch_col] if batch_col >= 0 and batch_col < len(cells) else ""
+                        student_name = cells[name_col] if name_col >= 0 and name_col < len(cells) else ""
+
+                        marks_map = {}
+                        for col_idx, ccode in code_cols.items():
+                            if col_idx < len(cells):
+                                marks_map[ccode] = cells[col_idx]
+
+                        student_marks[regno] = {
+                            "batch_no": batch_no,
+                            "name": student_name,
+                            "marks": marks_map
+                        }
+        except Exception:
+            pass
+
+    return student_marks, course_titles
+
+
 def build_subject_mapping_log(records: List[StudentResultRecord]) -> List[Dict[str, Any]]:
     """
     Collapse per-cell PDF records into one row per unique subject_code, in first-seen
@@ -1348,14 +1450,12 @@ def build_department_excel(
     pdf_report: "PDFExtractionReport",
     staff_map: Dict[str, str],
     source_filename: str = "",
+    ia_marks_dir: Optional[Dict[str, Dict[str, Dict[str, Any]]]] = None,
 ) -> bytes:
     """
     Build the departmental official result-analysis workbook: Analysis 1_New, 2_New,
-    3_New, 5_New, 6_New, Analysis 7 -- in that order, styled to resemble the reference
-    departmental workbook. This reuses the existing trusted GPA/credit calculation
-    engine (ClassAnalysis / StudentAnalysis / SubjectAnalysis, already computed via
-    compute_class_analysis) -- no analytics are re-derived here, and nothing is
-    generated using AI; this is a fully deterministic transformation.
+    3_New, 4_New, 5_New, 6_New, Analysis 7 -- in that order, styled to resemble the reference
+    departmental workbook.
     """
     import openpyxl
     from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
@@ -1524,6 +1624,107 @@ def build_department_excel(
     for c in range(5, ncols3 + 1):
         ws3.column_dimensions[get_column_letter(c)].width = 10
     page_setup(ws3, ncols3, r, landscape=True, freeze=f"E{start_row + 1}")
+
+    # ---------------------------------------------------------------
+    # Analysis 4 - Internal Assessment Marks of Failed Students
+    # ---------------------------------------------------------------
+    ws4 = wb.create_sheet("Analysis 4_New")
+    headers4 = ["S.No.", "REGISTER NUMBER", "NAME OF THE STUDENT", "BATCH NO", "SUBJECT CODE", "SUBJECT NAME", "IA-1 MARK", "IA-2 MARK", "IA-3 MARK", "AVERAGE IA"]
+    ncols4 = len(headers4)
+    start_row = title_block(ws4, ncols4, [programme_line, ay_line, session_line],
+                             "ANALYSIS 4 - INTERNAL ASSESSMENT MARKS OF FAILED STUDENTS")
+    for c, h in enumerate(headers4, start=1):
+        ws4.cell(row=start_row, column=c, value=h)
+    style_header_row(ws4, start_row, ncols4)
+    r = start_row + 1
+
+    ia_data = ia_marks_dir or {}
+    ia1_dict = ia_data.get("ia1", {})
+    ia2_dict = ia_data.get("ia2", {})
+    ia3_dict = ia_data.get("ia3", {})
+
+    s_no = 0
+    for s in ca.students:
+        arrear_courses = [c for c in s.courses if c.grade in ARREAR_GRADES]
+        if not arrear_courses:
+            continue
+
+        # Extract student batch number
+        batch_no = s.meta.get("batch", "")
+        if not batch_no:
+            for ia_dict in (ia1_dict, ia2_dict, ia3_dict):
+                if s.regno in ia_dict and ia_dict[s.regno].get("batch_no"):
+                    batch_no = ia_dict[s.regno]["batch_no"]
+                    break
+        if not batch_no:
+            batch_no = "N/A"
+
+        for c in arrear_courses:
+            s_no += 1
+            code_key = c.course_code.upper()
+            code_clean = re.sub(r"[^A-Z0-9]", "", code_key)
+
+            def get_mark(ia_map: Dict[str, Dict[str, Any]], reg: str, ccode: str) -> str:
+                if reg not in ia_map:
+                    return "N/A"
+                m_dict = ia_map[reg].get("marks", {})
+                for k, v in m_dict.items():
+                    if k.upper() == ccode or re.sub(r"[^A-Z0-9]", "", k.upper()) == code_clean:
+                        return str(v)
+                return "N/A"
+
+            mark1 = get_mark(ia1_dict, s.regno, code_key)
+            mark2 = get_mark(ia2_dict, s.regno, code_key)
+            mark3 = get_mark(ia3_dict, s.regno, code_key)
+
+            num_marks = []
+            for m_val in (mark1, mark2, mark3):
+                try:
+                    num_marks.append(float(m_val))
+                except ValueError:
+                    pass
+            avg_ia = round(sum(num_marks) / len(num_marks), 2) if num_marks else "N/A"
+
+            ws4.cell(row=r, column=1, value=s_no)
+            ws4.cell(row=r, column=2, value=s.regno)
+            ws4.cell(row=r, column=3, value=s.name)
+            ws4.cell(row=r, column=4, value=batch_no)
+            ws4.cell(row=r, column=5, value=c.course_code)
+            ws4.cell(row=r, column=6, value=c.subject)
+            ws4.cell(row=r, column=7, value=mark1)
+            ws4.cell(row=r, column=8, value=mark2)
+            ws4.cell(row=r, column=9, value=mark3)
+            
+            avg_cell = ws4.cell(row=r, column=10, value=avg_ia)
+            if isinstance(avg_ia, float):
+                avg_cell.number_format = '0.00'
+
+            style_body_row(ws4, r, ncols4)
+            ws4.cell(row=r, column=6).alignment = LEFT_WRAP
+            r += 1
+
+    if s_no == 0:
+        ws4.merge_cells(start_row=r, start_column=1, end_row=r, end_column=ncols4)
+        ws4.cell(row=r, column=1, value="No students with academic arrears (U / RA) were found.")
+        r += 1
+    elif not ia1_dict and not ia2_dict and not ia3_dict:
+        ws4.cell(row=r, column=1, value="Note: Internal Assessment (Cycle Test) mark sheets can be uploaded on the PDF-to-Excel page to populate IA 1, IA 2, and IA 3 marks.")
+        ws4.merge_cells(start_row=r, start_column=1, end_row=r, end_column=ncols4)
+        ws4.cell(row=r, column=1).font = NOTE_FONT
+        r += 1
+
+    ws4.column_dimensions["A"].width = 6
+    ws4.column_dimensions["B"].width = 16
+    ws4.column_dimensions["C"].width = 26
+    ws4.column_dimensions["D"].width = 12
+    ws4.column_dimensions["E"].width = 14
+    ws4.column_dimensions["F"].width = 32
+    ws4.column_dimensions["G"].width = 12
+    ws4.column_dimensions["H"].width = 12
+    ws4.column_dimensions["I"].width = 12
+    ws4.column_dimensions["J"].width = 14
+    page_setup(ws4, ncols4, r, landscape=True, freeze=f"E{start_row + 1}")
+
 
     # ---------------------------------------------------------------
     # Analysis 5 - List of Subject Toppers
@@ -7141,10 +7342,11 @@ def _get_pdf_to_excel_context() -> Tuple[Optional["PDFExtractionReport"], Option
 
 
 def page_pdf_to_excel(pdf_report: "PDFExtractionReport", ca: "ClassAnalysis", filename: str) -> Tuple:
-    """COE PDF -> Department Excel conversion page: metadata, staff mapping, validation, download."""
+    """COE PDF -> Department Excel conversion page: metadata, staff mapping, IA marks upload, validation, download."""
     meta = pdf_report.doc_metadata
     mappings = list(ca.subject_mappings or [])
     staff_directory = SESSION.get("staff_directory", {})
+    ia_marks_store = SESSION.get("ia_marks_directory", {})
 
     meta_card = card(
         H3("COE PDF → Department Excel", cls="text-lg font-bold text-slate-800 mb-1"),
@@ -7214,6 +7416,56 @@ def page_pdf_to_excel(pdf_report: "PDFExtractionReport", ca: "ClassAnalysis", fi
         action="/pdf-to-excel/clear-mappings", method="POST", cls="mb-6"
     )
 
+    # Internal Assessment Marks Upload Panel for Analysis 4
+    ia1_count = len(ia_marks_store.get("ia1", {}))
+    ia2_count = len(ia_marks_store.get("ia2", {}))
+    ia3_count = len(ia_marks_store.get("ia3", {}))
+
+    ia_upload_form = Form(
+        Div(
+            H3("Analysis 4 — Internal Assessment (Cycle Test) Mark Sheets", cls="text-sm font-bold text-slate-800 mb-1"),
+            P("Upload Cycle Test mark sheet files (.mhtml, .html, .xlsx, .csv) to populate IA-1, IA-2, and IA-3 marks of failed students in Analysis 4:", cls="text-xs text-slate-500 mb-4"),
+            
+            Div(
+                Div(
+                    Label("IA 1 / Cycle Test 1 Mark Sheet", cls="block text-xs font-semibold text-slate-700 mb-1"),
+                    Input(type="file", name="ia1_file", accept=".mhtml,.mht,.html,.htm,.xlsx,.xls,.csv",
+                          cls="w-full text-xs text-slate-500 file:mr-2 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"),
+                    Span(f"✓ {ia1_count} students loaded" if ia1_count else "Not uploaded yet",
+                         cls=f"text-[10px] font-bold mt-1.5 inline-block px-2 py-0.5 rounded {('bg-green-100 text-green-800' if ia1_count else 'bg-slate-100 text-slate-500')}"),
+                    cls="card p-3 bg-slate-50 border border-slate-200"
+                ),
+                Div(
+                    Label("IA 2 / Cycle Test 2 Mark Sheet", cls="block text-xs font-semibold text-slate-700 mb-1"),
+                    Input(type="file", name="ia2_file", accept=".mhtml,.mht,.html,.htm,.xlsx,.xls,.csv",
+                          cls="w-full text-xs text-slate-500 file:mr-2 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"),
+                    Span(f"✓ {ia2_count} students loaded" if ia2_count else "Not uploaded yet",
+                         cls=f"text-[10px] font-bold mt-1.5 inline-block px-2 py-0.5 rounded {('bg-green-100 text-green-800' if ia2_count else 'bg-slate-100 text-slate-500')}"),
+                    cls="card p-3 bg-slate-50 border border-slate-200"
+                ),
+                Div(
+                    Label("IA 3 / Cycle Test 3 Mark Sheet", cls="block text-xs font-semibold text-slate-700 mb-1"),
+                    Input(type="file", name="ia3_file", accept=".mhtml,.mht,.html,.htm,.xlsx,.xls,.csv",
+                          cls="w-full text-xs text-slate-500 file:mr-2 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"),
+                    Span(f"✓ {ia3_count} students loaded" if ia3_count else "Not uploaded yet",
+                         cls=f"text-[10px] font-bold mt-1.5 inline-block px-2 py-0.5 rounded {('bg-green-100 text-green-800' if ia3_count else 'bg-slate-100 text-slate-500')}"),
+                    cls="card p-3 bg-slate-50 border border-slate-200"
+                ),
+                cls="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4"
+            ),
+            
+            Div(
+                (Form(Button("Clear saved IA marks", type="submit", cls="text-xs text-red-600 hover:text-red-700 underline mr-auto"),
+                      action="/pdf-to-excel/clear-ia", method="POST") if (ia1_count or ia2_count or ia3_count) else None),
+                Button("📤 Upload & Process IA Mark Sheets", type="submit",
+                       cls="px-4 py-2 text-sm font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors"),
+                cls="flex items-center justify-between"
+            ),
+            cls="p-5"
+        ),
+        action="/pdf-to-excel/upload-ia", method="POST", enctype="multipart/form-data", cls="card mb-6 border-l-4 border-l-indigo-600"
+    )
+
     ok, issues = validate_export_dataset(ca)
     if ok:
         validation_body = P("✓ Dataset validated — ready for export.", cls="text-sm font-semibold text-green-700")
@@ -7244,164 +7496,47 @@ def page_pdf_to_excel(pdf_report: "PDFExtractionReport", ca: "ClassAnalysis", fi
         meta_card,
         staff_form,
         clear_form,
+        ia_upload_form,
         validation_card,
         card(actions, cls="p-5"),
         cls="max-w-6xl mx-auto"
     ))
 
 
-@app.post("/upload-pdf")
-async def route_upload_pdf(request):
-    try:
-        form = await request.form()
-        file = form.get("file_pdf")
-        if file is None:
-            push_alert("No PDF file selected.", "red")
-            return RedirectResponse("/upload", status_code=303)
-
-        raw_filename = getattr(file, "filename", "") or "result.pdf"
-        filename = os.path.basename(raw_filename)
-        filename = re.sub(r"[^\w\.\-]", "_", filename)
-
-        if not filename.lower().endswith(".pdf"):
-            push_alert("Only .pdf files are accepted in Mode A.", "red")
-            return RedirectResponse("/upload", status_code=303)
-
-        pdf_bytes = await file.read()
-        if not pdf_bytes:
-            push_alert("Uploaded PDF file is empty.", "red")
-            return RedirectResponse("/upload", status_code=303)
-
-        pdf_report = extract_coe_pdf(pdf_bytes, filename)
-        if not pdf_report.ok:
-            push_alert(pdf_report.fatal_error, "red")
-            return RedirectResponse("/upload", status_code=303)
-
-        SESSION["preview_pdf_bytes"] = pdf_bytes
-        SESSION["preview_pdf_filename"] = filename
-        SESSION["preview_pdf_report"] = pdf_report
-        SESSION["reconciliation_report"] = None
-
-        return page_pdf_preview()
-    except Exception as e:
-        push_alert(f"PDF extraction error: {e}", "red")
-        return RedirectResponse("/upload", status_code=303)
-
-
-@app.post("/upload-dual")
-async def route_upload_dual(request):
-    try:
-        form = await request.form()
-        file_pdf = form.get("file_pdf")
-        file_excel = form.get("file_excel")
-        if not file_pdf or not file_excel:
-            push_alert("Please select both PDF and Excel files for dual reconciliation.", "red")
-            return RedirectResponse("/upload", status_code=303)
-
-        pdf_bytes = await file_pdf.read()
-        excel_bytes = await file_excel.read()
-
-        pdf_filename = os.path.basename(getattr(file_pdf, "filename", "") or "result.pdf")
-        excel_filename = os.path.basename(getattr(file_excel, "filename", "") or "result.xlsx")
-
-        pdf_report = extract_coe_pdf(pdf_bytes, pdf_filename)
-        if not pdf_report.ok:
-            push_alert(f"PDF error: {pdf_report.fatal_error}", "red")
-            return RedirectResponse("/upload", status_code=303)
-
-        excel_res = validate_and_clean(excel_bytes, excel_filename)
-        if not excel_res.ok:
-            push_alert(f"Excel error: {excel_res.report.fatal_error}", "red")
-            return RedirectResponse("/upload", status_code=303)
-
-        reconcil_report = reconcile_pdf_and_excel(pdf_report.records, excel_res.records)
-
-        SESSION["preview_pdf_bytes"] = pdf_bytes
-        SESSION["preview_pdf_filename"] = pdf_filename
-        SESSION["preview_pdf_report"] = pdf_report
-        SESSION["preview_raw_bytes"] = excel_bytes
-        SESSION["preview_filename"] = excel_filename
-        SESSION["preview_report"] = excel_res.report
-        SESSION["reconciliation_report"] = reconcil_report
-
-        push_alert(f"Dual Reconciliation complete: {reconcil_report.matched_count} matched, {reconcil_report.mismatched_count} mismatches.", "blue")
-        return page_pdf_preview()
-    except Exception as e:
-        push_alert(f"Dual upload error: {e}", "red")
-        return RedirectResponse("/upload", status_code=303)
-
-
-@app.post("/confirm-pdf")
-async def route_confirm_pdf(request):
-    try:
-        start_t = time.time()
-        pdf_report: PDFExtractionReport = SESSION.get("preview_pdf_report")
-        filename = SESSION.get("preview_pdf_filename", "result.pdf")
-        if not pdf_report or not pdf_report.records:
-            push_alert("No extracted PDF records found to analyze.", "red")
-            return RedirectResponse("/upload", status_code=303)
-
-        df = pdf_records_to_dataframe(pdf_report.records)
-        ca = compute_class_analysis(df, filename)
-
-        # NOTE: previously these were never copied over for the PDF pipeline, so the
-        # Subject Mapping / Unresolved sheets and data-quality checks silently had
-        # nothing to show for PDF-sourced uploads. Mirror the Excel pipeline here so
-        # both pipelines produce the same NormalizedResult-shaped ClassAnalysis.
-        ca.subject_mappings = build_subject_mapping_log(pdf_report.records)
-        ca.quarantined_tokens = pdf_report.quarantined_tokens
-        ca.format_detected = "pdf"
-        ca.metadata["source_page_count"] = pdf_report.doc_metadata.page_count
-        ca.metadata["extraction_confidence"] = pdf_report.overall_confidence
-
-        SESSION["records"] = df
-        SESSION["analytics"] = ca
-        SESSION["file_name"] = filename
-        SESSION["ptm_briefs"] = {}
-        SESSION["analysis_duration"] = round(time.time() - start_t, 2)
-
-        push_alert(
-            f"Successfully analyzed COE PDF ({pdf_report.doc_metadata.programme}, {pdf_report.doc_metadata.semester}): "
-            f"Processed {ca.student_count} students across {ca.subject_count} subjects in {SESSION['analysis_duration']}s.",
-            "green"
-        )
-        return RedirectResponse("/dashboard", status_code=303)
-    except Exception as e:
-        push_alert(f"PDF confirm error: {e}", "red")
-        return RedirectResponse("/upload", status_code=303)
-
-
-@app.get("/pdf-to-excel")
-def route_pdf_to_excel():
+@app.post("/pdf-to-excel/upload-ia")
+async def route_pdf_to_excel_upload_ia(request):
     pdf_report, ca = _get_pdf_to_excel_context()
     if not pdf_report or not ca:
         push_alert("Upload a COE PDF first to convert it to a department Excel workbook.", "amber")
         return RedirectResponse("/upload", status_code=303)
-    return page_pdf_to_excel(pdf_report, ca, SESSION.get("preview_pdf_filename", "coe_result.pdf"))
 
-
-@app.post("/pdf-to-excel/save-staff")
-async def route_pdf_to_excel_save_staff(request):
-    pdf_report, ca = _get_pdf_to_excel_context()
-    if not pdf_report or not ca:
-        push_alert("Upload a COE PDF first to convert it to a department Excel workbook.", "amber")
-        return RedirectResponse("/upload", status_code=303)
     form = await request.form()
-    directory = SESSION.setdefault("staff_directory", {})
-    for m in (ca.subject_mappings or []):
-        code = m["course_code"]
-        key = f"staff__{code}"
-        if key in form:
-            # Stored exactly as supplied -- never altered, blank left blank rather than fabricated.
-            directory[code] = str(form[key]).strip()
-    push_alert("Staff names saved.", "green")
+    ia_store = SESSION.setdefault("ia_marks_directory", {"ia1": {}, "ia2": {}, "ia3": {}})
+    uploaded_counts = []
+
+    for test_key, field_name in [("ia1", "ia1_file"), ("ia2", "ia2_file"), ("ia3", "ia3_file")]:
+        file_obj = form.get(field_name)
+        if file_obj and getattr(file_obj, "filename", ""):
+            raw_bytes = await file_obj.read()
+            if raw_bytes:
+                fname = getattr(file_obj, "filename", "marks.mhtml")
+                parsed_marks, _titles = parse_ia_marks_content(raw_bytes, fname)
+                if parsed_marks:
+                    ia_store[test_key] = parsed_marks
+                    uploaded_counts.append(f"{test_key.upper()} ({len(parsed_marks)} students)")
+
+    if uploaded_counts:
+        push_alert(f"Successfully processed IA mark sheets: {', '.join(uploaded_counts)}.", "green")
+    else:
+        push_alert("No valid IA mark sheet files were uploaded.", "amber")
+
     return page_pdf_to_excel(pdf_report, ca, SESSION.get("preview_pdf_filename", "coe_result.pdf"))
 
 
-@app.post("/pdf-to-excel/clear-mappings")
-def route_pdf_to_excel_clear_mappings():
-    SESSION["staff_directory"] = {}
-    push_alert("Saved staff mappings cleared.", "blue")
+@app.post("/pdf-to-excel/clear-ia")
+def route_pdf_to_excel_clear_ia():
+    SESSION["ia_marks_directory"] = {"ia1": {}, "ia2": {}, "ia3": {}}
+    push_alert("Saved Internal Assessment marks cleared.", "blue")
     return RedirectResponse("/pdf-to-excel", status_code=303)
 
 
@@ -7416,14 +7551,16 @@ def route_pdf_to_excel_download():
         push_alert("Export validation failed: " + "; ".join(issues), "red")
         return RedirectResponse("/pdf-to-excel", status_code=303)
     staff_map = SESSION.get("staff_directory", {})
+    ia_store = SESSION.get("ia_marks_directory", {})
     filename = SESSION.get("preview_pdf_filename", "coe_result.pdf")
-    xlsx_bytes = build_department_excel(ca, pdf_report, staff_map, filename)
+    xlsx_bytes = build_department_excel(ca, pdf_report, staff_map, filename, ia_store)
     fname = department_excel_filename(pdf_report)
     return Response(
         content=xlsx_bytes,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f'attachment; filename="{fname}"'},
     )
+
 
 
 @app.post("/upload-preview")
