@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import csv
 import difflib
 import gc
 import hashlib
@@ -516,9 +517,16 @@ class StudentResultRecord:
     raw_result_status: str = ""
     result_semester: int = 3
     subject_semester: int = 3
-    source_type: str = "PDF"  # "PDF" | "EXCEL"
+    source_type: str = "PDF"  # "PDF" | "EXCEL" | "XLS" | "XLSX"
     source_page: int = 1
     extraction_confidence: float = 1.0
+    # Legacy-XLS / multi-source provenance (additive; unused by the PDF pipeline)
+    source_sheet: str = ""
+    source_row: int = 0
+    grade_column: str = ""
+    gp_column: str = ""
+    source_gp: Optional[float] = None
+    data_quality_issue: str = ""  # e.g. "GRADE_POINT_MISMATCH", "" if none
 
 
 @dataclass
@@ -1268,7 +1276,9 @@ def reconcile_pdf_and_excel(
 
 
 def pdf_records_to_dataframe(pdf_records: List[StudentResultRecord]) -> pd.DataFrame:
-    """Convert StudentResultRecord list into normalized pandas DataFrame for compute_class_analysis."""
+    """Convert StudentResultRecord list into normalized pandas DataFrame for compute_class_analysis.
+    Generic over source_type ("PDF" | "XLS" | "XLSX") -- this is the single conversion function
+    the analytics engine consumes from, regardless of which ingestion path produced the records."""
     rows = []
     for idx, r in enumerate(pdf_records):
         rows.append({
@@ -1282,8 +1292,525 @@ def pdf_records_to_dataframe(pdf_records: List[StudentResultRecord]) -> pd.DataF
             "src_row": r.source_page,
             "source_type": r.source_type,
             "batch": r.batch_number,
+            "source_gp": r.source_gp,
+            "data_quality_issue": r.data_quality_issue,
         })
     return pd.DataFrame(rows)
+
+
+# Alias: the analytics engine deliberately has ONE ingestion-agnostic conversion function.
+# This name is provided so PDF/XLS/XLSX call sites can each read as intent-revealing without
+# implying "PDF-only" or duplicating the conversion logic per source type.
+normalized_records_to_dataframe = pdf_records_to_dataframe
+
+
+# =============================================================================
+# 3.3) LEGACY XLS / MULTI-SOURCE NORMALIZATION LAYER
+# =============================================================================
+#
+#   PDF ---\
+#   XLS  ---+---> extract_*(...) -> List[StudentResultRecord] (+ quarantined_tokens)
+#   XLSX ---/                              |
+#                                          v
+#                          normalized_records_to_dataframe()
+#                                          |
+#                                          v
+#                              compute_class_analysis()   <-- UNCHANGED analytics engine
+#                                          |
+#                          Dashboard / PDF report / Excel export
+#
+# Every ingestion path produces the SAME StudentResultRecord shape and feeds the SAME
+# compute_class_analysis(). No analytics/GPA/ranking logic is duplicated per source type.
+
+_COURSE_CODE_RE = re.compile(r"^\d{2}[A-Z]{2,4}\d{3}$")
+
+_SUMMARY_ROW_KEYWORDS = (
+    "TOTAL", "REGISTRED", "REGISTERED", "APPEARED", "NO. OF PASS", "NO OF PASS",
+    "NO. OF ABSENT", "NO OF ABSENT", "% OF PASS", "PASS %", "AVERAGE", "MEDIAN",
+    "SIGNATURE", "PRINCIPAL", "CONTROLLER", "HOD", "CLASS ADVISOR", "PREPARED BY",
+    "VERIFIED BY", "APPROVED BY", "1 ARR", "2 ARR", "3 ARR", "4 ARR", "ALL PASS",
+)
+
+
+@dataclass
+class LegacyXLSExtractionReport:
+    ok: bool = True
+    fatal_error: str = ""
+    warnings: List[str] = field(default_factory=list)
+    reader_method: str = ""           # "xlrd" | "libreoffice" | ""
+    sheet_name: str = ""
+    header_row: int = -1
+    records: List[StudentResultRecord] = field(default_factory=list)
+    quarantined_tokens: List[Dict[str, Any]] = field(default_factory=list)
+    gp_mismatches: List[Dict[str, Any]] = field(default_factory=list)
+    subject_descriptors: List[Dict[str, Any]] = field(default_factory=list)
+    student_count: int = 0
+    subject_count: int = 0
+    expected_cell_count: int = 0
+    valid_cell_count: int = 0
+    malformed_cell_count: int = 0
+    blank_cell_count: int = 0
+    unresolved_subject_count: int = 0
+    unknown_token_count: int = 0
+    duplicate_key_count: int = 0
+    overall_confidence: float = 1.0
+
+
+def _normalize_course_code_token(token: str) -> str:
+    """'24-AD-401' / '24 AD 401' -> '24AD401'. Never semantically reorders the code."""
+    return re.sub(r"[\s\-\./]", "", str(token or "")).upper()
+
+
+def _looks_like_course_code(token: str) -> bool:
+    return bool(_COURSE_CODE_RE.match(_normalize_course_code_token(token)))
+
+
+def _is_summary_row(cells: List[str]) -> bool:
+    joined = " ".join(str(c).strip().upper() for c in cells if str(c).strip())
+    return any(kw in joined for kw in _SUMMARY_ROW_KEYWORDS)
+
+
+def _open_legacy_workbook_sheets(data: bytes) -> Tuple[Dict[str, List[List[str]]], str]:
+    """
+    Open a legacy .xls (BIFF/OLE) workbook and return {sheet_name: rows} with every
+    cell stringified. Preferred order:
+      1. xlrd (pure python) if importable -- no external process required.
+      2. LibreOffice headless conversion, if the 'soffice'/'libreoffice' binary exists.
+      3. Raise a clear, actionable error -- never silently degrade to guessing.
+    """
+    # 1. Pure-python reader, if available on this host.
+    try:
+        import xlrd  # type: ignore
+        book = xlrd.open_workbook(file_contents=data)
+        sheets: Dict[str, List[List[str]]] = {}
+        for sheet in book.sheets():
+            rows = []
+            for r in range(sheet.nrows):
+                rows.append([str(sheet.cell_value(r, c)).strip() for c in range(sheet.ncols)])
+            sheets[sheet.name] = rows
+        return sheets, "xlrd"
+    except ImportError:
+        pass
+    except Exception as e:
+        raise RuntimeError(f"xlrd could not open the workbook: {e}")
+
+    # 2. LibreOffice headless conversion fallback.
+    import shutil
+    import subprocess
+    import tempfile
+
+    soffice_bin = shutil.which("soffice") or shutil.which("libreoffice")
+    if not soffice_bin:
+        raise RuntimeError(
+            "Cannot read legacy .xls: no Python .xls reader (xlrd) is installed and no "
+            "LibreOffice ('soffice'/'libreoffice') binary was found on this host. "
+            "Install xlrd, install LibreOffice, or re-save the file as .xlsx."
+        )
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        src_path = os.path.join(tmpdir, "workbook.xls")
+        with open(src_path, "wb") as f:
+            f.write(data)
+        try:
+            subprocess.run(
+                [
+                    soffice_bin, "--headless", "--convert-to",
+                    'csv:"Text - txt - csv (StarCalc)":44,34,0,1,,,,,,,,-1',
+                    "--outdir", tmpdir, src_path,
+                ],
+                check=True, capture_output=True, timeout=90,
+            )
+        except subprocess.TimeoutExpired:
+            raise RuntimeError("LibreOffice conversion of the .xls file timed out.")
+        except subprocess.CalledProcessError as e:
+            raise RuntimeError(f"LibreOffice could not convert the .xls file: {e.stderr!r}")
+
+        sheets = {}
+        for fname in sorted(os.listdir(tmpdir)):
+            if not fname.lower().endswith(".csv"):
+                continue
+            sheet_name = fname[len("workbook-"):-4] if fname.startswith("workbook-") else fname[:-4]
+            with open(os.path.join(tmpdir, fname), newline="", encoding="utf-8", errors="replace") as f:
+                rows = [row for row in csv.reader(f)]
+            sheets[sheet_name] = rows
+        if not sheets:
+            raise RuntimeError("LibreOffice produced no readable sheets from this .xls file.")
+        return sheets, "libreoffice"
+
+
+def _select_best_result_sheet(sheets: Dict[str, List[List[str]]]) -> Tuple[str, List[List[str]], int, int]:
+    """
+    Score every sheet+row for how much it looks like a per-student x per-subject grade
+    matrix (a row with several course-code-shaped header cells), and return the best
+    (sheet_name, rows, header_row_idx, course_code_hits).
+    """
+    best = ("", [], -1, 0)
+    for sheet_name, rows in sheets.items():
+        limit = min(20, len(rows))
+        for idx in range(limit):
+            row = rows[idx]
+            hits = sum(1 for cell in row if _looks_like_course_code(cell))
+            # Prefer catalog-known codes even more strongly, but don't require them --
+            # another department's catalog may not be loaded.
+            catalog_hits = sum(
+                1 for cell in row
+                if _normalize_course_code_token(cell) in COURSE_CODE_INDEX
+            )
+            score = hits + catalog_hits * 2
+            if score > best[3]:
+                best = (sheet_name, rows, idx, score)
+    return best
+
+
+def _detect_subject_descriptors(rows: List[List[str]], header_row_idx: int) -> List[Dict[str, Any]]:
+    """
+    From the course-code header row, build subject descriptors {course_code, grade_col,
+    gp_col}. GP columns are detected structurally (the column immediately to the right
+    of a course-code cell, when that column's header is blank -- the standard COE
+    merged-header layout) and verified against a sample of the data rows actually
+    looking GP-like (small numbers 0-10 or blank), never assumed.
+    """
+    header_row = rows[header_row_idx]
+    sample_rows = rows[header_row_idx + 1: header_row_idx + 8]
+    descriptors = []
+    for c, cell in enumerate(header_row):
+        if not _looks_like_course_code(cell):
+            continue
+        code = _normalize_course_code_token(cell)
+        gp_col: Optional[int] = None
+        if c + 1 < len(header_row) and not str(header_row[c + 1]).strip():
+            candidate = c + 1
+            gp_like = 0
+            total = 0
+            for r in sample_rows:
+                if candidate >= len(r):
+                    continue
+                v = str(r[candidate]).strip()
+                if not v:
+                    continue
+                total += 1
+                try:
+                    fv = float(v)
+                    if 0 <= fv <= 10:
+                        gp_like += 1
+                except ValueError:
+                    pass
+            if total == 0 or gp_like / total >= 0.6:
+                gp_col = candidate
+        descriptors.append({"course_code": code, "raw_header": cell, "grade_col": c, "gp_col": gp_col})
+    return descriptors
+
+
+def _detect_id_columns_and_student_rows(
+    rows: List[List[str]], header_row_idx: int, subject_cols: set
+) -> Dict[str, Any]:
+    """
+    Find S.No / Register No / Name columns (scanning the header row and the row(s)
+    immediately below it, since COE sheets commonly have a 2-row header: course codes
+    on one row, {S.No, Reg. No, Name, <short subject label>...} on the next), then
+    find where the actual student rows start and end (stopping before any
+    totals/statistics section).
+    """
+    sno_col: Optional[int] = None
+    regno_col: Optional[int] = None
+    name_col: Optional[int] = None
+
+    search_rows = [header_row_idx]
+    if header_row_idx + 1 < len(rows):
+        search_rows.append(header_row_idx + 1)
+
+    for ridx in search_rows:
+        row = rows[ridx]
+        for idx, h in enumerate(row):
+            if idx in subject_cols:
+                continue
+            h_norm = re.sub(r"\s+", " ", str(h or "")).strip().upper()
+            if sno_col is None and h_norm in ("S.NO", "SL.NO", "SNO", "SLNO", "S NO", "SL NO"):
+                sno_col = idx
+            if regno_col is None and any(
+                k in h_norm for k in ("REGISTER NO", "REG.NO", "REG NO", "REGISTER NUMBER", "REGNO", "REG. NO")
+            ):
+                regno_col = idx
+            if name_col is None and "NAME" in h_norm and "STAFF" not in h_norm and "MENTOR" not in h_norm:
+                name_col = idx
+        if regno_col is not None:
+            break
+
+    if regno_col is None:
+        regno_col = 1
+    if name_col is None:
+        name_col = regno_col + 1
+    if sno_col is None:
+        sno_col = max(0, regno_col - 1)
+
+    # Data typically starts 1-2 rows after the course-code header row (past any sub-label row).
+    data_start = header_row_idx + 1
+    if data_start < len(rows):
+        first_candidate = rows[data_start]
+        looks_like_label_row = (
+            regno_col < len(first_candidate)
+            and not re.match(r"^\d{6,}$", str(first_candidate[regno_col]).strip())
+        )
+        if looks_like_label_row:
+            data_start += 1
+
+    start_idx = None
+    end_idx = None
+    expected_sno = None
+    for idx in range(data_start, len(rows)):
+        row = rows[idx]
+        if len(row) <= max(regno_col, sno_col, name_col):
+            if start_idx is not None:
+                end_idx = idx
+                break
+            continue
+        if _is_summary_row(row):
+            if start_idx is not None:
+                end_idx = idx
+                break
+            continue
+        regno_val = str(row[regno_col]).strip()
+        sno_val = str(row[sno_col]).strip()
+        regno_ok = bool(re.match(r"^\d{6,}$", regno_val))
+        sno_ok = sno_val.isdigit()
+        if regno_ok and (not sno_val or sno_ok):
+            if start_idx is None:
+                start_idx = idx
+                expected_sno = int(sno_val) if sno_ok else None
+            elif sno_ok and expected_sno is not None:
+                expected_sno += 1
+                if int(sno_val) != expected_sno:
+                    # sequence broke -- likely entered a different block; stop here.
+                    end_idx = idx
+                    break
+            end_idx = idx + 1
+        else:
+            if start_idx is not None:
+                end_idx = idx
+                break
+            # else: still scanning for the first valid student row
+    if start_idx is None:
+        start_idx, end_idx = data_start, data_start
+
+    return {
+        "sno_col": sno_col, "regno_col": regno_col, "name_col": name_col,
+        "student_start": start_idx, "student_end": end_idx,
+    }
+
+
+def extract_legacy_xls(data: bytes, filename: str) -> LegacyXLSExtractionReport:
+    """
+    First-class legacy .xls ingestion. Produces the SAME StudentResultRecord shape the
+    PDF pipeline produces, so it flows through the unchanged analytics engine. Never
+    fabricates a grade for a malformed cell -- malformed/ambiguous cells are quarantined,
+    not resolved.
+    """
+    report = LegacyXLSExtractionReport()
+    if not data:
+        report.ok = False
+        report.fatal_error = "Uploaded .xls file is empty (0 bytes)."
+        return report
+
+    try:
+        sheets, reader_method = _open_legacy_workbook_sheets(data)
+    except Exception as e:
+        report.ok = False
+        report.fatal_error = str(e)
+        return report
+    report.reader_method = reader_method
+
+    sheet_name, rows, header_row_idx, score = _select_best_result_sheet(sheets)
+    if header_row_idx < 0 or score < 3:
+        report.ok = False
+        report.fatal_error = (
+            "Could not locate a per-student result matrix in this workbook (no row with "
+            "several course-code-shaped column headers was found in any sheet)."
+        )
+        return report
+    report.sheet_name = sheet_name
+    report.header_row = header_row_idx
+
+    descriptors = _detect_subject_descriptors(rows, header_row_idx)
+    if not descriptors:
+        report.ok = False
+        report.fatal_error = f"Sheet '{sheet_name}' has no detectable subject columns."
+        return report
+    report.subject_descriptors = descriptors
+    subject_col_idxs = {d["grade_col"] for d in descriptors} | {d["gp_col"] for d in descriptors if d["gp_col"] is not None}
+
+    ids = _detect_id_columns_and_student_rows(rows, header_row_idx, subject_col_idxs)
+    regno_col, name_col = ids["regno_col"], ids["name_col"]
+    student_start, student_end = ids["student_start"], ids["student_end"]
+
+    if student_start >= student_end:
+        report.ok = False
+        report.fatal_error = (
+            f"Sheet '{sheet_name}' — could not identify the student data region "
+            "(no rows with a valid register number were found below the header)."
+        )
+        return report
+
+    resolved_subjects = []
+    for d in descriptors:
+        can_name, code, cred, sem, cat, conf, is_amb = resolve_subject_info(d["course_code"])
+        resolved_in_catalog = bool(code) and code.upper() in COURSE_CODE_INDEX
+        resolved_subjects.append({
+            **d, "canonical_name": can_name, "canonical_code": code or d["course_code"],
+            "credits": cred if cred > 0 else 3.0, "semester": sem,
+            "confidence": conf, "unresolved": (not resolved_in_catalog) and is_amb,
+        })
+        if (not resolved_in_catalog) and is_amb:
+            report.unresolved_subject_count += 1
+
+    seen_keys: Dict[Tuple[str, str], bool] = {}
+    student_regnos = set()
+
+    for ridx in range(student_start, student_end):
+        row = rows[ridx]
+        if len(row) <= max(regno_col, name_col):
+            continue
+        raw_reg = str(row[regno_col]).strip()
+        raw_name = str(row[name_col]).strip() if name_col < len(row) else ""
+        if not re.match(r"^\d{6,}$", raw_reg):
+            continue
+        student_regnos.add(raw_reg)
+
+        for subj in resolved_subjects:
+            gcol = subj["grade_col"]
+            gpcol = subj["gp_col"]
+            raw_grade = str(row[gcol]).strip() if gcol < len(row) else ""
+
+            if not raw_grade:
+                report.blank_cell_count += 1
+                continue
+
+            normalized = _grade_normalize(raw_grade)
+            key = (raw_reg.upper(), subj["canonical_code"].upper())
+
+            if not normalized or normalized not in GRADE_POINTS:
+                classification = _classify_result_cell_issue(raw_grade)
+                report.quarantined_tokens.append({
+                    "row": str(ridx + 1),
+                    "regno": raw_reg,
+                    "column": subj["course_code"],
+                    "raw_value": raw_grade,
+                    "reason": f"Unrecognized result token '{raw_grade}' quarantined for manual department review.",
+                    "register_number": raw_reg,
+                    "student_name": raw_name,
+                    "course_code": subj["canonical_code"],
+                    "grade_point": None,
+                    "classification": classification,
+                    "source": "XLS",
+                    "source_row": ridx + 1,
+                })
+                report.malformed_cell_count += 1
+                continue
+
+            if key in seen_keys:
+                report.duplicate_key_count += 1
+                continue
+            seen_keys[key] = True
+
+            source_gp: Optional[float] = None
+            data_quality_issue = ""
+            if gpcol is not None and gpcol < len(row):
+                raw_gp = str(row[gpcol]).strip()
+                if raw_gp:
+                    try:
+                        source_gp = float(raw_gp)
+                        expected_gp = GRADE_POINTS[normalized]
+                        if abs(source_gp - expected_gp) > 0.01:
+                            data_quality_issue = "GRADE_POINT_MISMATCH"
+                            report.gp_mismatches.append({
+                                "register_number": raw_reg, "student_name": raw_name,
+                                "course_code": subj["canonical_code"], "grade": normalized,
+                                "source_gp": source_gp, "expected_gp": expected_gp,
+                                "source_row": ridx + 1,
+                            })
+                    except ValueError:
+                        pass
+
+            report.records.append(StudentResultRecord(
+                register_number=raw_reg,
+                student_name=raw_name,
+                subject_code=subj["canonical_code"],
+                subject_name=subj["canonical_name"],
+                original_subject_text=subj["course_code"],
+                credits=subj["credits"],
+                result_status=normalized,
+                raw_result_status=raw_grade,
+                subject_semester=subj["semester"],
+                source_type="XLS",
+                source_page=0,
+                extraction_confidence=subj["confidence"],
+                source_sheet=sheet_name,
+                source_row=ridx + 1,
+                grade_column=subj["course_code"],
+                gp_column=(str(gpcol) if gpcol is not None else ""),
+                source_gp=source_gp,
+                data_quality_issue=data_quality_issue,
+            ))
+            report.valid_cell_count += 1
+
+    report.student_count = len(student_regnos)
+    report.subject_count = len(resolved_subjects)
+    report.expected_cell_count = report.student_count * report.subject_count
+    report.unknown_token_count = len(report.quarantined_tokens)
+
+    if report.valid_cell_count == 0:
+        report.ok = False
+        report.fatal_error = f"No valid result cells could be extracted from sheet '{sheet_name}'."
+        return report
+
+    base_conf = 0.96
+    if report.unknown_token_count:
+        base_conf -= min(0.20, report.unknown_token_count * 0.03)
+    if report.gp_mismatches:
+        base_conf -= min(0.10, len(report.gp_mismatches) * 0.01)
+    report.overall_confidence = round(max(0.50, base_conf), 2)
+    return report
+
+
+def reconcile_by_course_code(
+    records_a: List[StudentResultRecord], records_b: List[StudentResultRecord],
+    label_a: str = "Source A", label_b: str = "Source B"
+) -> ReconciliationReport:
+    """
+    Generalized cross-source reconciliation keyed by (register_number, course_code) --
+    used for PDF<->XLS / XLS<->XLSX comparisons. Never decides which source is correct;
+    only reports MATCH / MISMATCH / SOURCE_MALFORMED-aware discrepancies for faculty review.
+    """
+    report = ReconciliationReport()
+    map_a = {(r.register_number.strip().upper(), (r.subject_code or "").strip().upper()): r for r in records_a}
+    map_b = {(r.register_number.strip().upper(), (r.subject_code or "").strip().upper()): r for r in records_b}
+
+    for key in set(map_a) | set(map_b):
+        rec_a = map_a.get(key)
+        rec_b = map_b.get(key)
+        if rec_a is not None and rec_b is not None:
+            if rec_a.result_status == rec_b.result_status:
+                report.matched_count += 1
+            else:
+                report.mismatched_count += 1
+                report.mismatched_records.append({
+                    "register_number": rec_a.register_number,
+                    "student_name": rec_a.student_name or rec_b.student_name,
+                    "subject": rec_a.subject_code,
+                    f"{label_a.lower()}_grade": rec_a.result_status,
+                    f"{label_b.lower()}_grade": rec_b.result_status,
+                    "status": "MISMATCH",
+                })
+        elif rec_a is not None:
+            report.missing_in_excel.append({
+                "register_number": rec_a.register_number, "student_name": rec_a.student_name,
+                "subject": rec_a.subject_code, f"{label_a.lower()}_grade": rec_a.result_status,
+            })
+        else:
+            report.missing_in_pdf.append({
+                "register_number": rec_b.register_number, "student_name": rec_b.student_name,
+                "subject": rec_b.subject_code, f"{label_b.lower()}_grade": rec_b.result_status,
+            })
+    return report
 
 
 # =============================================================================
