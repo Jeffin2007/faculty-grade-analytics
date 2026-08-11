@@ -237,13 +237,14 @@ GRADE_TOKEN_CLEAN = {
     "A+": "A+", "A PLUS": "A+", "AP": "A+", "A PLUS PLUS": "A+",
     "B+": "B+", "B PLUS": "B+", "BP": "B+",
     "A0": "A+", "A1": "O", "O": "O", "A": "A", "B": "B", "C": "C",
-    "U": "U",
-    "RA": "RA", "R.A": "RA", "R/A": "RA", "R A": "RA",
-    "SA": "SA", "S A": "SA", "S.A": "SA",
-    "WD": "WD", "W": "WD", "DW": "WD", "W.D": "WD",
+    "U": "U", "FAIL": "U", "F": "U",
+    "RA": "RA", "R.A": "RA", "R/A": "RA", "R A": "RA", "AB": "RA", "ABSENT": "RA", "UA": "RA", "ABS": "RA",
+    "SA": "SA", "S A": "SA", "S.A": "SA", "NE": "SA",
+    "WD": "WD", "W": "WD", "DW": "WD", "W.D": "WD", "WITHDRAWN": "WD",
     "MM": "MM", "M.M": "MM", "MALPRACTICE": "MM",
-    "WH2": "WH2", "WH 2": "WH2", "WH-2": "WH2", "WH.2": "WH2", "WH02": "WH2",
+    "WH": "WH2", "WH1": "WH2", "WH2": "WH2", "WH 2": "WH2", "WH-2": "WH2", "WH.2": "WH2", "WH02": "WH2", "WITHHELD": "WH2",
 }
+
 
 HEADER_ALIASES: Dict[str, List[str]] = {
     "regno": [
@@ -670,10 +671,11 @@ def extract_coe_pdf(pdf_bytes: bytes, filename: str) -> PDFExtractionReport:
         page = doc[page_idx]
         src_page = page_idx + 1
         page_lines = page_texts[page_idx].split("\n")
+        page_records: List[StudentResultRecord] = []
 
         # Scan for course codes in page header
         for line in page_lines[:25]:
-            codes = re.findall(r"\b(?:24[-_]?)?([A-Z]{2,4}[-_]?\d{3,5})\b", line.upper())
+            codes = re.findall(r"\b((?:24[-_]?)?[A-Z]{2,4}[-_]?\d{3,5})\b", line.upper())
             for ccode in codes:
                 can_name, code, cred, sem, cat, conf, amb = resolve_subject_info(ccode)
                 if code not in [ch["code"] for ch in course_headers_detected]:
@@ -686,9 +688,11 @@ def extract_coe_pdf(pdf_bytes: bytes, filename: str) -> PDFExtractionReport:
                         "confidence": conf
                     })
 
-        # 1. Native PyMuPDF fast table extraction
+        # 1. Native PyMuPDF fast table extraction (try default lines, then text strategy)
         try:
             tabs = page.find_tables()
+            if not tabs or not tabs.tables:
+                tabs = page.find_tables(strategy="text")
             if tabs and tabs.tables:
                 for tab in tabs.tables:
                     raw_matrix = tab.extract()
@@ -705,9 +709,6 @@ def extract_coe_pdf(pdf_bytes: bytes, filename: str) -> PDFExtractionReport:
                             regno = m.group(1)
                             name_val = str(row[name_col]).strip() if len(row) > name_col and row[name_col] else ""
                             if name_val.strip() == regno.strip() and len(row) > regno_col and row[regno_col]:
-                                # header resolution pointed at the wrong column for this row; the
-                                # regno column itself can't also be the name -- fall back to the
-                                # next cell over rather than silently accepting regno-as-name.
                                 fallback_idx = name_col + 1
                                 if len(row) > fallback_idx and row[fallback_idx]:
                                     name_val = str(row[fallback_idx]).strip()
@@ -732,7 +733,7 @@ def extract_coe_pdf(pdf_bytes: bytes, filename: str) -> PDFExtractionReport:
                                         source_page=src_page,
                                         extraction_confidence=0.95
                                     )
-                                    extracted_records.append(rec)
+                                    page_records.append(rec)
                                     inspector_items.append({
                                         "source_page": src_page,
                                         "raw_text": row_str,
@@ -745,193 +746,234 @@ def extract_coe_pdf(pdf_bytes: bytes, filename: str) -> PDFExtractionReport:
         except Exception:
             pass
 
-        # 2. Process text blocks from page if table extraction didn't populate records for this page
-        if len(extracted_records) == 0:
-            blocks = page.get_text("blocks")
-            for b in blocks:
-                b_text = b[4].strip()
-                if not b_text:
-                    continue
+        # 2. Process text blocks / word-position lines for this page if table extraction yielded 0 records
+        if len(page_records) == 0:
+            # 2a. Word position horizontal line alignment
+            try:
+                words = page.get_text("words")
+                if words:
+                    # Group words by Y coordinate (tolerance 3.5pt)
+                    lines_by_y: Dict[int, List[Tuple[float, float, str]]] = defaultdict(list)
+                    for w in words:
+                        x0, y0, x1, y1, text, b_num, l_num, w_num = w
+                        y_key = int(round(y0 / 3.5) * 3.5)
+                        lines_by_y[y_key].append((x0, y0, text.strip()))
 
-                lines_in_block = b_text.split("\n")
-                for line_idx, line_str in enumerate(lines_in_block):
-                    line_clean = line_str.strip()
-                    if not line_clean:
+                    sorted_y_keys = sorted(lines_by_y.keys())
+                    for yk in sorted_y_keys:
+                        line_words = sorted(lines_by_y[yk], key=lambda w: w[0])
+                        line_str = " ".join(w[2] for w in line_words if w[2])
+                        m = student_reg_pattern.search(line_str)
+                        if m:
+                            regno = m.group(1)
+                            tokens = [w[2].upper() for w in line_words if w[2]]
+                            reg_idx = next((i for i, t in enumerate(tokens) if regno in t), -1)
+                            after_tokens = tokens[reg_idx + 1:] if reg_idx >= 0 else tokens
+
+                            name_parts: List[str] = []
+                            grades_found: List[Tuple[str, str]] = []
+                            expected_n = len(course_headers_detected)
+                            used_anchor = False
+
+                            if expected_n and len(after_tokens) >= expected_n:
+                                tail = after_tokens[-expected_n:]
+                                tail_norm = [_grade_normalize(t) for t in tail]
+                                if all(tail_norm):
+                                    grades_found = list(zip(tail, tail_norm))
+                                    head_tokens = after_tokens[:-expected_n]
+                                    name_parts = [t for t in head_tokens if re.match(r"^[A-Z\.]+$", t)]
+                                    used_anchor = True
+
+                            if not used_anchor:
+                                for tok in after_tokens:
+                                    g_norm = _grade_normalize(tok)
+                                    if g_norm:
+                                        grades_found.append((tok, g_norm))
+                                    elif re.match(r"^[A-Z\.]+$", tok) and len(grades_found) == 0:
+                                        name_parts.append(tok)
+
+                            raw_name = " ".join(name_parts)
+                            for idx, (raw_g, norm_g) in enumerate(grades_found):
+                                if idx < len(course_headers_detected):
+                                    ch = course_headers_detected[idx]
+                                    subj_code = ch["code"]
+                                    subj_name = ch["canonical_name"]
+                                    credits_val = ch["credits"]
+                                    subj_sem = ch["semester"]
+                                else:
+                                    subj_code = f"SUBJ_{idx+1}"
+                                    subj_name = f"Subject {idx+1}"
+                                    credits_val = 3.0
+                                    subj_sem = 3
+
+                                rec = StudentResultRecord(
+                                    register_number=regno,
+                                    student_name=raw_name,
+                                    subject_code=subj_code,
+                                    subject_name=subj_name,
+                                    original_subject_text=subj_code,
+                                    credits=credits_val,
+                                    result_status=norm_g,
+                                    raw_result_status=raw_g,
+                                    source_type="PDF",
+                                    source_page=src_page,
+                                    extraction_confidence=0.92
+                                )
+                                page_records.append(rec)
+                                inspector_items.append({
+                                    "source_page": src_page,
+                                    "raw_text": line_str,
+                                    "parsed_regno": regno,
+                                    "parsed_name": raw_name or "—",
+                                    "parsed_subject": subj_name,
+                                    "parsed_grade": norm_g,
+                                    "confidence": "HIGH"
+                                })
+            except Exception:
+                pass
+
+            # 2b. Block text parsing fallback for this page if word alignment yielded 0 records
+            if len(page_records) == 0:
+                blocks = page.get_text("blocks")
+                for b in blocks:
+                    b_text = b[4].strip()
+                    if not b_text:
                         continue
-                    if any(re.search(p, line_clean.upper()) for p in noise_patterns):
-                        continue
-                    m = student_reg_pattern.search(line_clean)
-                    if m:
-                        regno = m.group(1)
-                        reg_pos = line_clean.find(regno)
-                        after_reg = line_clean[reg_pos + len(regno):].strip()
-
-                        # Collect potential multi-line text if grades are on subsequent lines in block
-                        combined_line = after_reg
-                        if not combined_line and line_idx + 1 < len(lines_in_block):
-                            combined_line = " ".join(lines_in_block[line_idx + 1 : line_idx + 4])
-
-                        tokens = [t.strip().upper() for t in re.split(r"[\s\t,]+", combined_line) if t.strip()]
-
-                        # Anchor grade parsing from the END of the token stream using the known
-                        # subject count (course_headers_detected), so a trailing name initial that
-                        # happens to look like a grade letter (e.g. "...BADHUSHA A") is never
-                        # misread as the first grade. Only fall back to left-to-right scanning
-                        # when the expected subject count is unknown or doesn't fit.
-                        name_parts: List[str] = []
-                        grades_found: List[Tuple[str, str]] = []
-                        expected_n = len(course_headers_detected)
-                        used_anchor = False
-                        if expected_n and len(tokens) >= expected_n:
-                            tail = tokens[-expected_n:]
-                            tail_norm = [_grade_normalize(t) for t in tail]
-                            if all(tail_norm):
-                                grades_found = list(zip(tail, tail_norm))
-                                head_tokens = tokens[:-expected_n]
-                                name_parts = [t for t in head_tokens
-                                              if re.match(r"^[A-Z\.]+$", t)
-                                              and t not in ["UA", "AB", "NR", "NE", "FAIL", "F", "ABSENT", "WITHHELD"]]
-                                for t in head_tokens:
-                                    if t in ["UA", "AB", "NR", "NE", "FAIL", "F", "ABSENT", "WITHHELD"]:
-                                        quarantined_tokens.append({
-                                            "row": f"Page {src_page}",
-                                            "regno": regno,
-                                            "column": "PDF Text Stream",
-                                            "raw_value": t,
-                                            "reason": f"Unrecognized PDF result status '{t}' quarantined requiring faculty review.",
-                                            "register_number": regno,
-                                            "student_name": "",
-                                            "course_code": "",
-                                            "grade_point": None,
-                                            "classification": _classify_result_cell_issue(t),
-                                            "source": "PDF",
-                                            "source_row": src_page,
-                                        })
-                                used_anchor = True
-
-                        if not used_anchor:
-                            for tok in tokens:
-                                g_norm = _grade_normalize(tok)
-                                if g_norm:
-                                    grades_found.append((tok, g_norm))
-                                elif tok in ["UA", "AB", "NR", "NE", "FAIL", "F", "ABSENT", "WITHHELD"]:
-                                    quarantined_tokens.append({
-                                        "row": f"Page {src_page}",
-                                        "regno": regno,
-                                        "column": "PDF Text Stream",
-                                        "raw_value": tok,
-                                        "reason": f"Unrecognized PDF result status '{tok}' quarantined requiring faculty review.",
-                                        "register_number": regno,
-                                        "student_name": "",
-                                        "course_code": "",
-                                        "grade_point": None,
-                                        "classification": _classify_result_cell_issue(tok),
-                                        "source": "PDF",
-                                        "source_row": src_page,
-                                    })
-                                elif re.match(r"^[A-Z\.]+$", tok) and len(grades_found) == 0:
-                                    name_parts.append(tok)
-
-                        raw_name = " ".join(name_parts)
-
-                        for idx, (raw_g, norm_g) in enumerate(grades_found):
-                            if idx < len(course_headers_detected):
-                                ch = course_headers_detected[idx]
-                                subj_code = ch["code"]
-                                subj_name = ch["canonical_name"]
-                                credits_val = ch["credits"]
-                                subj_sem = ch["semester"]
-                            else:
-                                subj_code = f"SUBJ_{idx+1}"
-                                subj_name = f"Subject {idx+1}"
-                                credits_val = 3.0
-                                subj_sem = 3
-
-                            rec = StudentResultRecord(
-                                register_number=regno,
-                                student_name=raw_name,
-                                subject_code=subj_code,
-                                subject_name=subj_name,
-                                original_subject_text=subj_code,
-                                credits=credits_val,
-                                result_status=norm_g,
-                                raw_result_status=raw_g,
-                                result_semester=3,
-                                subject_semester=subj_sem,
-                                source_type="PDF",
-                                source_page=src_page,
-                                extraction_confidence=0.95
-                            )
-                            extracted_records.append(rec)
-
-                            inspector_items.append({
-                                "source_page": src_page,
-                                "raw_text": line_clean,
-                                "parsed_regno": regno,
-                                "parsed_name": raw_name or "—",
-                                "parsed_subject": subj_name,
-                                "parsed_grade": norm_g,
-                                "confidence": "HIGH" if ch.get("confidence", 1.0) >= 0.8 else "REVIEW"
-                            })
-
-    # Secondary fallback using pdfplumber if PyMuPDF blocks were plain structured grid tables
-    if len(extracted_records) == 0:
-        try:
-            import pdfplumber
-            with pdfplumber.open(io.BytesIO(pdf_bytes)) as plumber_pdf:
-                for p_idx, p in enumerate(plumber_pdf.pages):
-                    src_page = p_idx + 1
-                    tables = p.extract_tables()
-                    for table in tables:
-                        if not table or len(table) < 2:
+                    lines_in_block = b_text.split("\n")
+                    for line_idx, line_str in enumerate(lines_in_block):
+                        line_clean = line_str.strip()
+                        if not line_clean or any(re.search(p, line_clean.upper()) for p in noise_patterns):
                             continue
-                        headers = [str(c or "").strip() for c in table[0]]
-                        regno_col, name_col = _resolve_id_columns(headers)
-                        for row_idx in range(1, len(table)):
-                            row = table[row_idx]
-                            if not row:
+                        m = student_reg_pattern.search(line_clean)
+                        if m:
+                            regno = m.group(1)
+                            reg_pos = line_clean.find(regno)
+                            after_reg = line_clean[reg_pos + len(regno):].strip()
+                            combined_line = after_reg
+                            if not combined_line and line_idx + 1 < len(lines_in_block):
+                                combined_line = " ".join(lines_in_block[line_idx + 1 : line_idx + 4])
+
+                            tokens = [t.strip().upper() for t in re.split(r"[\s\t,]+", combined_line) if t.strip()]
+                            name_parts: List[str] = []
+                            grades_found: List[Tuple[str, str]] = []
+                            expected_n = len(course_headers_detected)
+                            used_anchor = False
+                            if expected_n and len(tokens) >= expected_n:
+                                tail = tokens[-expected_n:]
+                                tail_norm = [_grade_normalize(t) for t in tail]
+                                if all(tail_norm):
+                                    grades_found = list(zip(tail, tail_norm))
+                                    head_tokens = tokens[:-expected_n]
+                                    name_parts = [t for t in head_tokens if re.match(r"^[A-Z\.]+$", t)]
+                                    used_anchor = True
+
+                            if not used_anchor:
+                                for tok in tokens:
+                                    g_norm = _grade_normalize(tok)
+                                    if g_norm:
+                                        grades_found.append((tok, g_norm))
+                                    elif re.match(r"^[A-Z\.]+$", tok) and len(grades_found) == 0:
+                                        name_parts.append(tok)
+
+                            raw_name = " ".join(name_parts)
+                            for idx, (raw_g, norm_g) in enumerate(grades_found):
+                                if idx < len(course_headers_detected):
+                                    ch = course_headers_detected[idx]
+                                    subj_code = ch["code"]
+                                    subj_name = ch["canonical_name"]
+                                    credits_val = ch["credits"]
+                                    subj_sem = ch["semester"]
+                                else:
+                                    subj_code = f"SUBJ_{idx+1}"
+                                    subj_name = f"Subject {idx+1}"
+                                    credits_val = 3.0
+                                    subj_sem = 3
+
+                                rec = StudentResultRecord(
+                                    register_number=regno,
+                                    student_name=raw_name,
+                                    subject_code=subj_code,
+                                    subject_name=subj_name,
+                                    original_subject_text=subj_code,
+                                    credits=credits_val,
+                                    result_status=norm_g,
+                                    raw_result_status=raw_g,
+                                    source_type="PDF",
+                                    source_page=src_page,
+                                    extraction_confidence=0.90
+                                )
+                                page_records.append(rec)
+                                inspector_items.append({
+                                    "source_page": src_page,
+                                    "raw_text": line_clean,
+                                    "parsed_regno": regno,
+                                    "parsed_name": raw_name or "—",
+                                    "parsed_subject": subj_name,
+                                    "parsed_grade": norm_g,
+                                    "confidence": "HIGH" if ch.get("confidence", 1.0) >= 0.8 else "REVIEW"
+                                })
+
+        # 3. Secondary pdfplumber table fallback for this page if PyMuPDF yielded 0 records for this page
+        if len(page_records) == 0:
+            try:
+                import pdfplumber
+                with pdfplumber.open(io.BytesIO(pdf_bytes)) as plumber_pdf:
+                    if page_idx < len(plumber_pdf.pages):
+                        p = plumber_pdf.pages[page_idx]
+                        tables = p.extract_tables()
+                        for table in tables:
+                            if not table or len(table) < 2:
                                 continue
-                            row_str = " ".join(str(c or "") for c in row)
-                            m = student_reg_pattern.search(row_str)
-                            if m:
-                                regno = m.group(1)
-                                name_val = str(row[name_col]).strip() if len(row) > name_col and row[name_col] else ""
-                                if name_val.strip() == regno.strip():
-                                    fallback_idx = name_col + 1
-                                    if len(row) > fallback_idx and row[fallback_idx]:
-                                        name_val = str(row[fallback_idx]).strip()
-                                grade_start = max(regno_col, name_col) + 1
-                                for c_idx in range(grade_start, len(row)):
-                                    cell_v = str(row[c_idx] or "").strip()
-                                    norm_g = _grade_normalize(cell_v)
-                                    if norm_g:
-                                        subj_hdr = headers[c_idx] if c_idx < len(headers) else f"Column_{c_idx}"
-                                        can_name, code, cred, sem, cat, conf, amb = resolve_subject_info(subj_hdr)
-                                        rec = StudentResultRecord(
-                                            register_number=regno,
-                                            student_name=name_val,
-                                            subject_code=code or subj_hdr,
-                                            subject_name=can_name,
-                                            original_subject_text=subj_hdr,
-                                            credits=cred if cred > 0 else 3.0,
-                                            result_status=norm_g,
-                                            raw_result_status=cell_v,
-                                            source_type="PDF",
-                                            source_page=src_page,
-                                            extraction_confidence=0.90
-                                        )
-                                        extracted_records.append(rec)
-                                        inspector_items.append({
-                                            "source_page": src_page,
-                                            "raw_text": row_str,
-                                            "parsed_regno": regno,
-                                            "parsed_name": name_val or "—",
-                                            "parsed_subject": can_name,
-                                            "parsed_grade": norm_g,
-                                            "confidence": "HIGH"
-                                        })
-        except Exception as pe:
-            report.warnings.append(f"pdfplumber table extraction notice: {pe}")
+                            headers = [str(c or "").strip() for c in table[0]]
+                            regno_col, name_col = _resolve_id_columns(headers)
+                            for row_idx in range(1, len(table)):
+                                row = table[row_idx]
+                                if not row:
+                                    continue
+                                row_str = " ".join(str(c or "") for c in row)
+                                m = student_reg_pattern.search(row_str)
+                                if m:
+                                    regno = m.group(1)
+                                    name_val = str(row[name_col]).strip() if len(row) > name_col and row[name_col] else ""
+                                    if name_val.strip() == regno.strip():
+                                        fallback_idx = name_col + 1
+                                        if len(row) > fallback_idx and row[fallback_idx]:
+                                            name_val = str(row[fallback_idx]).strip()
+                                    grade_start = max(regno_col, name_col) + 1
+                                    for c_idx in range(grade_start, len(row)):
+                                        cell_v = str(row[c_idx] or "").strip()
+                                        norm_g = _grade_normalize(cell_v)
+                                        if norm_g:
+                                            subj_hdr = headers[c_idx] if c_idx < len(headers) else f"Column_{c_idx}"
+                                            can_name, code, cred, sem, cat, conf, amb = resolve_subject_info(subj_hdr)
+                                            rec = StudentResultRecord(
+                                                register_number=regno,
+                                                student_name=name_val,
+                                                subject_code=code or subj_hdr,
+                                                subject_name=can_name,
+                                                original_subject_text=subj_hdr,
+                                                credits=cred if cred > 0 else 3.0,
+                                                result_status=norm_g,
+                                                raw_result_status=cell_v,
+                                                source_type="PDF",
+                                                source_page=src_page,
+                                                extraction_confidence=0.90
+                                            )
+                                            page_records.append(rec)
+                                            inspector_items.append({
+                                                "source_page": src_page,
+                                                "raw_text": row_str,
+                                                "parsed_regno": regno,
+                                                "parsed_name": name_val or "—",
+                                                "parsed_subject": can_name,
+                                                "parsed_grade": norm_g,
+                                                "confidence": "HIGH"
+                                            })
+            except Exception as pe:
+                report.warnings.append(f"pdfplumber table extraction notice for page {src_page}: {pe}")
+
+        extracted_records.extend(page_records)
+
 
     report.records = extracted_records
     report.raw_inspector_items = inspector_items
@@ -1076,12 +1118,14 @@ def build_class_analysis_excel(ca: "ClassAnalysis") -> bytes:
     ever falls back to using the raw course code as the subject name.
     """
     import openpyxl
-    from openpyxl.styles import Font, PatternFill, Alignment
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
     from openpyxl.utils import get_column_letter
 
     wb = openpyxl.Workbook()
     header_fill = PatternFill(start_color="0F1B33", end_color="0F1B33", fill_type="solid")
     header_font = Font(color="FFFFFF", bold=True)
+    thin = Side(style="thin", color="D1D5DB")
+    cell_border = Border(left=thin, right=thin, top=thin, bottom=thin)
 
     def write_sheet(ws, headers: List[str], rows: List[List[Any]]):
         ws.append(headers)
@@ -1089,12 +1133,40 @@ def build_class_analysis_excel(ca: "ClassAnalysis") -> bytes:
             cell = ws.cell(row=1, column=c)
             cell.fill = header_fill
             cell.font = header_font
-            cell.alignment = Alignment(horizontal="center")
-        for row in rows:
+            cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+            cell.border = cell_border
+        for r_idx, row in enumerate(rows, start=2):
             ws.append(row)
-        for c, h in enumerate(headers, start=1):
-            width = max(12, min(45, len(str(h)) + 4))
-            ws.column_dimensions[get_column_letter(c)].width = width
+            for c_idx, val in enumerate(row, start=1):
+                cell = ws.cell(row=r_idx, column=c_idx)
+                cell.border = cell_border
+                h_name = headers[c_idx - 1] if c_idx - 1 < len(headers) else ""
+                
+                # Alignments and number formats
+                if isinstance(val, float):
+                    if "%" in h_name or "pct" in h_name.lower() or "rate" in h_name.lower():
+                        cell.number_format = '0.0'
+                    else:
+                        cell.number_format = '0.00'
+                    cell.alignment = Alignment(horizontal="right", vertical="center")
+                elif isinstance(val, int) and "Register" not in h_name and "Reg" not in h_name and "S.No" not in h_name:
+                    cell.number_format = '#,##0'
+                    cell.alignment = Alignment(horizontal="right", vertical="center")
+                elif "Register" in h_name or "S.No" in h_name or "Code" in h_name:
+                    cell.alignment = Alignment(horizontal="center", vertical="center")
+                else:
+                    cell.alignment = Alignment(horizontal="left", vertical="center")
+
+        # Auto-fit column widths based on max content length
+        for c_idx, h in enumerate(headers, start=1):
+            max_len = len(str(h or ""))
+            for r_idx in range(2, len(rows) + 2):
+                cell_v = ws.cell(row=r_idx, column=c_idx).value
+                if cell_v is not None:
+                    max_len = max(max_len, len(str(cell_v)))
+            width = max(12, min(55, max_len + 4))
+            ws.column_dimensions[get_column_letter(c_idx)].width = width
+
 
     mappings = sorted(ca.subject_mappings or [], key=lambda m: m["course_code"])
     code_to_name = {m["course_code"]: m["official_subject_name"] for m in mappings}
@@ -1378,12 +1450,14 @@ def build_department_excel(
         ws1.cell(row=r, column=2, value=code)
         ws1.cell(row=r, column=3, value=f"{m['official_subject_name']}\n{staff_line}")
         ws1.cell(row=r, column=4, value=subj.student_count if subj else 0)
-        ws1.cell(row=r, column=5, value=0)  # not separately tracked -- never fabricated
+        ws1.cell(row=r, column=5, value=subj.sa_count if subj else 0)
         ws1.cell(row=r, column=6, value=subj.arrear_count if subj else 0)
-        ws1.cell(row=r, column=7, value=subj.wh2_count if subj else 0)
+        ws1.cell(row=r, column=7, value=(subj.wh2_count + subj.mm_count) if subj else 0)
         ws1.cell(row=r, column=8, value=subj.pass_count if subj else 0)
-        ws1.cell(row=r, column=9, value=round(subj.pass_pct, 2) if subj and subj.pass_pct is not None else 0.0)
+        p_cell = ws1.cell(row=r, column=9, value=round(subj.pass_pct, 2) if subj and subj.pass_pct is not None else 0.0)
+        p_cell.number_format = '0.00'
         style_body_row(ws1, r, ncols1)
+
         ws1.cell(row=r, column=3).alignment = LEFT_WRAP
         r += 1
     ws1.cell(row=r, column=1,
@@ -1528,10 +1602,13 @@ def build_department_excel(
         ws6.cell(row=r, column=1, value=i)
         ws6.cell(row=r, column=2, value=s.regno)
         ws6.cell(row=r, column=3, value=s.name)
-        ws6.cell(row=r, column=4, value=s.gpa)
+        gpa_c = ws6.cell(row=r, column=4, value=s.gpa)
+        if s.gpa is not None:
+            gpa_c.number_format = '0.00'
         ws6.cell(row=r, column=5, value=s.rank)
         style_body_row(ws6, r, ncols6)
         r += 1
+
     ws6.column_dimensions["A"].width = 6
     ws6.column_dimensions["B"].width = 16
     ws6.column_dimensions["C"].width = 28
@@ -3172,8 +3249,11 @@ def compute_student_analytics(records: pd.DataFrame) -> List[StudentAnalysis]:
         passing = [c for c in courses if c.grade in PASSING_GRADES]
         attempted_credits = sum(c.credits for c in courses)
         completed_credits = sum(c.credits for c in passing)
-        quality_points = sum(c.credits * c.points for c in passing)
-        gpa = (quality_points / completed_credits) if completed_credits > 0 else None
+        gpa_courses = [c for c in courses if c.grade not in WITHDRAWAL_GRADES]
+        gpa_attempted_credits = sum(c.credits for c in gpa_courses)
+        quality_points = sum(c.credits * c.points for c in courses)
+        gpa = (quality_points / gpa_attempted_credits) if gpa_attempted_credits > 0 else None
+
 
         counts = {g: sum(1 for c in courses if c.grade == g) for g in GRADE_ORDER}
         u_count = counts.get("U", 0)
