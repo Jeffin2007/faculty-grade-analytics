@@ -1204,6 +1204,415 @@ def build_class_analysis_excel(ca: "ClassAnalysis") -> bytes:
     return bio.getvalue()
 
 
+# =============================================================================
+# 3.3) PDF -> DEPARTMENT OFFICIAL EXCEL CONVERTER (Analyses 1 / 2 / 3 / 5 / 6 / 7)
+# =============================================================================
+
+_DEPT_EXPANSION = {
+    "DEPARTMENT OF AI & DS": "DEPARTMENT OF ARTIFICIAL INTELLIGENCE AND DATA SCIENCE",
+}
+
+
+def _dept_short_code(department: str, programme: str) -> str:
+    text = f"{department} {programme}".upper()
+    if "ARTIFICIAL INTELLIGENCE" in text or "AI & DS" in text or "AI AND DS" in text or "AIDS" in text:
+        return "AI_DS"
+    if "COMPUTER SCIENCE" in text or "CSE" in text:
+        return "CSE"
+    if "ELECTRONICS AND COMMUNICATION" in text or "ECE" in text:
+        return "ECE"
+    if "ELECTRICAL AND ELECTRONICS" in text or "EEE" in text:
+        return "EEE"
+    if "MECHANICAL" in text:
+        return "MECH"
+    if "CIVIL" in text:
+        return "CIVIL"
+    if re.search(r"\bIT\b", text) or "INFORMATION TECHNOLOGY" in text:
+        return "IT"
+    words = re.findall(r"[A-Z]+", department.upper())
+    initials = "".join(w[0] for w in words if w not in ("OF", "AND", "THE", "DEPARTMENT"))
+    return initials[:6] or "DEPT"
+
+
+def _session_short_code(exam_session: str) -> str:
+    s = (exam_session or "").upper()
+    months = "JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC"
+    m = re.search(rf"({months})\s*/?\s*({months})?", s)
+    year_m = re.search(r"(20\d{2})", s)
+    year = year_m.group(1) if year_m else datetime.now().strftime("%Y")
+    if m and m.group(1):
+        parts = [p for p in [m.group(1), m.group(2)] if p]
+        return "_".join(parts) + f"_{year}"
+    return f"RESULT_{year}"
+
+
+def department_excel_filename(pdf_report: "PDFExtractionReport") -> str:
+    """Filename derived dynamically from department / exam session / year -- never hardcoded."""
+    meta = pdf_report.doc_metadata
+    dept_code = _dept_short_code(meta.department, meta.programme)
+    session_code = _session_short_code(meta.exam_session)
+    fname = f"{dept_code}_{session_code}_Result_Analysis.xlsx"
+    return re.sub(r"[^\w\.\-]", "_", fname)
+
+
+def _semester_parity(semester_text: str) -> str:
+    m = re.search(r"([IVX]+|\d+)", (semester_text or "").upper())
+    if not m:
+        return ""
+    tok = m.group(1)
+    roman = {"I": 1, "II": 2, "III": 3, "IV": 4, "V": 5, "VI": 6, "VII": 7, "VIII": 8}
+    n = roman.get(tok) or (int(tok) if tok.isdigit() else None)
+    if n is None:
+        return ""
+    return "EVEN" if n % 2 == 0 else "ODD"
+
+
+def _grade_gp_lookup(student: "StudentAnalysis") -> Dict[str, Tuple[str, float]]:
+    return {c.course_code: (c.grade, c.points) for c in student.courses}
+
+
+def build_department_excel(
+    ca: "ClassAnalysis",
+    pdf_report: "PDFExtractionReport",
+    staff_map: Dict[str, str],
+    source_filename: str = "",
+) -> bytes:
+    """
+    Build the departmental official result-analysis workbook: Analysis 1_New, 2_New,
+    3_New, 5_New, 6_New, Analysis 7 -- in that order, styled to resemble the reference
+    departmental workbook. This reuses the existing trusted GPA/credit calculation
+    engine (ClassAnalysis / StudentAnalysis / SubjectAnalysis, already computed via
+    compute_class_analysis) -- no analytics are re-derived here, and nothing is
+    generated using AI; this is a fully deterministic transformation.
+    """
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
+
+    meta = pdf_report.doc_metadata
+    institution = ("SARANATHAN COLLEGE OF ENGINEERING, TIRUCHIRAPPALLI - 620 012"
+                   if "SARANATHAN" in meta.institution.upper() else meta.institution.upper())
+    dept_text = meta.department.upper()
+    dept_line = _DEPT_EXPANSION.get(dept_text, dept_text if dept_text.startswith("DEPARTMENT") else f"DEPARTMENT OF {dept_text}")
+    programme_line = f"COURSE: {meta.programme}"
+    parity = _semester_parity(meta.semester)
+    ay_line = f"ACADEMIC YEAR: {meta.academic_year}" + (f" ({parity})" if parity else "")
+    session_line = meta.exam_session
+
+    mappings = list(ca.subject_mappings or [])  # first-seen order == PDF course order
+    code_to_staff = {m["course_code"]: (staff_map.get(m["course_code"], "") or "").strip() for m in mappings}
+    code_to_subj: Dict[str, "SubjectAnalysis"] = {s.course_code: s for s in ca.subjects}
+
+    THIN = Side(style="thin", color="9AA5B1")
+    BORDER = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
+    TITLE_FONT = Font(bold=True, size=12, color="0F1B33")
+    SUB_FONT = Font(bold=True, size=10, color="0F1B33")
+    HEADER_FILL = PatternFill(start_color="1F3864", end_color="1F3864", fill_type="solid")
+    HEADER_FONT = Font(bold=True, color="FFFFFF", size=9)
+    CENTER = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    LEFT_WRAP = Alignment(horizontal="left", vertical="center", wrap_text=True)
+    NOTE_FONT = Font(italic=True, size=8, color="64748B")
+
+    wb = openpyxl.Workbook()
+    wb.remove(wb.active)
+
+    def title_block(ws, ncols: int, extra_lines: List[str], analysis_title: str) -> int:
+        r = 1
+        for line in [institution, dept_line, analysis_title] + extra_lines:
+            ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=max(ncols, 1))
+            cell = ws.cell(row=r, column=1, value=line)
+            cell.font = TITLE_FONT if r <= 2 else SUB_FONT
+            cell.alignment = CENTER
+            r += 1
+        return r + 1  # blank spacer row before the header row
+
+    def style_header_row(ws, row_idx: int, ncols: int):
+        for c in range(1, ncols + 1):
+            cell = ws.cell(row=row_idx, column=c)
+            cell.fill = HEADER_FILL
+            cell.font = HEADER_FONT
+            cell.alignment = CENTER
+            cell.border = BORDER
+
+    def style_body_row(ws, row_idx: int, ncols: int):
+        for c in range(1, ncols + 1):
+            cell = ws.cell(row=row_idx, column=c)
+            cell.border = BORDER
+            cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+    def page_setup(ws, ncols: int, last_row: int, landscape: bool = True, freeze: str = "A1"):
+        ws.page_setup.orientation = "landscape" if landscape else "portrait"
+        ws.sheet_properties.pageSetUpPr.fitToPage = True
+        ws.page_setup.fitToWidth = 1
+        ws.page_setup.fitToHeight = 0
+        ws.page_margins.left = 0.3
+        ws.page_margins.right = 0.3
+        ws.page_margins.top = 0.4
+        ws.page_margins.bottom = 0.4
+        ws.oddHeader.center.text = f"&B{ws.title}"
+        ws.oddFooter.center.text = "Page &P of &N"
+        last_col = get_column_letter(max(ncols, 1))
+        ws.print_area = f"A1:{last_col}{max(last_row, 1)}"
+        ws.freeze_panes = freeze
+
+    # ---------------------------------------------------------------
+    # Analysis 1 - University Examination Result Analysis
+    # ---------------------------------------------------------------
+    ws1 = wb.create_sheet("Analysis 1_New")
+    headers1 = ["S.NO", "SUBJECT CODE", "SUBJECT TITLE / STAFF NAME", "NO.OF STUDENTS REGISTERED",
+                "NO. OF STUDENTS ABSENT", "NO.OF STUDENTS FAILED", "NO. OF STUDENTS WH",
+                "NO. OF STUDENTS PASSED", "PASS % (Including ABSENT)"]
+    ncols1 = len(headers1)
+    start_row = title_block(ws1, ncols1, [programme_line, ay_line, session_line],
+                             "ANALYSIS 1 - UNIVERSITY EXAMINATION RESULT ANALYSIS")
+    for c, h in enumerate(headers1, start=1):
+        ws1.cell(row=start_row, column=c, value=h)
+    style_header_row(ws1, start_row, ncols1)
+    r = start_row + 1
+    for i, m in enumerate(mappings, start=1):
+        code = m["course_code"]
+        subj = code_to_subj.get(code)
+        staff = code_to_staff.get(code, "")
+        staff_line = f"Staff: {staff}" if staff else "(Staff name not entered)"
+        ws1.cell(row=r, column=1, value=i)
+        ws1.cell(row=r, column=2, value=code)
+        ws1.cell(row=r, column=3, value=f"{m['official_subject_name']}\n{staff_line}")
+        ws1.cell(row=r, column=4, value=subj.student_count if subj else 0)
+        ws1.cell(row=r, column=5, value=0)  # not separately tracked -- never fabricated
+        ws1.cell(row=r, column=6, value=subj.arrear_count if subj else 0)
+        ws1.cell(row=r, column=7, value=subj.wh2_count if subj else 0)
+        ws1.cell(row=r, column=8, value=subj.pass_count if subj else 0)
+        ws1.cell(row=r, column=9, value=round(subj.pass_pct, 2) if subj and subj.pass_pct is not None else 0.0)
+        style_body_row(ws1, r, ncols1)
+        ws1.cell(row=r, column=3).alignment = LEFT_WRAP
+        r += 1
+    ws1.cell(row=r, column=1,
+             value="Note: Absent-count is not separately tracked by COE PDF extraction; shown as 0 rather than fabricated.")
+    ws1.merge_cells(start_row=r, start_column=1, end_row=r, end_column=ncols1)
+    ws1.cell(row=r, column=1).font = NOTE_FONT
+    ws1.column_dimensions["A"].width = 6
+    ws1.column_dimensions["B"].width = 14
+    ws1.column_dimensions["C"].width = 34
+    for c in range(4, ncols1 + 1):
+        ws1.column_dimensions[get_column_letter(c)].width = 14
+    page_setup(ws1, ncols1, r, landscape=True, freeze=f"A{start_row + 1}")
+
+    # ---------------------------------------------------------------
+    # Analysis 2 - Comparison of Previous Batch Results
+    # ---------------------------------------------------------------
+    ws2 = wb.create_sheet("Analysis 2_New")
+    start_row = title_block(ws2, 6, [programme_line, ay_line, session_line],
+                             "ANALYSIS 2 - COMPARISON OF PREVIOUS BATCH RESULTS")
+    ws2.merge_cells(start_row=start_row, start_column=1, end_row=start_row, end_column=6)
+    cell = ws2.cell(row=start_row, column=1,
+                     value="Previous batch comparison data is not available in the uploaded COE PDF.")
+    cell.font = Font(italic=True, bold=True, size=10, color="B45309")
+    cell.alignment = CENTER
+    for c in range(1, 7):
+        ws2.column_dimensions[get_column_letter(c)].width = 20
+    page_setup(ws2, 6, start_row, landscape=False)
+
+    # ---------------------------------------------------------------
+    # Analysis 3 - Result Analysis of Failed Students
+    # ---------------------------------------------------------------
+    ws3 = wb.create_sheet("Analysis 3_New")
+    headers3 = ["S.No.", "Reg.No", "Student Name", "Quota"] + [m["course_code"] for m in mappings]
+    ncols3 = len(headers3)
+    start_row = title_block(ws3, ncols3, [programme_line, ay_line, session_line],
+                             "ANALYSIS 3 - RESULT ANALYSIS OF FAILED STUDENTS")
+    for c, h in enumerate(headers3, start=1):
+        ws3.cell(row=start_row, column=c, value=h)
+    style_header_row(ws3, start_row, ncols3)
+    r = start_row + 1
+    n_failed = 0
+    for s in ca.students:
+        if s.u_count <= 0 and s.ra_count <= 0:
+            continue
+        n_failed += 1
+        gp_lookup = _grade_gp_lookup(s)
+        ws3.cell(row=r, column=1, value=n_failed)
+        ws3.cell(row=r, column=2, value=s.regno)
+        ws3.cell(row=r, column=3, value=s.name)
+        ws3.cell(row=r, column=4, value="N/A")  # quota is not present in the extracted COE PDF data
+        for j, m in enumerate(mappings, start=5):
+            grade, _pts = gp_lookup.get(m["course_code"], ("", 0))
+            ws3.cell(row=r, column=j, value=grade if grade in ARREAR_GRADES else "")
+        style_body_row(ws3, r, ncols3)
+        r += 1
+    if n_failed == 0:
+        ws3.merge_cells(start_row=r, start_column=1, end_row=r, end_column=ncols3)
+        ws3.cell(row=r, column=1, value="No students with academic arrears (U / RA) were found.")
+        r += 1
+    ws3.column_dimensions["A"].width = 6
+    ws3.column_dimensions["B"].width = 16
+    ws3.column_dimensions["C"].width = 26
+    ws3.column_dimensions["D"].width = 10
+    for c in range(5, ncols3 + 1):
+        ws3.column_dimensions[get_column_letter(c)].width = 10
+    page_setup(ws3, ncols3, r, landscape=True, freeze=f"E{start_row + 1}")
+
+    # ---------------------------------------------------------------
+    # Analysis 5 - List of Subject Toppers
+    # ---------------------------------------------------------------
+    ws5 = wb.create_sheet("Analysis 5_New")
+    headers5 = ["S.No", "STAFF NAME", "SUBJECT CODE", "SUBJECT NAME", "NO.OF TOPPERS",
+                "REGISTER NUMBER", "NAME OF THE STUDENT", "GRADE"]
+    ncols5 = len(headers5)
+    start_row = title_block(ws5, ncols5, [programme_line, ay_line, session_line],
+                             "ANALYSIS 5 - LIST OF SUBJECT TOPPERS")
+    for c, h in enumerate(headers5, start=1):
+        ws5.cell(row=start_row, column=c, value=h)
+    style_header_row(ws5, start_row, ncols5)
+    r = start_row + 1
+    for i, m in enumerate(mappings, start=1):
+        code = m["course_code"]
+        staff = code_to_staff.get(code, "")
+        staff_disp = staff if staff else "(Staff name not entered)"
+        entries = [(s.regno, s.name, c_.grade, c_.points)
+                   for s in ca.students for c_ in s.courses
+                   if c_.course_code == code and c_.grade in PASSING_GRADES]
+        if not entries:
+            ws5.cell(row=r, column=1, value=i)
+            ws5.cell(row=r, column=2, value=staff_disp)
+            ws5.cell(row=r, column=3, value=code)
+            ws5.cell(row=r, column=4, value=m["official_subject_name"])
+            ws5.cell(row=r, column=5, value=0)
+            ws5.cell(row=r, column=6, value="—")
+            ws5.cell(row=r, column=7, value="—")
+            ws5.cell(row=r, column=8, value="—")
+            style_body_row(ws5, r, ncols5)
+            r += 1
+            continue
+        best_points = max(e[3] for e in entries)
+        toppers = sorted([e for e in entries if e[3] == best_points], key=lambda e: e[0])
+        top_start_row = r
+        for idx, (regno, name, grade, points) in enumerate(toppers):
+            if idx == 0:
+                ws5.cell(row=r, column=1, value=i)
+                ws5.cell(row=r, column=2, value=staff_disp)
+                ws5.cell(row=r, column=3, value=code)
+                ws5.cell(row=r, column=4, value=m["official_subject_name"])
+                ws5.cell(row=r, column=5, value=len(toppers))
+            ws5.cell(row=r, column=6, value=regno)
+            ws5.cell(row=r, column=7, value=name)
+            ws5.cell(row=r, column=8, value=grade)
+            style_body_row(ws5, r, ncols5)
+            r += 1
+        if len(toppers) > 1:
+            for colm in (1, 2, 3, 4, 5):
+                ws5.merge_cells(start_row=top_start_row, start_column=colm, end_row=r - 1, end_column=colm)
+    ws5.column_dimensions["A"].width = 6
+    ws5.column_dimensions["B"].width = 22
+    ws5.column_dimensions["C"].width = 14
+    ws5.column_dimensions["D"].width = 34
+    ws5.column_dimensions["E"].width = 12
+    ws5.column_dimensions["F"].width = 16
+    ws5.column_dimensions["G"].width = 26
+    ws5.column_dimensions["H"].width = 10
+    page_setup(ws5, ncols5, r, landscape=True, freeze=f"A{start_row + 1}")
+
+    # ---------------------------------------------------------------
+    # Analysis 6 - Rank List Based on GPA (reuses the existing ranking engine)
+    # ---------------------------------------------------------------
+    ws6 = wb.create_sheet("Analysis 6_New")
+    headers6 = ["S. No.", "REGISTER NUMBER", "NAME OF THE STUDENT", "GPA", "RANK"]
+    ncols6 = len(headers6)
+    start_row = title_block(ws6, ncols6, [programme_line, ay_line, session_line],
+                             "ANALYSIS 6 - RANK LIST BASED ON GPA")
+    for c, h in enumerate(headers6, start=1):
+        ws6.cell(row=start_row, column=c, value=h)
+    style_header_row(ws6, start_row, ncols6)
+    ranked = sorted([s for s in ca.students if s.rank], key=lambda s: s.rank)
+    r = start_row + 1
+    for i, s in enumerate(ranked, start=1):
+        ws6.cell(row=r, column=1, value=i)
+        ws6.cell(row=r, column=2, value=s.regno)
+        ws6.cell(row=r, column=3, value=s.name)
+        ws6.cell(row=r, column=4, value=s.gpa)
+        ws6.cell(row=r, column=5, value=s.rank)
+        style_body_row(ws6, r, ncols6)
+        r += 1
+    ws6.column_dimensions["A"].width = 6
+    ws6.column_dimensions["B"].width = 16
+    ws6.column_dimensions["C"].width = 28
+    ws6.column_dimensions["D"].width = 10
+    ws6.column_dimensions["E"].width = 10
+    page_setup(ws6, ncols6, r, landscape=False, freeze=f"A{start_row + 1}")
+
+    # ---------------------------------------------------------------
+    # Analysis 7 - Provisional Results (raw, per-student per-subject)
+    # ---------------------------------------------------------------
+    ws7 = wb.create_sheet("Analysis 7")
+    ncols7 = 3 + len(mappings) * 2
+    start_row = title_block(ws7, ncols7, [programme_line, ay_line, session_line],
+                             "ANALYSIS 7 - PROVISIONAL RESULTS")
+    hdr_top, hdr_bot = start_row, start_row + 1
+    ws7.merge_cells(start_row=hdr_top, start_column=1, end_row=hdr_bot, end_column=1)
+    ws7.cell(row=hdr_top, column=1, value="S.No")
+    ws7.merge_cells(start_row=hdr_top, start_column=2, end_row=hdr_bot, end_column=2)
+    ws7.cell(row=hdr_top, column=2, value="Reg. No")
+    ws7.merge_cells(start_row=hdr_top, start_column=3, end_row=hdr_bot, end_column=3)
+    ws7.cell(row=hdr_top, column=3, value="Name of the Student")
+    col = 4
+    for m in mappings:
+        ws7.merge_cells(start_row=hdr_top, start_column=col, end_row=hdr_top, end_column=col + 1)
+        ws7.cell(row=hdr_top, column=col, value=f"{m['course_code']}\n{m['official_subject_name']}\n({m['credits']} Cr)")
+        ws7.cell(row=hdr_bot, column=col, value="Grade")
+        ws7.cell(row=hdr_bot, column=col + 1, value="GP")
+        col += 2
+    style_header_row(ws7, hdr_top, ncols7)
+    style_header_row(ws7, hdr_bot, ncols7)
+    ws7.row_dimensions[hdr_top].height = 42
+    r = hdr_bot + 1
+    for i, s in enumerate(ca.students, start=1):
+        gp_lookup = _grade_gp_lookup(s)
+        ws7.cell(row=r, column=1, value=i)
+        ws7.cell(row=r, column=2, value=s.regno)
+        ws7.cell(row=r, column=3, value=s.name)
+        col = 4
+        for m in mappings:
+            grade, points = gp_lookup.get(m["course_code"], ("—", ""))
+            ws7.cell(row=r, column=col, value=grade)
+            ws7.cell(row=r, column=col + 1, value=points if points != "" else "")
+            col += 2
+        style_body_row(ws7, r, ncols7)
+        r += 1
+    ws7.column_dimensions["A"].width = 6
+    ws7.column_dimensions["B"].width = 16
+    ws7.column_dimensions["C"].width = 26
+    for c in range(4, ncols7 + 1):
+        ws7.column_dimensions[get_column_letter(c)].width = 9
+    page_setup(ws7, ncols7, r, landscape=True, freeze=f"D{hdr_bot + 1}")
+
+    # ---------------------------------------------------------------
+    # Hidden metadata sheet - PDF provenance (section 19)
+    # ---------------------------------------------------------------
+    ok, _issues = validate_export_dataset(ca)
+    ws_meta = wb.create_sheet("Source Metadata")
+    ws_meta.append(["Field", "Value"])
+    for c in range(1, 3):
+        cell = ws_meta.cell(row=1, column=c)
+        cell.font = HEADER_FONT
+        cell.fill = HEADER_FILL
+    for row in [
+        ["Source File", source_filename or pdf_report.doc_metadata.institution],
+        ["Source Type", "COE PDF"],
+        ["Source Pages", meta.page_count],
+        ["Extraction Timestamp", datetime.now().isoformat(timespec="seconds")],
+        ["Students", ca.student_count],
+        ["Subjects", ca.subject_count],
+        ["Validation Status", "PASSED" if ok else "ISSUES FOUND"],
+    ]:
+        ws_meta.append(row)
+    ws_meta.column_dimensions["A"].width = 22
+    ws_meta.column_dimensions["B"].width = 44
+    ws_meta.sheet_state = "hidden"
+
+    bio = io.BytesIO()
+    wb.save(bio)
+    return bio.getvalue()
+
+
 def reconcile_pdf_and_excel(
     pdf_records: List[StudentResultRecord],
     excel_records: Any
@@ -4057,6 +4466,8 @@ SESSION: Dict[str, Any] = {
     "preview_cols": [],
     "preview_report": None,
     "ptm_briefs": {},
+    "staff_directory": {},      # Course Code -> Staff Name, remembered across PDF conversions
+    "pdf_to_excel_cache": None,  # (cache_key, ClassAnalysis) so /pdf-to-excel doesn't recompute every GET
 }
 
 _ALERTS: List[Tuple[str, str]] = []
@@ -6607,14 +7018,155 @@ def page_pdf_preview() -> Tuple:
         Form(
             Div(
                 A("← Upload Different File", href="/upload", cls="px-4 py-2.5 text-sm font-medium text-slate-600 hover:text-slate-800"),
-                Button("Confirm & Analyze Results →", type="submit",
-                       cls="px-6 py-2.5 text-sm font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors shadow-sm"),
+                Div(
+                    A("📊 Convert to Department Excel", href="/pdf-to-excel",
+                      cls="px-4 py-2.5 text-sm font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors mr-3"),
+                    Button("🔎 Continue to Academic Analysis", type="submit",
+                           cls="px-6 py-2.5 text-sm font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors shadow-sm"),
+                    cls="flex items-center"
+                ),
                 cls="flex items-center justify-between border-t pt-4"
             ),
             action="/confirm-pdf", method="POST",
             cls="card p-6 mb-8"
         ),
         cls="max-w-5xl mx-auto"
+    ))
+
+
+def _get_pdf_to_excel_context() -> Tuple[Optional["PDFExtractionReport"], Optional["ClassAnalysis"]]:
+    """
+    Build (or reuse a cached) ClassAnalysis straight from the preflight PDF extraction,
+    without requiring the faculty to go through /confirm-pdf and the normal analytics
+    workflow first. Reuses pdf_records_to_dataframe + compute_class_analysis -- the
+    same trusted GPA/credit engine used everywhere else in the app.
+    """
+    pdf_report: Optional[PDFExtractionReport] = SESSION.get("preview_pdf_report")
+    if not pdf_report or not pdf_report.records:
+        return None, None
+    filename = SESSION.get("preview_pdf_filename", "coe_result.pdf")
+    cache_key = (filename, len(pdf_report.records), id(pdf_report))
+    cached = SESSION.get("pdf_to_excel_cache")
+    if cached and cached[0] == cache_key:
+        return pdf_report, cached[1]
+    df = pdf_records_to_dataframe(pdf_report.records)
+    ca = compute_class_analysis(df, filename)
+    ca.subject_mappings = build_subject_mapping_log(pdf_report.records)
+    ca.quarantined_tokens = pdf_report.quarantined_tokens
+    ca.format_detected = "pdf"
+    ca.metadata["source_page_count"] = pdf_report.doc_metadata.page_count
+    ca.metadata["extraction_confidence"] = pdf_report.overall_confidence
+    SESSION["pdf_to_excel_cache"] = (cache_key, ca)
+    return pdf_report, ca
+
+
+def page_pdf_to_excel(pdf_report: "PDFExtractionReport", ca: "ClassAnalysis", filename: str) -> Tuple:
+    """COE PDF -> Department Excel conversion page: metadata, staff mapping, validation, download."""
+    meta = pdf_report.doc_metadata
+    mappings = list(ca.subject_mappings or [])
+    staff_directory = SESSION.get("staff_directory", {})
+
+    meta_card = card(
+        H3("COE PDF → Department Excel", cls="text-lg font-bold text-slate-800 mb-1"),
+        P("Convert the official COE result PDF into the department's analysis workbook.", cls="text-sm text-slate-500 mb-4"),
+        Div(
+            Div(Span("Institution:", cls="text-xs text-slate-400 block"), Span(meta.institution, cls="text-sm font-medium text-slate-800")),
+            Div(Span("Programme:", cls="text-xs text-slate-400 block"), Span(meta.programme, cls="text-sm font-medium text-slate-800")),
+            Div(Span("Semester:", cls="text-xs text-slate-400 block"), Span(meta.semester, cls="text-sm font-medium text-slate-800")),
+            Div(Span("Academic Session:", cls="text-xs text-slate-400 block"), Span(f"{meta.academic_year} / {meta.exam_session}", cls="text-sm font-medium text-slate-800")),
+            Div(Span("Students:", cls="text-xs text-slate-400 block"), Span(str(ca.student_count), cls="text-sm font-medium text-slate-800")),
+            Div(Span("Subjects:", cls="text-xs text-slate-400 block"), Span(str(ca.subject_count), cls="text-sm font-medium text-slate-800")),
+            Div(Span("Result Cells:", cls="text-xs text-slate-400 block"),
+                Span(f"{ca.student_count * ca.subject_count} expected · {ca.record_count} extracted", cls="text-sm font-medium text-slate-800")),
+            cls="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
+        ),
+        cls="p-5 mb-6"
+    )
+
+    rows = []
+    for i, m in enumerate(mappings, start=1):
+        code = m["course_code"]
+        prefill = staff_directory.get(code, "")
+        status = "✓" if not m.get("unresolved") else "⚠"
+        rows.append(Tr(
+            Td(str(i), cls="px-3 py-2 text-xs text-slate-600 border-b"),
+            Td(code, cls="px-3 py-2 text-xs font-mono font-bold text-slate-900 border-b"),
+            Td(m["official_subject_name"], cls="px-3 py-2 text-xs text-slate-800 border-b"),
+            Td(Input(type="text", name=f"staff__{code}", value=prefill, placeholder="Enter staff name",
+                     cls="w-full px-2 py-1 text-xs border border-slate-300 rounded"), cls="px-3 py-2 border-b"),
+            Td(str(m["credits"]), cls="px-3 py-2 text-xs text-slate-600 border-b text-center"),
+            Td(status, cls="px-3 py-2 text-xs border-b text-center"),
+        ))
+
+    staff_form = Form(
+        Div(
+            H3("Subject Staff Mapping", cls="text-sm font-bold text-slate-800 mb-1"),
+            P("Course codes come from the PDF and subject names come from the R2024 syllabus catalog — the only "
+              "manual field required is Staff Name. Leave a field blank to flag it as not entered rather than "
+              "guessing.", cls="text-xs text-slate-500 mb-3"),
+            Div(
+                Table(
+                    Thead(Tr(
+                        Th("S.No", cls="px-3 py-2 text-left text-xs font-semibold text-slate-600 bg-slate-50 border-b"),
+                        Th("Course Code", cls="px-3 py-2 text-left text-xs font-semibold text-slate-600 bg-slate-50 border-b"),
+                        Th("Subject Name", cls="px-3 py-2 text-left text-xs font-semibold text-slate-600 bg-slate-50 border-b"),
+                        Th("Staff Name", cls="px-3 py-2 text-left text-xs font-semibold text-slate-600 bg-slate-50 border-b"),
+                        Th("Credits", cls="px-3 py-2 text-left text-xs font-semibold text-slate-600 bg-slate-50 border-b"),
+                        Th("Status", cls="px-3 py-2 text-left text-xs font-semibold text-slate-600 bg-slate-50 border-b"),
+                    )),
+                    Tbody(*rows),
+                    cls="w-full border border-slate-200 rounded-lg overflow-hidden"
+                ),
+                cls="overflow-x-auto mb-4"
+            ),
+            Div(
+                Button("💾 Save Staff Names", type="submit",
+                       cls="px-4 py-2 text-sm font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg"),
+                cls="flex items-center justify-end gap-3"
+            ),
+            cls="p-5"
+        ),
+        action="/pdf-to-excel/save-staff", method="POST", cls="card mb-3"
+    )
+
+    clear_form = Form(
+        Button("Clear saved staff mappings", type="submit", cls="text-xs text-red-600 hover:text-red-700 underline"),
+        action="/pdf-to-excel/clear-mappings", method="POST", cls="mb-6"
+    )
+
+    ok, issues = validate_export_dataset(ca)
+    if ok:
+        validation_body = P("✓ Dataset validated — ready for export.", cls="text-sm font-semibold text-green-700")
+    else:
+        validation_body = Div(
+            P(f"⚠ {len(issues)} issue(s) found — download is blocked until resolved:",
+              cls="text-sm font-semibold text-red-700 mb-2"),
+            *[Div(P(i, cls="text-xs text-red-700 whitespace-pre-wrap"), cls="mb-2 pl-3 border-l-2 border-red-300")
+              for i in issues]
+        )
+    validation_card = card(H3("Data Validation", cls="text-sm font-bold text-slate-800 mb-2"), validation_body, cls="p-5 mb-6")
+
+    actions = Div(
+        A("← Upload Different File", href="/upload", cls="px-4 py-2.5 text-sm font-medium text-slate-600 hover:text-slate-800"),
+        (A("📥 Download Department Excel", href="/pdf-to-excel/download",
+           cls="px-6 py-2.5 text-sm font-semibold bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors shadow-sm")
+         if ok else
+         Span("Resolve validation issues above to enable download", cls="px-4 py-2.5 text-sm font-medium text-red-600")),
+        cls="flex items-center justify-between border-t pt-4"
+    )
+
+    return layout("COE PDF → Department Excel", "upload", Div(
+        Div(
+            H1("COE PDF → Department Excel", cls="text-2xl font-bold text-slate-800 mb-1"),
+            P(f"File: {html.escape(filename)} · Convert the official COE result PDF into the department's analysis workbook.",
+              cls="text-sm text-slate-500 mb-6"),
+        ),
+        meta_card,
+        staff_form,
+        clear_form,
+        validation_card,
+        card(actions, cls="p-5"),
+        cls="max-w-6xl mx-auto"
     ))
 
 
@@ -6737,6 +7289,61 @@ async def route_confirm_pdf(request):
     except Exception as e:
         push_alert(f"PDF confirm error: {e}", "red")
         return RedirectResponse("/upload", status_code=303)
+
+
+@app.get("/pdf-to-excel")
+def route_pdf_to_excel():
+    pdf_report, ca = _get_pdf_to_excel_context()
+    if not pdf_report or not ca:
+        push_alert("Upload a COE PDF first to convert it to a department Excel workbook.", "amber")
+        return RedirectResponse("/upload", status_code=303)
+    return page_pdf_to_excel(pdf_report, ca, SESSION.get("preview_pdf_filename", "coe_result.pdf"))
+
+
+@app.post("/pdf-to-excel/save-staff")
+async def route_pdf_to_excel_save_staff(request):
+    pdf_report, ca = _get_pdf_to_excel_context()
+    if not pdf_report or not ca:
+        push_alert("Upload a COE PDF first to convert it to a department Excel workbook.", "amber")
+        return RedirectResponse("/upload", status_code=303)
+    form = await request.form()
+    directory = SESSION.setdefault("staff_directory", {})
+    for m in (ca.subject_mappings or []):
+        code = m["course_code"]
+        key = f"staff__{code}"
+        if key in form:
+            # Stored exactly as supplied -- never altered, blank left blank rather than fabricated.
+            directory[code] = str(form[key]).strip()
+    push_alert("Staff names saved.", "green")
+    return page_pdf_to_excel(pdf_report, ca, SESSION.get("preview_pdf_filename", "coe_result.pdf"))
+
+
+@app.post("/pdf-to-excel/clear-mappings")
+def route_pdf_to_excel_clear_mappings():
+    SESSION["staff_directory"] = {}
+    push_alert("Saved staff mappings cleared.", "blue")
+    return RedirectResponse("/pdf-to-excel", status_code=303)
+
+
+@app.get("/pdf-to-excel/download")
+def route_pdf_to_excel_download():
+    pdf_report, ca = _get_pdf_to_excel_context()
+    if not pdf_report or not ca:
+        push_alert("Upload a COE PDF first to convert it to a department Excel workbook.", "amber")
+        return RedirectResponse("/upload", status_code=303)
+    ok, issues = validate_export_dataset(ca)
+    if not ok:
+        push_alert("Export validation failed: " + "; ".join(issues), "red")
+        return RedirectResponse("/pdf-to-excel", status_code=303)
+    staff_map = SESSION.get("staff_directory", {})
+    filename = SESSION.get("preview_pdf_filename", "coe_result.pdf")
+    xlsx_bytes = build_department_excel(ca, pdf_report, staff_map, filename)
+    fname = department_excel_filename(pdf_report)
+    return Response(
+        content=xlsx_bytes,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )
 
 
 @app.post("/upload-preview")
