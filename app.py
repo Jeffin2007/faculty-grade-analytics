@@ -319,11 +319,15 @@ SYLLABUS_CATALOG_R2024: List[Dict[str, Any]] = [
     {"code": "24AD304", "name": "Software Engineering", "credits": 3.0, "semester": 3, "category": "Sem 1-4 Foundation", "aliases": ["AD24304", "SE", "SOFTWARE ENG", "SOFTWARE ENGINEERING", "SOFTWARE ENGINEERING AND AGILE"]},
 
     # Semester 4 (Foundation / Core)
-    {"code": "24MA401", "name": "Probability and Statistics", "credits": 4.0, "semester": 4, "category": "Sem 1-4 Foundation", "aliases": ["MA24401", "P&S", "PAS", "PROBABILITY & STATISTICS", "PROBABILITY AND STATISTICS", "PROBABILITY AND QUEUEING THEORY", "M4"]},
-    {"code": "24AD401", "name": "Operating Systems", "credits": 3.0, "semester": 4, "category": "Sem 1-4 Foundation", "aliases": ["AD24401", "OS", "OPERATING SYSTEM", "OPERATING SYSTEMS", "PRINCIPLES OF OPERATING SYSTEMS", "PRINCIPLES TO OPERATING SYSTEM", "OPERATING SYSTEMS CONCEPTS"]},
-    {"code": "24AD402", "name": "Introduction to Artificial Intelligence", "credits": 3.0, "semester": 4, "category": "Sem 1-4 Foundation", "aliases": ["AD24402", "AI", "ARTIFICIAL INTELLIGENCE", "INTRO TO AI", "INTRODUCTION TO AI", "INTRODUCTION TO ARTIFICIAL INTELLIGENCE", "AI FUNDAMENTALS"]},
-    {"code": "24AD403", "name": "Machine Learning", "credits": 4.0, "semester": 4, "category": "Sem 1-4 Foundation", "aliases": ["AD24403", "ML", "MACHINE LEARNING", "ML CONCEPTS", "MACHINE LEARNING TECHNIQUES"]},
-    {"code": "24AD404", "name": "Data Science and Exploratory Data Analysis", "credits": 3.0, "semester": 4, "category": "Sem 1-4 Foundation", "aliases": ["AD24404", "DSEA", "EDA", "EXPLORATORY DATA ANALYSIS", "DATA SCIENCE AND EDA", "DATA SCIENCE AND EXPLORATORY DATA ANALYSIS", "DATA SCIENCE"]},
+    {"code": "24MA401", "name": "Discrete Mathematics", "credits": 4.0, "semester": 4, "category": "Sem 1-4 Foundation", "type": "THEORY", "aliases": ["MA24401", "DM", "DISCRETE MATHS", "DISCRETE MATH", "DISCRETE MATHEMATICS"]},
+    {"code": "24CH401", "name": "Environmental Science and Engineering", "credits": 2.0, "semester": 4, "category": "Sem 1-4 Foundation", "type": "THEORY", "aliases": ["CH24401", "ES", "ENVIRONMENTAL SCIENCE", "ENVIRONMENTAL SCIENCE AND ENGINEERING", "ENVIRONMENTAL SCIENCES AND SUSTAINABILITY", "EVS"]},
+    {"code": "24AD401", "name": "Machine Learning", "credits": 3.0, "semester": 4, "category": "Sem 1-4 Foundation", "type": "THEORY", "aliases": ["AD24401", "ML", "MACHINE LEARNING", "ML CONCEPTS", "MACHINE LEARNING TECHNIQUES"]},
+    {"code": "24AD402", "name": "Data Science and Exploratory Data Analysis", "credits": 3.0, "semester": 4, "category": "Sem 1-4 Foundation", "type": "THEORY", "aliases": ["AD24402", "DSEA", "EDA", "EXPLORATORY DATA ANALYSIS", "DATA SCIENCE AND EDA", "DATA SCIENCE AND EXPLORATORY DATA ANALYSIS", "DATA SCIENCE"]},
+    {"code": "24AD403", "name": "Software Engineering", "credits": 3.0, "semester": 4, "category": "Sem 1-4 Foundation", "type": "THEORY", "aliases": ["AD24403", "SE", "SOFTWARE ENG", "SOFTWARE ENGINEERING", "SOFTWARE ENGINEERING AND AGILE"]},
+    {"code": "24AD404", "name": "Principles to Operating System", "credits": 4.0, "semester": 4, "category": "Sem 1-4 Foundation", "type": "THEORY_CUM_PRACTICAL", "aliases": ["AD24404", "OS", "OPERATING SYSTEM", "OPERATING SYSTEMS", "PRINCIPLES OF OPERATING SYSTEMS", "PRINCIPLES TO OPERATING SYSTEM", "OPERATING SYSTEMS CONCEPTS"]},
+    {"code": "24AD411", "name": "Machine Learning Laboratory", "credits": 1.5, "semester": 4, "category": "Sem 1-4 Foundation", "type": "LAB", "aliases": ["AD24411", "ML LAB", "MACHINE LEARNING LAB", "MACHINE LEARNING LABORATORY"]},
+    {"code": "24AD412", "name": "Data Science and Exploratory Data Analysis Laboratory", "credits": 1.5, "semester": 4, "category": "Sem 1-4 Foundation", "type": "LAB", "aliases": ["AD24412", "DSEA LAB", "EDA LAB", "DATA SCIENCE LAB", "DATA SCIENCE AND EDA LAB"]},
+    {"code": "24EM401", "name": "Employability Skills II", "credits": 1.0, "semester": 4, "category": "Sem 1-4 Foundation", "type": "LAB", "aliases": ["EM24401", "EMPLOYABILITY SKILLS II", "EMPLOYABILITY SKILLS 2", "ES II", "SOFT SKILLS II"]},
 
     # Semester 5 (Advanced Core / Electives)
     {"code": "24AD501", "name": "Deep Learning", "credits": 4.0, "semester": 5, "category": "Sem 5-8 Advanced", "aliases": ["AD24501", "DL", "DEEP LEARNING", "DEEP LEARNING CONCEPTS"]},
@@ -401,8 +405,13 @@ _build_syllabus_indexes()
 
 import functools
 
+# Bump this whenever SYLLABUS_CATALOG_R2024 content changes. It is folded into the
+# memoized resolver's cache key so a catalog edit can never be served from a stale
+# in-process cache entry (defends against hot-reload / long-lived worker scenarios).
+CATALOG_VERSION = "r2024-sem4-fix-2026-08-11"
+
 @functools.lru_cache(maxsize=2048)
-def _memoized_resolve_subject_info(norm: str, clean_code: str) -> Tuple[str, str, float, int, str, float, bool]:
+def _memoized_resolve_subject_info(norm: str, clean_code: str, _catalog_version: str = CATALOG_VERSION) -> Tuple[str, str, float, int, str, float, bool]:
     # Stage 1: Exact / Normalized Course Code (O(1))
     if norm in COURSE_CODE_INDEX:
         item = COURSE_CODE_INDEX[norm]
@@ -470,7 +479,7 @@ def resolve_subject_info(raw_name: Any, custom_overrides: Optional[Dict[str, str
             return (item["name"], item["code"], item["credits"], item["semester"], item["category"], 1.0, False)
         return (target_name, "", 3.0, 1, "Custom Subject", 1.0, False)
 
-    res = _memoized_resolve_subject_info(norm, clean_code)
+    res = _memoized_resolve_subject_info(norm, clean_code, CATALOG_VERSION)
     if res[0] == norm:
         return (clean_raw, clean_code or clean_raw, res[2], res[3], res[4], res[5], res[6])
     return res
@@ -859,6 +868,212 @@ def extract_coe_pdf(pdf_bytes: bytes, filename: str) -> PDFExtractionReport:
         report.fatal_error = "Could not extract student result records from PDF. Please review file format or upload Excel sheet."
 
     return report
+
+
+def build_subject_mapping_log(records: List[StudentResultRecord]) -> List[Dict[str, Any]]:
+    """
+    Collapse per-cell PDF records into one row per unique subject_code, in first-seen
+    order, with resolution provenance. This is what repeated page headers must NOT
+    fan out into duplicate subjects -- dict keying on subject_code enforces that.
+    """
+    seen: Dict[str, Dict[str, Any]] = {}
+    for r in records:
+        code = r.subject_code or r.original_subject_text or r.subject_name
+        if not code or code in seen:
+            continue
+        can_name, canon_code, cred, sem, cat, conf, ambiguous = resolve_subject_info(
+            r.subject_code or r.original_subject_text
+        )
+        resolved_in_catalog = bool(canon_code) and canon_code.upper() in COURSE_CODE_INDEX
+        if resolved_in_catalog and conf >= 0.999:
+            method, resolution_confidence = "EXACT_COURSE_CODE", 1.0
+        elif resolved_in_catalog:
+            method, resolution_confidence = "ALIAS_OR_NAME_MATCH", conf
+        elif ambiguous:
+            method, resolution_confidence = "UNRESOLVED", 0.0
+        else:
+            method, resolution_confidence = "FUZZY_MATCH", conf
+        seen[code] = {
+            "course_code": r.subject_code or code,
+            "official_subject_name": can_name if resolved_in_catalog else (r.subject_name or can_name),
+            "semester": sem,
+            "credits": cred,
+            "course_type": (COURSE_CODE_INDEX.get(canon_code.upper(), {}) or {}).get("type", ""),
+            "resolution_method": method,
+            "resolution_confidence": resolution_confidence,
+            "source_page": r.source_page,
+            "unresolved": not resolved_in_catalog,
+        }
+    return list(seen.values())
+
+
+def validate_export_dataset(ca: "ClassAnalysis") -> Tuple[bool, List[str]]:
+    """
+    Pre-download validation gate. Returns (ok, issues). When issues is non-empty the
+    caller must refuse to generate the Excel file rather than ship something misleading.
+    """
+    issues: List[str] = []
+
+    if ca.student_count <= 0 or not ca.students:
+        issues.append("Student count is zero — no students found to export.")
+    if ca.subject_count <= 0 or not ca.subjects:
+        issues.append("Subject count is zero — no subjects found to export.")
+
+    codes_seen = [m["course_code"] for m in (ca.subject_mappings or [])]
+    dupe_codes = {c for c in codes_seen if codes_seen.count(c) > 1}
+    if dupe_codes:
+        issues.append(f"Duplicate course codes detected in Subject Mapping: {sorted(dupe_codes)}")
+
+    regnos = [s.regno for s in ca.students]
+    dupe_regnos = {r for r in regnos if regnos.count(r) > 1}
+    if dupe_regnos:
+        issues.append(f"Duplicate register numbers detected: {sorted(dupe_regnos)}")
+
+    unresolved = [m for m in (ca.subject_mappings or []) if m.get("unresolved")]
+    # Unresolved subjects are not a hard failure -- they route to the Unresolved sheet --
+    # but a subject with a blank name IS a hard failure, since that would render a blank
+    # column header on the export.
+    for m in (ca.subject_mappings or []):
+        if not m.get("official_subject_name"):
+            issues.append(f"Course code {m.get('course_code')} has no resolvable subject name.")
+
+    expected_cells = ca.student_count * ca.subject_count if ca.student_count and ca.subject_count else 0
+    for s in ca.students:
+        if s.total_courses and ca.subject_count and s.total_courses > ca.subject_count:
+            issues.append(f"Student {s.regno} has {s.total_courses} results but only {ca.subject_count} subjects exist.")
+            break
+
+    return (len(issues) == 0, issues)
+
+
+def build_class_analysis_excel(ca: "ClassAnalysis") -> bytes:
+    """
+    Build the faculty-facing 'Download Class Analysis' workbook. Course code and
+    resolved official subject name are always shown side by side; nothing here
+    ever falls back to using the raw course code as the subject name.
+    """
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment
+    from openpyxl.utils import get_column_letter
+
+    wb = openpyxl.Workbook()
+    header_fill = PatternFill(start_color="0F1B33", end_color="0F1B33", fill_type="solid")
+    header_font = Font(color="FFFFFF", bold=True)
+
+    def write_sheet(ws, headers: List[str], rows: List[List[Any]]):
+        ws.append(headers)
+        for c in range(1, len(headers) + 1):
+            cell = ws.cell(row=1, column=c)
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = Alignment(horizontal="center")
+        for row in rows:
+            ws.append(row)
+        for c, h in enumerate(headers, start=1):
+            width = max(12, min(45, len(str(h)) + 4))
+            ws.column_dimensions[get_column_letter(c)].width = width
+
+    mappings = sorted(ca.subject_mappings or [], key=lambda m: m["course_code"])
+    code_to_name = {m["course_code"]: m["official_subject_name"] for m in mappings}
+
+    def col_label(subj: "SubjectAnalysis") -> str:
+        name = code_to_name.get(subj.course_code, subj.subject)
+        return f"{subj.course_code} - {name}" if subj.course_code else name
+
+    # Sheet 1: Class Summary
+    ws1 = wb.active
+    ws1.title = "Class Summary"
+    write_sheet(ws1, ["Metric", "Value"], [
+        ["File", ca.file_name],
+        ["Generated At", ca.generated_at],
+        ["Students", ca.student_count],
+        ["Subjects", ca.subject_count],
+        ["Result Cells", ca.record_count],
+        ["Class GPA", ca.class_gpa],
+        ["Pass Rate %", ca.pass_rate],
+        ["Arrear Students", ca.arrear_student_count],
+        ["Multiple-U Students", ca.multiple_u_count],
+        ["Malpractice Students", ca.malpractice_student_count],
+    ])
+
+    # Sheet 2: Student Results (Course Code - Subject Name columns, one per subject)
+    ws2 = wb.create_sheet("Student Results")
+    subj_cols = sorted(ca.subjects, key=lambda s: s.course_code or s.subject)
+    headers2 = ["S.No", "Register Number", "Student Name"] + [col_label(s) for s in subj_cols] + \
+               ["GPA", "Academic Arrears", "SA", "WD", "Malpractice", "Risk Level"]
+    rows2 = []
+    for i, s in enumerate(ca.students, start=1):
+        grade_by_code = {c.course_code: c.grade for c in s.courses}
+        row = [i, s.regno, s.name] + [grade_by_code.get(sc.course_code, "—") for sc in subj_cols] + \
+              [s.gpa, s.arrear_count, s.sa_count, s.wd_count, s.malpractice_count, s.risk_level]
+        rows2.append(row)
+    write_sheet(ws2, headers2, rows2)
+
+    # Sheet 3: Subject Analysis
+    ws3 = wb.create_sheet("Subject Analysis")
+    write_sheet(ws3, ["Course Code", "Subject Name", "Students", "Avg GP", "Pass %", "U", "RA", "Arrears"],
+                [[s.course_code, code_to_name.get(s.course_code, s.subject), s.student_count,
+                  s.avg_gp, s.pass_pct, s.u_count, s.ra_count, s.arrear_count] for s in subj_cols])
+
+    # Sheet 4: Subject Mapping (faculty verification sheet)
+    ws4 = wb.create_sheet("Subject Mapping")
+    write_sheet(ws4, ["Course Code", "Official Subject Name", "Semester", "Credits",
+                       "Course Type", "Resolution Method", "Confidence", "Source Page"],
+                [[m["course_code"], m["official_subject_name"], m["semester"], m["credits"],
+                  m["course_type"], m["resolution_method"], m["resolution_confidence"], m["source_page"]]
+                 for m in mappings if not m.get("unresolved")])
+
+    # Sheet 5: Unresolved / Quarantined Items
+    ws5 = wb.create_sheet("Unresolved Subjects")
+    unresolved_rows = [[m["course_code"], "Unknown", "Requires Faculty Review", m["source_page"]]
+                        for m in mappings if m.get("unresolved")]
+    write_sheet(ws5, ["Course Code", "Subject Name", "Resolution", "Source Page"], unresolved_rows)
+    ws5b = wb.create_sheet("Quarantined Tokens")
+    write_sheet(ws5b, ["Register No", "Raw Value", "Reason"],
+                [[q.get("regno", ""), q.get("raw_value", ""), q.get("reason", "")] for q in (ca.quarantined_tokens or [])])
+
+    # Sheet 4: Student Risk (reads StudentAnalysis.attention / risk_level / is_high_performer
+    # exactly as already computed in compute_subject_analytics — no re-derivation here)
+    ws_risk = wb.create_sheet("Student Risk")
+    write_sheet(ws_risk, ["Register Number", "Student Name", "GPA", "Risk Level", "Attention Status",
+                           "High Performer", "Attention Subjects"],
+                [[s.regno, s.name, s.gpa, s.risk_level, s.attention, "YES" if s.is_high_performer else "NO",
+                  ", ".join(s.attention_subjects)] for s in ca.students])
+
+    # Sheet 5: Arrear & Backlog Tracker (reads StudentAnalysis.backlog_* / u_count / ra_count
+    # exactly as already computed — no re-derivation here)
+    ws_arrear = wb.create_sheet("Arrear & Backlog Tracker")
+    write_sheet(ws_arrear, ["Register Number", "Student Name", "U Count", "RA Count", "Total Arrears",
+                             "Has Backlog Arrears", "Backlog Arrear Count", "Backlog Subjects"],
+                [[s.regno, s.name, s.u_count, s.ra_count, s.arrear_count,
+                  "YES" if s.has_backlog_arrears else "NO", s.backlog_arrear_count,
+                  ", ".join(s.backlog_subjects)] for s in ca.students if s.arrear_count > 0 or s.has_backlog_arrears])
+
+    # Sheet 9: Source Provenance (reads StudentResultRecord.source_page /
+    # extraction_confidence via subject_mappings — no re-derivation here)
+    ws_prov = wb.create_sheet("Source Provenance")
+    write_sheet(ws_prov, ["Course Code", "Official Subject Name", "Source Page", "Resolution Method", "Confidence"],
+                [[m["course_code"], m["official_subject_name"], m["source_page"], m["resolution_method"],
+                  m["resolution_confidence"]] for m in mappings])
+    ws_prov.append([])
+    ws_prov.append(["Document metadata"])
+    for k, v in (ca.metadata or {}).items():
+        ws_prov.append([k, v])
+
+    # Sheet 6: Data Quality
+    ok, issues = validate_export_dataset(ca)
+    ws6 = wb.create_sheet("Data Quality")
+    write_sheet(ws6, ["Check", "Status"], [
+        ["Students verified", ca.student_count],
+        ["Subjects verified", ca.subject_count],
+        ["Result cells verified", ca.record_count],
+        ["Unresolved subjects", sum(1 for m in mappings if m.get("unresolved"))],
+        ["Validation passed", "YES" if ok else "NO"],
+    ] + [["Issue", i] for i in issues])
+
+    bio = io.BytesIO()
+    wb.save(bio)
+    return bio.getvalue()
 
 
 def reconcile_pdf_and_excel(
@@ -5811,6 +6026,16 @@ async def route_confirm_pdf(request):
         df = pdf_records_to_dataframe(pdf_report.records)
         ca = compute_class_analysis(df, filename)
 
+        # NOTE: previously these were never copied over for the PDF pipeline, so the
+        # Subject Mapping / Unresolved sheets and data-quality checks silently had
+        # nothing to show for PDF-sourced uploads. Mirror the Excel pipeline here so
+        # both pipelines produce the same NormalizedResult-shaped ClassAnalysis.
+        ca.subject_mappings = build_subject_mapping_log(pdf_report.records)
+        ca.quarantined_tokens = pdf_report.quarantined_tokens
+        ca.format_detected = "pdf"
+        ca.metadata["source_page_count"] = pdf_report.doc_metadata.page_count
+        ca.metadata["extraction_confidence"] = pdf_report.overall_confidence
+
         SESSION["records"] = df
         SESSION["analytics"] = ca
         SESSION["file_name"] = filename
@@ -6161,6 +6386,25 @@ async def route_report_student_select(request):
         return RedirectResponse("/reports", status_code=303)
     rid = create_report_id("student", {"class_analysis": ca, "regno": s.regno})
     return RedirectResponse(f"/download-pdf?report_id={rid}", status_code=303)
+
+
+@app.get("/download-class-excel")
+def route_download_class_excel():
+    if not session_ready():
+        push_alert("No data loaded.", "amber")
+        return RedirectResponse("/", status_code=303)
+    ca = SESSION["analytics"]
+    ok, issues = validate_export_dataset(ca)
+    if not ok:
+        push_alert("Export validation failed: " + "; ".join(issues), "red")
+        return RedirectResponse("/dashboard", status_code=303)
+    xlsx_bytes = build_class_analysis_excel(ca)
+    fname = re.sub(r"[^\w\.\-]", "_", f"class_analysis_{ca.file_name or 'report'}.xlsx")
+    return Response(
+        content=xlsx_bytes,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )
 
 
 @app.get("/download-pdf")
