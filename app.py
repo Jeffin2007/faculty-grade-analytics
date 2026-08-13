@@ -177,22 +177,23 @@ CLASS_AI_INSTRUCTION = (
 
 GRADE_POINTS = {
     "O": 10, "A+": 9, "A": 8, "B+": 7, "B": 6, "C": 5,
-    "U": 0, "RA": 0, "SA": 0, "WD": 0, "MM": 0, "WH2": 0,
+    "U": 0, "RA": 0, "UA": 0, "SA": 0, "WD": 0, "MM": 0, "WH2": 0,
 }
 PASSING_GRADES = {"O", "A+", "A", "B+", "B", "C"}
-FAILING_GRADES = {"U", "RA", "SA", "WD", "MM", "WH2"}
-ARREAR_GRADES = {"U", "RA"}
+FAILING_GRADES = {"U", "RA", "UA", "SA", "WD", "MM", "WH2"}
+ARREAR_GRADES = {"U", "RA", "UA"}
 ATTENDANCE_GRADES = {"SA"}
 WITHDRAWAL_GRADES = {"WD"}
 MALPRACTICE_GRADES = {"MM", "WH2"}
 
-GRADE_ORDER = ["O", "A+", "A", "B+", "B", "C", "U", "RA", "SA", "WD", "MM", "WH2"]
+GRADE_ORDER = ["O", "A+", "A", "B+", "B", "C", "U", "RA", "UA", "SA", "WD", "MM", "WH2"]
 PASS_GRADE_ORDER = ["O", "A+", "A", "B+", "B", "C"]
-FAIL_GRADE_ORDER = ["U", "RA", "SA", "WD", "MM", "WH2"]
+FAIL_GRADE_ORDER = ["U", "RA", "UA", "SA", "WD", "MM", "WH2"]
 
 RESULT_STATUS = {
     "U": {"type": "arrear", "description": "Reappearance required"},
     "RA": {"type": "arrear", "description": "Reappearance / Arrear"},
+    "UA": {"type": "arrear", "description": "Absent / Reappearance required"},
     "SA": {"type": "attendance_issue", "description": "Shortage of Attendance"},
     "WD": {"type": "withdrawal", "description": "Withdrawal"},
     "MM": {"type": "malpractice", "description": "Malpractice"},
@@ -208,6 +209,7 @@ GRADE_COLORS = {
     "C": "#94a3b8",
     "U": "#dc2626",
     "RA": "#ef4444",
+    "UA": "#f87171",
     "SA": "#d97706",
     "WD": "#9333ea",
     "MM": "#7c3aed",
@@ -238,7 +240,8 @@ GRADE_TOKEN_CLEAN = {
     "B+": "B+", "B PLUS": "B+", "BP": "B+",
     "A0": "A+", "A1": "O", "O": "O", "A": "A", "B": "B", "C": "C",
     "U": "U", "FAIL": "U", "F": "U",
-    "RA": "RA", "R.A": "RA", "R/A": "RA", "R A": "RA", "AB": "RA", "ABSENT": "RA", "UA": "RA", "ABS": "RA",
+    "RA": "RA", "R.A": "RA", "R/A": "RA", "R A": "RA",
+    "AB": "UA", "ABSENT": "UA", "UA": "UA", "ABS": "UA", "A B": "UA", "A.B": "UA", "A/B": "UA",
     "SA": "SA", "S A": "SA", "S.A": "SA", "NE": "SA",
     "WD": "WD", "W": "WD", "DW": "WD", "W.D": "WD", "WITHDRAWN": "WD",
     "MM": "MM", "M.M": "MM", "MALPRACTICE": "MM",
@@ -546,6 +549,14 @@ class PDFExtractionReport:
     warnings: List[str] = field(default_factory=list)
     fatal_error: str = ""
 
+
+@dataclass
+class ReconciliationReport:
+    matched_count: int = 0
+    mismatched_count: int = 0
+    mismatched_records: List[Dict[str, Any]] = field(default_factory=list)
+    missing_in_excel: List[Dict[str, Any]] = field(default_factory=list)
+    missing_in_pdf: List[Dict[str, Any]] = field(default_factory=list)
 
 
 def _resolve_id_columns(headers: List[str]) -> Tuple[int, int]:
@@ -987,117 +998,15 @@ def extract_coe_pdf(pdf_bytes: bytes, filename: str) -> PDFExtractionReport:
     else:
         report.overall_confidence = 0.0
         report.ok = False
-        report.fatal_error = "Could not extract student result records from PDF. Please ensure the uploaded file is a valid COE Result PDF."
+        report.fatal_error = "Could not extract student result records from PDF. Please review file format or upload Excel sheet."
 
     return report
 
 
-class SimpleHTMLTableParser(html.parser.HTMLParser):
-    def __init__(self):
-        super().__init__()
-        self.tables = []
-        self.current_table = []
-        self.current_row = []
-        self.current_cell = []
-        self.in_cell = False
-
-    def handle_starttag(self, tag, attrs):
-        if tag in ('td', 'th'):
-            self.in_cell = True
-            self.current_cell = []
-        elif tag == 'tr':
-            self.current_row = []
-        elif tag == 'table':
-            self.current_table = []
-
-    def handle_endtag(self, tag):
-        if tag in ('td', 'th'):
-            self.in_cell = False
-            self.current_row.append(' '.join(''.join(self.current_cell).split()))
-        elif tag == 'tr':
-            if self.current_row:
-                self.current_table.append(self.current_row)
-        elif tag == 'table':
-            if self.current_table:
-                self.tables.append(self.current_table)
-
-    def handle_data(self, data):
-        if self.in_cell:
-            self.current_cell.append(data)
-
-
-def parse_staff_names_from_html(raw_bytes: bytes, filename: str) -> Dict[str, str]:
-    """
-    Deterministically extracts Subject Code / Course Title -> Staff Name mappings from
-    Internal Assessment mark sheets / Staff Allocation HTML / MHTML web pages.
-    """
-    if not raw_bytes:
-        return {}
-    import quopri
-    if filename.lower().endswith(('.mhtml', '.mht')):
-        try:
-            decoded = quopri.decodestring(raw_bytes).decode('utf-8', errors='ignore')
-        except Exception:
-            decoded = raw_bytes.decode('utf-8', errors='ignore')
-    else:
-        decoded = raw_bytes.decode('utf-8', errors='ignore')
-
-    decoded = html.unescape(decoded)
-    results: Dict[str, str] = {}
-
-    parser = SimpleHTMLTableParser()
-    try:
-        parser.feed(decoded)
-    except Exception:
-        pass
-
-    code_pattern = re.compile(r"\b((?:24[-_]?)?[A-Z]{2,4}[-_]?\d{3,5})\b", re.IGNORECASE)
-
-    for table in parser.tables:
-        if not table:
-            continue
-
-        header = [c.upper() for c in table[0]]
-        code_col = -1
-        staff_col = -1
-
-        for idx, h in enumerate(header):
-            if any(k in h for k in ["SUBCODE", "COURSE CODE", "SUBJECT CODE", "SUB CODE", "CODE"]):
-                if code_col < 0:
-                    code_col = idx
-            if any(k in h for k in ["FACULTY", "STAFF", "TEACHER", "INSTRUCTOR", "HANDLED BY", "INCHARGE"]):
-                if staff_col < 0:
-                    staff_col = idx
-
-        if code_col >= 0 and staff_col >= 0:
-            for row in table[1:]:
-                if len(row) > max(code_col, staff_col):
-                    code_val = row[code_col].strip()
-                    staff_val = row[staff_col].strip()
-                    m_code = code_pattern.search(code_val)
-                    if m_code and staff_val:
-                        code_norm = re.sub(r"[^A-Z0-9]", "", m_code.group(1).upper())
-                        results[code_norm] = staff_val
-
-        for row in table:
-            code_found = None
-            staff_found = None
-            for cell in row:
-                m_c = code_pattern.search(cell)
-                if m_c and not code_found:
-                    code_found = re.sub(r"[^A-Z0-9]", "", m_c.group(1).upper())
-                elif any(title in cell for title in ["Dr.", "Prof.", "Mr.", "Mrs.", "Ms.", "AP/", "ASP/"]) and not staff_found:
-                    staff_found = cell.strip()
-            if code_found and staff_found and code_found not in results:
-                results[code_found] = staff_found
-
-    return results
-
-
-def parse_ia_marks_content(raw_bytes: bytes, filename: str) -> Tuple[Dict[str, Dict[str, Any]], Dict[str, str]]:
+def parse_ia_marks_content(raw_bytes: bytes, filename: str) -> Tuple[Dict[str, Dict[str, Any]], Dict[str, str], Dict[str, str]]:
     """
     Parses Internal Assessment / Cycle Test mark sheets uploaded as .mhtml, .html, .xlsx, or .csv.
-    Returns (student_marks, course_titles).
+    Returns (student_marks, course_titles, course_staff).
     student_marks schema:
       {
         "813824243001": {
@@ -1115,9 +1024,10 @@ def parse_ia_marks_content(raw_bytes: bytes, filename: str) -> Tuple[Dict[str, D
 
     student_marks: Dict[str, Dict[str, Any]] = {}
     course_titles: Dict[str, str] = {}
+    course_staff: Dict[str, str] = {}
 
     if not raw_bytes:
-        return student_marks, course_titles
+        return student_marks, course_titles, course_staff
 
     # Decode HTML / MHTML bytes
     if filename.lower().endswith(('.mhtml', '.mht')):
@@ -1146,12 +1056,15 @@ def parse_ia_marks_content(raw_bytes: bytes, filename: str) -> Tuple[Dict[str, D
                 if any("SUBCODE" in h or "COURSE CODE" in h for h in header_norm) and any("TITLE" in h or "SUBJECT" in h for h in header_norm):
                     subcode_col = next((i for i, h in enumerate(header_norm) if "SUBCODE" in h or "CODE" in h), 0)
                     title_col = next((i for i, h in enumerate(header_norm) if "TITLE" in h or "SUBJECT" in h), 1)
+                    faculty_col = next((i for i, h in enumerate(header_norm) if "FACULTY" in h or "STAFF" in h or "TEACHER" in h or "INSTRUCTOR" in h), -1)
                     for r in rows[1:]:
                         cells = [re.sub(r"\s+", " ", c.get_text()).strip() for c in r.find_all(['th', 'td'])]
                         if len(cells) > max(subcode_col, title_col):
                             code_tok = re.sub(r"[^A-Z0-9]", "", cells[subcode_col].upper())
                             if code_tok:
                                 course_titles[code_tok] = cells[title_col]
+                                if faculty_col >= 0 and len(cells) > faculty_col:
+                                    course_staff[code_tok] = cells[faculty_col]
                     continue
 
                 # Main Marks Table
@@ -1193,7 +1106,7 @@ def parse_ia_marks_content(raw_bytes: bytes, filename: str) -> Tuple[Dict[str, D
         except Exception:
             pass
 
-    return student_marks, course_titles
+    return student_marks, course_titles, course_staff
 
 
 def build_subject_mapping_log(records: List[StudentResultRecord]) -> List[Dict[str, Any]]:
@@ -1239,6 +1152,9 @@ def validate_export_dataset(ca: "ClassAnalysis") -> Tuple[bool, List[str]]:
     caller must refuse to generate the Excel file rather than ship something misleading.
     """
     issues: List[str] = []
+
+    if not SESSION.get("staff_verified", False):
+        issues.append("Extracted/entered staff names require manual verification. Please review the 'Subject Staff Mapping' table below and click 'Save Staff Names' to confirm.")
 
     if ca.student_count <= 0 or not ca.students:
         issues.append("Student count is zero — no students found to export.")
@@ -1949,12 +1865,132 @@ def build_department_excel(
             col += 2
         style_body_row(ws7, r, ncols7)
         r += 1
-    ws7.column_dimensions["A"].width = 6
+
+    # 1. Identify student row range
+    stud_start = hdr_bot + 1
+    stud_end = r - 1
+
+    # 2. Write the 17 summary rows starting at row `r`
+    # Row 1 (r): TOTAL REGISTRED
+    ws7.cell(row=r, column=1, value="TOTAL REGISTRED")
+    ws7.cell(row=r, column=3, value="TOTAL REGISTRED")
+    col = 4
+    for m in mappings:
+        col_ltr = get_column_letter(col)
+        ws7.cell(row=r, column=col, value=f'=COUNTIF({col_ltr}{stud_start}:{col_ltr}{stud_end}, "<>—")')
+        col += 2
+
+    # Row 2 (r+1): TOTAL APPEARED
+    ws7.cell(row=r+1, column=3, value="TOTAL APPEARED")
+    col = 4
+    for m in mappings:
+        col_ltr = get_column_letter(col)
+        ws7.cell(row=r+1, column=col, value=f'={col_ltr}{r}-{col_ltr}{r+3}')
+        col += 2
+
+    # Row 3 (r+2): No. of Pass
+    ws7.cell(row=r+2, column=3, value="No. of Pass")
+    col = 4
+    for m in mappings:
+        col_ltr = get_column_letter(col)
+        # Sum of COUNTIFs for passing grades O, A+, A, B+, B, C
+        pass_formula = " + ".join(f'COUNTIF({col_ltr}{stud_start}:{col_ltr}{stud_end}, "{g}")' for g in PASS_GRADE_ORDER)
+        ws7.cell(row=r+2, column=col, value=f'={pass_formula}')
+        col += 2
+
+    # Row 4 (r+3): No. Of Absent
+    ws7.cell(row=r+3, column=3, value="No. Of Absent")
+    col = 4
+    for m in mappings:
+        col_ltr = get_column_letter(col)
+        ws7.cell(row=r+3, column=col, value=f'=COUNTIF({col_ltr}{stud_start}:{col_ltr}{stud_end}, "UA")')
+        col += 2
+
+    # Row 5 (r+4): No. Of Fail
+    ws7.cell(row=r+4, column=3, value="No. Of Fail")
+    col = 4
+    for m in mappings:
+        col_ltr = get_column_letter(col)
+        ws7.cell(row=r+4, column=col, value=f'=COUNTIF({col_ltr}{stud_start}:{col_ltr}{stud_end}, "RA") + COUNTIF({col_ltr}{stud_start}:{col_ltr}{stud_end}, "U")')
+        col += 2
+
+    # Row 6 (r+5): % of Pass based on Registered
+    ws7.cell(row=r+5, column=1, value="Registred")
+    ws7.cell(row=r+5, column=3, value="% of Pass")
+    col = 4
+    for m in mappings:
+        col_ltr = get_column_letter(col)
+        ws7.cell(row=r+5, column=col, value=f'={col_ltr}{r+2}/{col_ltr}{r}*100')
+        col += 2
+
+    # Rows 7-15: Grade counts
+    grade_rows = [
+        ("O Grade", "O"),
+        ("A+ Grade", "A+"),
+        ("A Grade", "A"),
+        ("B+ Grade", "B+"),
+        ("B Grade", "B"),
+        ("C Grade", "C"),
+        ("RA", "RA"),
+        ("UA", "UA"),
+        ("WH", "WH2")  # WH in provisional results is mapped to WH2 or MM
+    ]
+    for idx, (label, g_token) in enumerate(grade_rows):
+        row_offset = 6 + idx
+        ws7.cell(row=r+row_offset, column=3, value=label)
+        col = 4
+        for m in mappings:
+            col_ltr = get_column_letter(col)
+            if g_token == "WH2":
+                # WH counts both WH2 and MM
+                ws7.cell(row=r+row_offset, column=col, value=f'=COUNTIF({col_ltr}{stud_start}:{col_ltr}{stud_end}, "WH2") + COUNTIF({col_ltr}{stud_start}:{col_ltr}{stud_end}, "MM")')
+            else:
+                ws7.cell(row=r+row_offset, column=col, value=f'=COUNTIF({col_ltr}{stud_start}:{col_ltr}{stud_end}, "{g_token}")')
+            col += 2
+
+    # Row 16 (r+15): SUM
+    col = 4
+    for m in mappings:
+        col_ltr = get_column_letter(col)
+        ws7.cell(row=r+15, column=col, value=f'=SUM({col_ltr}{r+6}:{col_ltr}{r+14})')
+        col += 2
+
+    # Row 17 (r+16): % of Pass based on Appeared
+    ws7.cell(row=r+16, column=1, value="Appeared")
+    ws7.cell(row=r+16, column=3, value="% of Pass")
+    col = 4
+    for m in mappings:
+        col_ltr = get_column_letter(col)
+        ws7.cell(row=r+16, column=col, value=f'={col_ltr}{r+2}/{col_ltr}{r+1}*100')
+        col += 2
+
+    # Style all summary rows
+    summary_font = Font(bold=True, size=9)
+    for row_offset in range(17):
+        row_idx = r + row_offset
+        style_body_row(ws7, row_idx, ncols7)
+        # Bold column A, B, C labels
+        for c in (1, 2, 3):
+            cell = ws7.cell(row=row_idx, column=c)
+            cell.font = summary_font
+            if c == 3:
+                cell.alignment = Alignment(horizontal="left", vertical="center")
+            else:
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+        # Bold and align formulas
+        for c in range(4, ncols7 + 1):
+            cell = ws7.cell(row=row_idx, column=c)
+            cell.font = summary_font
+            # Format percentage cells
+            if row_offset in (5, 16) and (c % 2 == 0):
+                cell.number_format = '0.00'
+
+    ws7.column_dimensions["A"].width = 16  # Widened to fit "TOTAL REGISTRED"
     ws7.column_dimensions["B"].width = 16
     ws7.column_dimensions["C"].width = 26
     for c in range(4, ncols7 + 1):
         ws7.column_dimensions[get_column_letter(c)].width = 9
-    page_setup(ws7, ncols7, r, landscape=True, freeze=f"D{hdr_bot + 1}")
+    page_setup(ws7, ncols7, r + 16, landscape=True, freeze=f"D{hdr_bot + 1}")
 
     # ---------------------------------------------------------------
     # Hidden metadata sheet - PDF provenance (section 19)
@@ -1983,6 +2019,77 @@ def build_department_excel(
     bio = io.BytesIO()
     wb.save(bio)
     return bio.getvalue()
+
+
+def reconcile_pdf_and_excel(
+    pdf_records: List[StudentResultRecord],
+    excel_records: Any
+) -> ReconciliationReport:
+    """
+    Reconcile COE PDF extraction against uploaded Excel dataset.
+    Matches by (register_number, subject_code/canonical_subject) and checks result_status.
+    """
+    report = ReconciliationReport()
+    pdf_map = {(r.register_number.upper(), r.subject_name.strip().lower()): r for r in pdf_records}
+
+    excel_map = {}
+    if isinstance(excel_records, pd.DataFrame):
+        for _, row in excel_records.iterrows():
+            reg = str(row["regno"]).strip().upper()
+            subj = str(row["subject"]).strip().lower()
+            excel_map[(reg, subj)] = row
+    elif isinstance(excel_records, list):
+        for r in excel_records:
+            if hasattr(r, "regno"):
+                reg = str(r.regno).strip().upper()
+                subj = str(r.subject).strip().lower()
+                excel_map[(reg, subj)] = r
+            elif isinstance(r, dict):
+                reg = str(r.get("regno", "")).strip().upper()
+                subj = str(r.get("subject", "")).strip().lower()
+                excel_map[(reg, subj)] = r
+
+    all_keys = set(pdf_map.keys()) | set(excel_map.keys())
+
+    for key in all_keys:
+        pdf_rec = pdf_map.get(key)
+        excel_item = excel_map.get(key)
+
+        if pdf_rec is not None and excel_item is not None:
+            excel_grade = excel_item["grade"] if isinstance(excel_item, (pd.Series, dict)) else excel_item.grade
+            excel_name = excel_item["name"] if isinstance(excel_item, (pd.Series, dict)) else excel_item.name
+            if pdf_rec.result_status == excel_grade:
+                report.matched_count += 1
+            else:
+                report.mismatched_count += 1
+                report.mismatched_records.append({
+                    "register_number": pdf_rec.register_number,
+                    "student_name": pdf_rec.student_name or excel_name,
+                    "subject": pdf_rec.subject_name,
+                    "pdf_grade": pdf_rec.result_status,
+                    "excel_grade": excel_grade,
+                    "status": "MISMATCH"
+                })
+        elif pdf_rec is not None and excel_item is None:
+            report.missing_in_excel.append({
+                "register_number": pdf_rec.register_number,
+                "student_name": pdf_rec.student_name,
+                "subject": pdf_rec.subject_name,
+                "pdf_grade": pdf_rec.result_status,
+            })
+        elif excel_item is not None and pdf_rec is None:
+            excel_reg = excel_item["regno"] if isinstance(excel_item, (pd.Series, dict)) else excel_item.regno
+            excel_name = excel_item["name"] if isinstance(excel_item, (pd.Series, dict)) else excel_item.name
+            excel_subj = excel_item["subject"] if isinstance(excel_item, (pd.Series, dict)) else excel_item.subject
+            excel_grade = excel_item["grade"] if isinstance(excel_item, (pd.Series, dict)) else excel_item.grade
+            report.missing_in_pdf.append({
+                "register_number": excel_reg,
+                "student_name": excel_name,
+                "subject": excel_subj,
+                "excel_grade": excel_grade,
+            })
+
+    return report
 
 
 def pdf_records_to_dataframe(pdf_records: List[StudentResultRecord]) -> pd.DataFrame:
@@ -2481,6 +2588,48 @@ def extract_legacy_xls(data: bytes, filename: str) -> LegacyXLSExtractionReport:
     return report
 
 
+def reconcile_by_course_code(
+    records_a: List[StudentResultRecord], records_b: List[StudentResultRecord],
+    label_a: str = "Source A", label_b: str = "Source B"
+) -> ReconciliationReport:
+    """
+    Generalized cross-source reconciliation keyed by (register_number, course_code) --
+    used for PDF<->XLS / XLS<->XLSX comparisons. Never decides which source is correct;
+    only reports MATCH / MISMATCH / SOURCE_MALFORMED-aware discrepancies for faculty review.
+    """
+    report = ReconciliationReport()
+    map_a = {(r.register_number.strip().upper(), (r.subject_code or "").strip().upper()): r for r in records_a}
+    map_b = {(r.register_number.strip().upper(), (r.subject_code or "").strip().upper()): r for r in records_b}
+
+    for key in set(map_a) | set(map_b):
+        rec_a = map_a.get(key)
+        rec_b = map_b.get(key)
+        if rec_a is not None and rec_b is not None:
+            if rec_a.result_status == rec_b.result_status:
+                report.matched_count += 1
+            else:
+                report.mismatched_count += 1
+                report.mismatched_records.append({
+                    "register_number": rec_a.register_number,
+                    "student_name": rec_a.student_name or rec_b.student_name,
+                    "subject": rec_a.subject_code,
+                    f"{label_a.lower()}_grade": rec_a.result_status,
+                    f"{label_b.lower()}_grade": rec_b.result_status,
+                    "status": "MISMATCH",
+                })
+        elif rec_a is not None:
+            report.missing_in_excel.append({
+                "register_number": rec_a.register_number, "student_name": rec_a.student_name,
+                "subject": rec_a.subject_code, f"{label_a.lower()}_grade": rec_a.result_status,
+            })
+        else:
+            report.missing_in_pdf.append({
+                "register_number": rec_b.register_number, "student_name": rec_b.student_name,
+                "subject": rec_b.subject_code, f"{label_b.lower()}_grade": rec_b.result_status,
+            })
+    return report
+
+
 # =============================================================================
 # 4) DATA MODELS
 # =============================================================================
@@ -2561,6 +2710,7 @@ class SubjectAnalysis:
     pass_pct: float
     u_count: int
     ra_count: int
+    ua_count: int
     sa_count: int
     wd_count: int
     mm_count: int
@@ -2579,7 +2729,7 @@ class SubjectAnalysis:
 
     @property
     def arrear_count(self) -> int:
-        return self.u_count + self.ra_count
+        return self.u_count + self.ra_count + self.ua_count
 
     @property
     def failure_concentration(self) -> int:
@@ -2591,6 +2741,7 @@ class SubjectAnalysis:
                 "avg_gp": self.avg_gp, "median_gp": self.median_gp,
                 "pass_count": self.pass_count, "pass_pct": self.pass_pct,
                 "u_count": self.u_count, "ra_count": self.ra_count,
+                "ua_count": self.ua_count,
                 "sa_count": self.sa_count, "wd_count": self.wd_count,
                 "mm_count": self.mm_count, "wh2_count": self.wh2_count,
                 "priority_level": self.priority_level,
@@ -2627,6 +2778,7 @@ class StudentAnalysis:
     passed_courses: int = 0
     u_count: int = 0
     ra_count: int = 0
+    ua_count: int = 0
     sa_count: int = 0
     wd_count: int = 0
     mm_count: int = 0
@@ -2643,7 +2795,7 @@ class StudentAnalysis:
 
     @property
     def arrear_count(self) -> int:
-        return self.u_count + self.ra_count
+        return self.u_count + self.ra_count + self.ua_count
 
     @property
     def malpractice_count(self) -> int:
@@ -2656,7 +2808,7 @@ class StudentAnalysis:
              "quality_points": self.quality_points, "gpa": self.gpa,
              "rank": self.rank, "percentile": self.percentile,
              "grade_counts": self.grade_counts, "passed_courses": self.passed_courses,
-             "u_count": self.u_count, "ra_count": self.ra_count,
+             "u_count": self.u_count, "ra_count": self.ra_count, "ua_count": self.ua_count,
              "sa_count": self.sa_count, "wd_count": self.wd_count,
              "mm_count": self.mm_count, "wh2_count": self.wh2_count,
              "arrear_count": self.arrear_count, "malpractice_count": self.malpractice_count,
@@ -2688,6 +2840,7 @@ class ClassAnalysis:
     cleared_count: int = 0
     u_student_count: int = 0
     ra_student_count: int = 0
+    ua_student_count: int = 0
     arrear_student_count: int = 0
     multiple_u_count: int = 0
     sa_student_count: int = 0
@@ -3313,12 +3466,13 @@ def compute_subject_analytics(records: pd.DataFrame, class_gpa_ref: Optional[flo
         pass_count = int(grp["grade"].isin(PASSING_GRADES).sum())
         u_count = int((grp["grade"] == "U").sum())
         ra_count = int((grp["grade"] == "RA").sum())
+        ua_count = int((grp["grade"] == "UA").sum())
         sa_count = int((grp["grade"] == "SA").sum())
         wd_count = int((grp["grade"] == "WD").sum())
         mm_count = int((grp["grade"] == "MM").sum())
         wh2_count = int((grp["grade"] == "WH2").sum())
 
-        arrear_total = u_count + ra_count
+        arrear_total = u_count + ra_count + ua_count
         pass_pct = _pct(pass_count, len(grp))
         u_pct = _pct(arrear_total, len(grp))
 
@@ -3366,7 +3520,7 @@ def compute_subject_analytics(records: pd.DataFrame, class_gpa_ref: Optional[flo
         distinction_cnt = counts.get("O", 0) + counts.get("A+", 0)
         high_pass_cnt = counts.get("A", 0) + counts.get("B+", 0)
         pass_cnt = counts.get("B", 0) + counts.get("C", 0)
-        fail_cnt = u_count + ra_count + sa_count + wd_count + mm_count + wh2_count
+        fail_cnt = u_count + ra_count + ua_count + sa_count + wd_count + mm_count + wh2_count
         grade_tiers = {
             "Distinction (O/A+)": distinction_cnt,
             "High Pass (A/B+)": high_pass_cnt,
@@ -3378,6 +3532,7 @@ def compute_subject_analytics(records: pd.DataFrame, class_gpa_ref: Optional[flo
             subject=str(subject), course_code=course_code, credits=credits,
             student_count=int(students), avg_gp=avg_gp, median_gp=median_gp,
             pass_count=pass_count, pass_pct=pass_pct, u_count=u_count, ra_count=ra_count,
+            ua_count=ua_count,
             sa_count=sa_count, wd_count=wd_count, mm_count=mm_count, wh2_count=wh2_count,
             u_pct=u_pct, priority_level=priority, gp_diff_vs_class=gp_diff,
             grade_counts=counts, top_students=top_students, u_students=u_students,
@@ -3440,12 +3595,13 @@ def compute_student_analytics(records: pd.DataFrame) -> List[StudentAnalysis]:
         counts = {g: sum(1 for c in courses if c.grade == g) for g in GRADE_ORDER}
         u_count = counts.get("U", 0)
         ra_count = counts.get("RA", 0)
+        ua_count = counts.get("UA", 0)
         sa_count = counts.get("SA", 0)
         wd_count = counts.get("WD", 0)
         mm_count = counts.get("MM", 0)
         wh2_count = counts.get("WH2", 0)
 
-        arrear_total = u_count + ra_count
+        arrear_total = u_count + ra_count + ua_count
         malpractice_total = mm_count + wh2_count
         has_backlog = (backlog_arrear_count > 0)
 
@@ -3496,7 +3652,7 @@ def compute_student_analytics(records: pd.DataFrame) -> List[StudentAnalysis]:
             credits_completed=completed_credits, credits_attempted=attempted_credits,
             quality_points=quality_points, gpa=gpa,
             grade_counts=counts, passed_courses=len(passing),
-            u_count=u_count, ra_count=ra_count, sa_count=sa_count, wd_count=wd_count,
+            u_count=u_count, ra_count=ra_count, ua_count=ua_count, sa_count=sa_count, wd_count=wd_count,
             mm_count=mm_count, wh2_count=wh2_count,
             attention=attention, is_high_performer=is_high,
             strongest_subjects=strongest, attention_subjects=attention_subjects,
@@ -3627,6 +3783,7 @@ def compute_class_analysis(records: pd.DataFrame, file_name: str) -> ClassAnalys
     ca.cleared_count = sum(1 for s in ca.students if s.attention == STATUS_CLEARED)
     ca.u_student_count = sum(1 for s in ca.students if s.u_count > 0)
     ca.ra_student_count = sum(1 for s in ca.students if s.ra_count > 0)
+    ca.ua_student_count = sum(1 for s in ca.students if s.ua_count > 0)
     ca.arrear_student_count = sum(1 for s in ca.students if s.arrear_count > 0)
     ca.multiple_u_count = sum(1 for s in ca.students if s.arrear_count >= 2)
     ca.backlog_student_count = sum(1 for s in ca.students if s.has_backlog_arrears)
@@ -4730,6 +4887,7 @@ SESSION: Dict[str, Any] = {
     "ptm_briefs": {},
     "staff_directory": {},      # Course Code -> Staff Name, remembered across PDF conversions
     "pdf_to_excel_cache": None,  # (cache_key, ClassAnalysis) so /pdf-to-excel doesn't recompute every GET
+    "staff_verified": False,
 }
 
 _ALERTS: List[Tuple[str, str]] = []
@@ -5054,110 +5212,77 @@ def layout(title: str, active: str, content, ca: Optional[ClassAnalysis] = None)
 # =============================================================================
 
 def page_upload() -> Tuple:
-    pdf_report: Optional[PDFExtractionReport] = SESSION.get("preview_pdf_report")
-    ca: Optional[ClassAnalysis] = SESSION.get("analytics")
-
-    post_extraction_banner = None
-    if pdf_report and pdf_report.ok:
-        post_extraction_banner = Div(
-            Div(
-                Div(
-                    Span("✓ Active Dataset Loaded:", cls="text-xs font-bold text-green-800 uppercase tracking-wider block mb-1"),
-                    H3(f"File: {SESSION.get('preview_pdf_filename', 'coe_result.pdf')} ({pdf_report.student_count} Students · {pdf_report.subject_count} Subjects)", cls="text-base font-bold text-slate-900"),
-                    cls="mb-3"
-                ),
-                Div(
-                    A("🔎 Open Interactive Academic Analysis →", href="/dashboard" if ca else "/confirm-pdf",
-                      cls="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl text-sm transition-all shadow-md text-center inline-block mr-3 mb-2"),
-                    A("📊 Convert to Department Excel →", href="/pdf-to-excel",
-                      cls="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl text-sm transition-all shadow-md text-center inline-block mb-2"),
-                    cls="flex flex-wrap items-center"
-                ),
-                cls="card p-6 bg-gradient-to-r from-blue-50 to-emerald-50 border-2 border-blue-300 shadow-md mb-8 max-w-3xl mx-auto"
-            )
-        )
-
     return layout("Upload", "upload", Div(
         # Top Navigation / Hero Header
         Div(
             Div(
                 Span("Faculty Grade Analytics Portal", cls="text-xs font-bold uppercase tracking-wider text-blue-600 bg-blue-50 px-3 py-1 rounded-full border border-blue-200 inline-block mb-3"),
-                Span("R2024 • Single Input COE PDF Workflow", cls="ml-2 text-xs font-medium text-slate-500"),
+                Span("R2024 • AI & Data Science", cls="ml-2 text-xs font-medium text-slate-500"),
             ),
-            H1("Upload COE Result PDF", cls="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight mb-3"),
-            P("Upload the official Controller of Examinations result PDF as the single source input. Automatically parse records, identify U/RA arrears, map R2024 subjects, and generate Interactive Analytics or Department Excel workbooks.",
+            H1("Turn COE Results into Actionable Academic Insights", cls="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight mb-3"),
+            P("Upload official COE result PDFs or Excel spreadsheets. Automatically parse records, identify U/RA arrears, map subjects to the R2024 syllabus, and generate faculty-ready analytics.",
               cls="text-slate-600 text-base max-w-2xl mx-auto leading-relaxed mb-8"),
             cls="text-center max-w-3xl mx-auto mb-10"
         ),
 
-        post_extraction_banner,
-
-        # Single COE PDF Upload Card
+        # Upload Cards Container
         Div(
+            # Mode A: PDF Direct Upload (Primary)
             Form(
                 Div(
                     Div(
-                        Span("📄", cls="text-3xl mr-2"),
                         Div(
-                            Span("PRIMARY INPUT SOURCE", cls="inline-block text-[10px] font-bold bg-blue-600 text-white px-2 py-0.5 rounded uppercase tracking-wider mb-0.5"),
-                            H3("COE Result PDF", cls="text-lg font-bold text-slate-900 leading-tight"),
+                            Div(
+                                Span("📄", cls="text-3xl mr-2"),
+                                Div(
+                                    Span("RECOMMENDED: COE PDF", cls="inline-block text-[10px] font-bold bg-blue-600 text-white px-2 py-0.5 rounded uppercase tracking-wider mb-0.5"),
+                                    H3("Upload COE Result PDF", cls="text-base font-bold text-slate-900 leading-tight"),
+                                ),
+                                cls="flex items-center"
+                            ),
+                            cls="mb-3"
                         ),
-                        cls="flex items-center mb-4"
-                    ),
-                    P("Upload the official Controller of Examinations result PDF.", cls="text-sm font-semibold text-slate-700 mb-3"),
+                        P("Drop your official result PDF here or click to browse. Automatically extracts grades & verifies page provenance.", cls="text-xs text-slate-500 mb-4 leading-relaxed"),
 
-                    # Process Steps
-                    Div(
-                        Span("The system will:", cls="text-xs font-bold text-slate-700 block mb-2"),
-                        Ol(
-                            Li("1. Extract student and subject results", cls="text-xs text-slate-600 py-1 border-b border-slate-100"),
-                            Li("2. Verify the extraction & page provenance", cls="text-xs text-slate-600 py-1 border-b border-slate-100"),
-                            Li("3. Map R2024 subjects & credit structure", cls="text-xs text-slate-600 py-1 border-b border-slate-100"),
-                            Li("4. Let faculty enter or extract staff names from IA mark HTML", cls="text-xs text-slate-600 py-1 border-b border-slate-100"),
-                            Li("5. Generate Interactive Analytics dashboard", cls="text-xs text-slate-600 py-1 border-b border-slate-100"),
-                            Li("6. Generate the Department Excel workbook", cls="text-xs text-slate-600 py-1"),
-                            cls="bg-blue-50/60 p-3.5 rounded-xl border border-blue-100 mb-5 space-y-0.5"
-                        ),
-                    ),
-
-                    # PDF Input & Select
-                    Div(
-                        Input(type="file", name="file_pdf", accept=".pdf", required=True, id="file_pdf_input",
-                              cls="block w-full text-xs text-slate-500 file:mr-3 file:py-2.5 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer border border-slate-200 rounded-lg p-1 bg-white",
-                              onchange="handlePdfFileSelect(this)"),
+                        # PDF Input & Select
                         Div(
-                            Span("✓ Selected PDF:", cls="text-xs font-bold text-blue-700 block mb-0.5"),
-                            Span("", id="pdf_file_name", cls="text-xs font-mono font-semibold text-slate-800 break-all block"),
-                            id="pdf_file_selected_info",
-                            cls="hidden mt-2 p-2.5 bg-blue-50 border border-blue-200 rounded-lg text-center"
+                            Input(type="file", name="file_pdf", accept=".pdf", required=True, id="file_pdf_input",
+                                  cls="block w-full text-xs text-slate-500 file:mr-3 file:py-2.5 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer border border-slate-200 rounded-lg p-1 bg-white",
+                                  onchange="handlePdfFileSelect(this)"),
+                            Div(
+                                Span("✓ Selected PDF:", cls="text-xs font-bold text-blue-700 block mb-0.5"),
+                                Span("", id="pdf_file_name", cls="text-xs font-mono font-semibold text-slate-800 break-all block"),
+                                id="pdf_file_selected_info",
+                                cls="hidden mt-2 p-2.5 bg-blue-50 border border-blue-200 rounded-lg text-center"
+                            ),
+                            cls="mb-4"
                         ),
-                        cls="mb-5"
-                    ),
 
-                    Button("Analyze COE PDF →", type="submit", id="btn_analyze_pdf",
-                           cls="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-xl text-sm transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2"),
+                        Button("Analyze PDF & Preview Extraction →", type="submit", id="btn_analyze_pdf",
+                               cls="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-xl text-sm transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2"),
 
-                    # Stage Progress Container (Hidden by default)
-                    Div(
-                        Div(Span("⏳ Processing COE PDF...", cls="text-xs font-bold text-blue-800 block mb-2")),
+                        # Stage Progress Container (Hidden by default)
                         Div(
-                            Div(Span("✓", cls="text-green-600 font-bold mr-2"), Span("Reading document stream", cls="text-xs text-slate-700"), cls="flex items-center text-xs py-0.5"),
-                            Div(Span("•", cls="text-blue-500 font-bold mr-2 animate-pulse"), Span("Detecting student records & subjects...", cls="text-xs text-slate-700"), cls="flex items-center text-xs py-0.5"),
-                            Div(Span("•", cls="text-slate-300 font-bold mr-2"), Span("Mapping R2024 syllabus...", cls="text-xs text-slate-400"), cls="flex items-center text-xs py-0.5"),
-                            Div(Span("•", cls="text-slate-300 font-bold mr-2"), Span("Preparing preflight review...", cls="text-xs text-slate-400"), cls="flex items-center text-xs py-0.5"),
-                            cls="bg-blue-50 p-3 rounded-lg border border-blue-100 mt-3"
+                            Div(Span("⏳ Processing COE PDF...", cls="text-xs font-bold text-blue-800 block mb-2")),
+                            Div(
+                                Div(Span("✓", cls="text-green-600 font-bold mr-2"), Span("Reading document stream", cls="text-xs text-slate-700"), cls="flex items-center text-xs py-0.5"),
+                                Div(Span("•", cls="text-blue-500 font-bold mr-2 animate-pulse"), Span("Detecting student records & subjects...", cls="text-xs text-slate-700"), cls="flex items-center text-xs py-0.5"),
+                                Div(Span("•", cls="text-slate-300 font-bold mr-2"), Span("Mapping R2024 syllabus...", cls="text-xs text-slate-400"), cls="flex items-center text-xs py-0.5"),
+                                Div(Span("•", cls="text-slate-300 font-bold mr-2"), Span("Preparing preflight review...", cls="text-xs text-slate-400"), cls="flex items-center text-xs py-0.5"),
+                                cls="bg-blue-50 p-3 rounded-lg border border-blue-100 mt-3"
+                            ),
+                            id="pdf_progress_card", cls="hidden mt-3"
                         ),
-                        id="pdf_progress_card", cls="hidden mt-3"
+                        cls="card p-6 border-2 border-blue-500/20 hover:border-blue-500/50 transition-all shadow-sm flex flex-col justify-between h-full"
                     ),
-                    cls="card p-8 border-2 border-blue-500/30 hover:border-blue-500/60 transition-all shadow-md"
                 ),
                 action="/upload-pdf", method="POST", enctype="multipart/form-data",
                 onsubmit="handleUploadFormSubmit(this, 'pdf_progress_card', 'Analyzing COE PDF...')"
             ),
-            cls="max-w-2xl mx-auto mb-12"
+            cls="max-w-md mx-auto mb-12"
         ),
 
-        # Section: Platform Capabilities
+        # Section 13: Trust / Capability Cards
         Div(
             H3("Platform Capabilities & Academic Features", cls="text-sm font-bold uppercase tracking-wider text-slate-400 text-center mb-6"),
             Div(
@@ -5189,28 +5314,28 @@ def page_upload() -> Tuple:
             ),
         ),
 
-        # Section: How It Works
+        # Section 14: How It Works
         Div(
             H3("How It Works", cls="text-sm font-bold uppercase tracking-wider text-slate-400 text-center mb-2"),
-            P("From COE Result PDF to faculty analytics & department Excel in minutes.", cls="text-xs text-slate-500 text-center mb-6"),
+            P("From result document to faculty action in minutes.", cls="text-xs text-slate-500 text-center mb-6"),
             Div(
-                Div(Span("01", cls="text-blue-600 font-extrabold text-lg block mb-1"), H4("Upload PDF", cls="text-xs font-bold text-slate-800"), P("Select official COE PDF", cls="text-[11px] text-slate-500"), cls="text-center p-3 card border border-slate-100"),
+                Div(Span("01", cls="text-blue-600 font-extrabold text-lg block mb-1"), H4("Upload", cls="text-xs font-bold text-slate-800"), P("Select PDF or Excel file", cls="text-[11px] text-slate-500"), cls="text-center p-3 card border border-slate-100"),
                 Div(Span("→", cls="text-slate-300 hidden sm:block text-xl self-center")),
-                Div(Span("02", cls="text-blue-600 font-extrabold text-lg block mb-1"), H4("Verify", cls="text-xs font-bold text-slate-800"), P("Review page provenance", cls="text-[11px] text-slate-500"), cls="text-center p-3 card border border-slate-100"),
+                Div(Span("02", cls="text-blue-600 font-extrabold text-lg block mb-1"), H4("Verify", cls="text-xs font-bold text-slate-800"), P("Review preflight mapping", cls="text-[11px] text-slate-500"), cls="text-center p-3 card border border-slate-100"),
                 Div(Span("→", cls="text-slate-300 hidden sm:block text-xl self-center")),
                 Div(Span("03", cls="text-blue-600 font-extrabold text-lg block mb-1"), H4("Analyze", cls="text-xs font-bold text-slate-800"), P("Compute cohort metrics", cls="text-[11px] text-slate-500"), cls="text-center p-3 card border border-slate-100"),
                 Div(Span("→", cls="text-slate-300 hidden sm:block text-xl self-center")),
-                Div(Span("04", cls="text-blue-600 font-extrabold text-lg block mb-1"), H4("Export", cls="text-xs font-bold text-slate-800"), P("Department Excel & Reports", cls="text-[11px] text-slate-500"), cls="text-center p-3 card border border-slate-100"),
+                Div(Span("04", cls="text-blue-600 font-extrabold text-lg block mb-1"), H4("Act", cls="text-xs font-bold text-slate-800"), P("Execute remedial plan", cls="text-[11px] text-slate-500"), cls="text-center p-3 card border border-slate-100"),
                 cls="grid grid-cols-2 sm:grid-cols-7 gap-2 max-w-4xl mx-auto items-center mb-12"
             ),
         ),
 
-        # Section: Data Privacy Message
+        # Section 15: Data Privacy Message
         Div(
             Div(
                 Span("🔒", cls="text-lg mr-2"),
                 Span("Academic Data Protection", cls="font-bold text-slate-800 text-xs mr-2"),
-                Span("• Results are processed locally for academic analysis.", cls="text-xs text-slate-500"),
+                Span("• Results are processed locally for academic analysis. AI receives only structured metrics required for advisory generation.", cls="text-xs text-slate-500"),
                 cls="flex items-center justify-center flex-wrap gap-1 p-3 bg-slate-100 border border-slate-200 rounded-xl max-w-3xl mx-auto text-center"
             ),
             cls="mb-8"
@@ -5224,6 +5349,21 @@ def page_upload() -> Tuple:
                 if (info) {
                     info.classList.remove('hidden');
                     document.getElementById('pdf_file_name').innerText = file.name;
+                }
+            }
+        }
+
+        function handleExcelFileSelect(input) {
+            if (input.files && input.files[0]) {
+                var file = input.files[0];
+                var promptEl = document.getElementById('excel_dropzone_prompt');
+                if (promptEl) promptEl.classList.add('hidden');
+                var info = document.getElementById('excel_file_selected_info');
+                if (info) {
+                    info.classList.remove('hidden');
+                    document.getElementById('excel_file_name').innerText = file.name;
+                    var sizeMB = (file.size / (1024 * 1024)).toFixed(2);
+                    document.getElementById('excel_file_size').innerText = sizeMB + ' MB';
                 }
             }
         }
@@ -5242,8 +5382,235 @@ def page_upload() -> Tuple:
                 btn.classList.add('opacity-75');
             }
         }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            var dropzone = document.getElementById('excel_dropzone');
+            if (dropzone) {
+                ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(function(eventName) {
+                    dropzone.addEventListener(eventName, function(e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                    }, false);
+                });
+                ['dragenter', 'dragover'].forEach(function(eventName) {
+                    dropzone.addEventListener(eventName, function() {
+                        dropzone.classList.add('border-emerald-600', 'bg-emerald-100/50');
+                    }, false);
+                });
+                ['dragleave', 'drop'].forEach(function(eventName) {
+                    dropzone.addEventListener(eventName, function() {
+                        dropzone.classList.remove('border-emerald-600', 'bg-emerald-100/50');
+                    }, false);
+                });
+                dropzone.addEventListener('drop', function(e) {
+                    var dt = e.dataTransfer;
+                    var files = dt.files;
+                    if (files && files.length > 0) {
+                        var fileInput = document.getElementById('file_excel_input');
+                        fileInput.files = files;
+                        handleExcelFileSelect(fileInput);
+                    }
+                }, false);
+            }
+        });
         """),
         cls="max-w-5xl mx-auto py-4"
+    ))
+
+
+def page_upload_mapping() -> Tuple:
+    """Requirements 1, 2, 3: Structure Preview, Format Detection, Column Mapping & Data Quality Check."""
+    cols = SESSION.get("preview_cols", [])
+    report: ValidationReport = SESSION.get("preview_report") or ValidationReport()
+    filename = SESSION.get("preview_filename", "")
+    mapping = report.mapped_columns or {}
+    format_type = getattr(report, "format_detected", "long")
+    subject_maps = getattr(report, "subject_mappings", [])
+
+    def col_select(target: str, label: str) -> Div:
+        options = [Option("-- Unmapped --", value="")]
+        selected = mapping.get(target, "")
+        for c in cols:
+            is_sel = (c == selected)
+            options.append(Option(f"{c} {'✓' if is_sel else ''}", value=c, selected=is_sel))
+        return Div(
+            Label(f"{label}:", cls="block text-xs font-semibold text-slate-600 mb-1"),
+            Select(*options, name=f"map_{target}", cls="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-blue-500"),
+            cls="mb-3"
+        )
+
+    format_badge = (
+        Span("Wide Format (Student Rows × Subject Grade Columns)", cls="px-3 py-1 bg-blue-100 text-blue-800 text-xs font-semibold rounded-full")
+        if format_type == "wide"
+        else Span("Long Format (Row per Grade Entry)", cls="px-3 py-1 bg-green-100 text-green-800 text-xs font-semibold rounded-full")
+    )
+
+    mapping_rows = []
+    for sm in subject_maps:
+        conf_pct = int(sm["confidence"] * 100)
+        badge = (
+            Span(f"✓ Verified ({conf_pct}%)", cls="text-xs font-semibold text-green-700 bg-green-50 border border-green-200 px-2 py-0.5 rounded")
+            if sm["confidence"] >= 0.80
+            else Span(f"⚠ Review Required ({conf_pct}%)", cls="text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded")
+        )
+        mapping_rows.append(Tr(
+            Td(sm["raw_header"], cls="px-4 py-2.5 text-xs font-mono text-slate-700 border-b"),
+            Td(sm["canonical_subject"], cls="px-4 py-2.5 text-xs font-medium text-slate-900 border-b"),
+            Td(sm["course_code"] or "—", cls="px-4 py-2.5 text-xs text-slate-500 border-b"),
+            Td(f"Sem {sm['semester']} ({sm['category']})", cls="px-4 py-2.5 text-xs text-slate-600 border-b"),
+            Td(badge, cls="px-4 py-2.5 text-xs border-b"),
+        ))
+
+    subject_mapping_card = (
+        Div(
+            H3("Detected Subject Columns & Abbreviation Resolution (R2024 AI & DS Catalog)", cls="text-sm font-bold text-slate-800 mb-2"),
+            P("The deterministic parser mapped the following columns to official syllabus subjects:", cls="text-xs text-slate-500 mb-3"),
+            Div(
+                Table(
+                    Thead(Tr(
+                        Th("Raw Header", cls="px-4 py-2 text-left text-xs font-semibold text-slate-600 bg-slate-50 border-b"),
+                        Th("Resolved Canonical Subject", cls="px-4 py-2 text-left text-xs font-semibold text-slate-600 bg-slate-50 border-b"),
+                        Th("Code", cls="px-4 py-2 text-left text-xs font-semibold text-slate-600 bg-slate-50 border-b"),
+                        Th("Curriculum Group", cls="px-4 py-2 text-left text-xs font-semibold text-slate-600 bg-slate-50 border-b"),
+                        Th("Match Confidence", cls="px-4 py-2 text-left text-xs font-semibold text-slate-600 bg-slate-50 border-b"),
+                    )),
+                    Tbody(*mapping_rows),
+                    cls="w-full border border-slate-200 rounded-lg overflow-hidden"
+                ),
+                cls="overflow-x-auto mb-6"
+            ),
+            cls="card p-5 mb-6"
+        ) if mapping_rows else None
+    )
+
+    # Quarantined Tokens Card
+    quarantined = getattr(report, "quarantined_tokens", [])
+    quarantine_card = (
+        Div(
+            Div(
+                Span("⚠️", cls="text-amber-500 text-lg mr-2"),
+                H3("Unrecognized Result Token Quarantine Report", cls="text-sm font-bold text-slate-800"),
+                Span(f"{len(quarantined)} token(s) quarantined", cls="ml-auto text-xs badge badge-amber"),
+                cls="flex items-center mb-3"
+            ),
+            P("The following unknown result tokens were encountered and quarantined for department review:", cls="text-xs text-slate-500 mb-3"),
+            Div(
+                Table(
+                    Thead(Tr(
+                        Th("Row", cls="px-3 py-2 text-left text-xs font-semibold text-slate-600 bg-slate-50 border-b"),
+                        Th("Register No", cls="px-3 py-2 text-left text-xs font-semibold text-slate-600 bg-slate-50 border-b"),
+                        Th("Column / Subject", cls="px-3 py-2 text-left text-xs font-semibold text-slate-600 bg-slate-50 border-b"),
+                        Th("Raw Value", cls="px-3 py-2 text-left text-xs font-semibold text-slate-600 bg-slate-50 border-b"),
+                        Th("Status / Action", cls="px-3 py-2 text-left text-xs font-semibold text-slate-600 bg-slate-50 border-b"),
+                    )),
+                    Tbody(*[Tr(
+                        Td(q["row"], cls="px-3 py-2 text-xs font-mono border-b"),
+                        Td(q["regno"] or "—", cls="px-3 py-2 text-xs font-mono border-b"),
+                        Td(q["column"], cls="px-3 py-2 text-xs font-mono border-b"),
+                        Td(Span(q["raw_value"], cls="px-2 py-0.5 bg-amber-100 text-amber-800 font-mono font-bold rounded text-xs"), cls="px-3 py-2 border-b"),
+                        Td(q["reason"], cls="px-3 py-2 text-xs text-slate-600 border-b"),
+                    ) for q in quarantined]),
+                    cls="w-full border border-slate-200 rounded-lg overflow-hidden"
+                ),
+                cls="overflow-x-auto mb-3"
+            ),
+            cls="card p-5 border-l-4 border-l-amber-500 mb-6"
+        ) if quarantined else None
+    )
+
+    # Department Manual Alias Override Form
+    alias_override_card = Div(
+        H3("Department Manual Subject Alias Override", cls="text-sm font-bold text-slate-800 mb-2"),
+        P("Map custom non-standard classroom subject abbreviations directly to canonical syllabus subjects:", cls="text-xs text-slate-500 mb-3"),
+        Form(
+            Div(
+                Input(type="text", name="raw_token", placeholder="e.g. DSEA-LAB, ML-THEORY", required=True,
+                      cls="px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500"),
+                Select(
+                    *[Option(item["name"], value=item["name"]) for item in SYLLABUS_CATALOG_R2024],
+                    name="canonical_target", required=True,
+                    cls="px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500"
+                ),
+                Button("Save Alias Override", type="submit", cls="px-4 py-2 text-sm font-semibold bg-slate-800 text-white rounded-lg hover:bg-slate-900 transition-colors"),
+                cls="grid grid-cols-1 sm:grid-cols-3 gap-3"
+            ),
+            action="/alias-override", method="POST",
+        ),
+        cls="card p-5 mb-6"
+    )
+
+    # Copy-Paste Sanitization Alert Banner
+    cleaned_cnt = getattr(report, "copy_paste_cleaned_count", 0)
+    copy_paste_alert = (
+        Div(
+            Span("✨", cls="text-blue-500 text-lg mr-2"),
+            Span(f"PDF Copy-Paste Sanitizer active: Cleaned {cleaned_cnt} merged/shifted COE formatting anomalies.", cls="text-xs font-semibold text-blue-800"),
+            cls="flex items-center px-4 py-3 bg-blue-50 border border-blue-200 rounded-xl mb-6"
+        ) if cleaned_cnt > 0 else None
+    )
+
+    return layout("Excel Structure & Column Mapping", "upload", Div(
+        Div(
+            H1("Excel File Analysis & Preflight Review", cls="text-2xl font-bold text-slate-800 mb-1"),
+            Div(
+                Span(f"File: {html.escape(filename)}", cls="text-sm text-slate-500 mr-3"),
+                format_badge,
+                cls="flex items-center gap-2 mb-6"
+            ),
+        ),
+
+        copy_paste_alert,
+
+        # Structure Preview Cards
+        Div(
+            stat_card("Detected Rows", str(report.total_input_rows), "#3b82f6"),
+            stat_card("Valid Records", str(report.valid_records), "#16a34a"),
+            stat_card("Sheet Name", report.sheet_name or "Sheet1", "#64748b"),
+            stat_card("Quality Status", "Clean" if not report.issues else f"{len(report.issues)} Issues", "#16a34a" if not report.issues else "#d97706"),
+            cls="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6"
+        ),
+
+        # Data Quality Check Report
+        Div(
+            H3("Excel Data Quality & Preflight Check", cls="text-sm font-bold text-slate-800 mb-3"),
+            Div(
+                Div(Span("✓", cls="text-green-600 font-bold mr-2"), Span(f"{report.valid_records} valid result records detected.", cls="text-sm text-slate-700"), cls="py-1 flex items-center"),
+                Div(Span("✓", cls="text-green-600 font-bold mr-2"), Span(f"Header row located automatically at row {report.header_row + 1}.", cls="text-sm text-slate-700"), cls="py-1 flex items-center"),
+                Div(Span("ℹ", cls="text-blue-600 font-bold mr-2"), Span(f"Structure recognized as {format_type.upper()} format.", cls="text-sm text-slate-700"), cls="py-1 flex items-center"),
+                Div(Span("⚠", cls="text-amber-600 font-bold mr-2"), Span(f"{report.duplicates_removed} duplicate row(s) removed during validation.", cls="text-sm text-slate-700"), cls="py-1 flex items-center") if report.duplicates_removed else None,
+                Div(Span("⚠", cls="text-amber-600 font-bold mr-2"), Span(f"{report.dropped_rows} row(s) dropped due to missing mandatory fields.", cls="text-sm text-slate-700"), cls="py-1 flex items-center") if report.dropped_rows else None,
+            ),
+            cls="card p-5 mb-6"
+        ),
+
+        quarantine_card,
+        subject_mapping_card,
+        alias_override_card,
+
+        # Column Mapping Form
+        Form(
+            H3("Student Identity Column Assignments", cls="text-sm font-bold text-slate-800 mb-3"),
+            P("Confirm or adjust student identity spreadsheet column assignments:", cls="text-xs text-slate-500 mb-4"),
+            Div(
+                col_select("regno", "Register Number"),
+                col_select("name", "Student Name"),
+                col_select("subject", "Subject Name (Long format only)"),
+                col_select("credits", "Course Credits (Long format only)"),
+                col_select("grade", "Final Result Grade (Long format only)"),
+                col_select("course_code", "Course Code (Optional)"),
+                cls="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6"
+            ),
+            Div(
+                A("← Upload Different File", href="/upload", cls="px-4 py-2.5 text-sm font-medium text-slate-600 hover:text-slate-800"),
+                Button("Confirm & Process Full Analytics →", type="submit",
+                       cls="px-6 py-2.5 text-sm font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors shadow-sm"),
+                cls="flex items-center justify-between border-t pt-4"
+            ),
+            action="/upload-confirm", method="POST",
+            cls="card p-6 mb-8"
+        ),
+
+        cls="max-w-4xl mx-auto"
     ))
 
 
@@ -6808,6 +7175,7 @@ def route_upload_get():
 def page_pdf_preview() -> Tuple:
     """PDF Preflight Extraction Review & Inspection Page."""
     pdf_report: PDFExtractionReport = SESSION.get("preview_pdf_report") or PDFExtractionReport()
+    reconcil: Optional[ReconciliationReport] = SESSION.get("reconciliation_report")
     filename = SESSION.get("preview_pdf_filename", "coe_result.pdf")
     meta = pdf_report.doc_metadata
 
@@ -6892,6 +7260,46 @@ def page_pdf_preview() -> Tuple:
         cls="card p-5 mb-6"
     )
 
+    # 4. PDF vs Excel Reconciliation Section (If available)
+    reconcil_card = None
+    if reconcil:
+        reconcil_rows = []
+        for m in reconcil.mismatched_records:
+            reconcil_rows.append(Tr(
+                Td(m["register_number"], cls="px-3 py-2 text-xs font-mono font-bold text-slate-900 border-b"),
+                Td(m["student_name"], cls="px-3 py-2 text-xs text-slate-800 border-b"),
+                Td(m["subject"], cls="px-3 py-2 text-xs text-slate-700 border-b"),
+                Td(Span(m["pdf_grade"], cls="px-2 py-0.5 text-xs font-bold bg-blue-100 text-blue-800 rounded"), cls="px-3 py-2 border-b"),
+                Td(Span(m["excel_grade"], cls="px-2 py-0.5 text-xs font-bold bg-amber-100 text-amber-800 rounded"), cls="px-3 py-2 border-b"),
+                Td(Span("🚨 MISMATCH", cls="px-2 py-0.5 text-xs font-bold bg-red-100 text-red-800 rounded"), cls="px-3 py-2 border-b"),
+            ))
+
+        reconcil_card = Div(
+            Div(
+                Span("🔄", cls="text-xl mr-2"),
+                H3("PDF vs Excel Reconciliation Report", cls="text-sm font-bold text-slate-800"),
+                Span(f"{reconcil.matched_count} Matched · {reconcil.mismatched_count} Mismatches", cls="ml-auto text-xs badge badge-slate"),
+                cls="flex items-center mb-3"
+            ),
+            P("COE PDF is treated as the primary authoritative source. Mismatches require faculty verification:", cls="text-xs text-slate-500 mb-3"),
+            Div(
+                Table(
+                    Thead(Tr(
+                        Th("Register No", cls="px-3 py-2 text-left text-xs font-semibold text-slate-600 bg-slate-50 border-b"),
+                        Th("Student Name", cls="px-3 py-2 text-left text-xs font-semibold text-slate-600 bg-slate-50 border-b"),
+                        Th("Subject", cls="px-3 py-2 text-left text-xs font-semibold text-slate-600 bg-slate-50 border-b"),
+                        Th("COE PDF Grade (Authoritative)", cls="px-3 py-2 text-left text-xs font-semibold text-slate-600 bg-slate-50 border-b"),
+                        Th("Excel Grade", cls="px-3 py-2 text-left text-xs font-semibold text-slate-600 bg-slate-50 border-b"),
+                        Th("Discrepancy Status", cls="px-3 py-2 text-left text-xs font-semibold text-slate-600 bg-slate-50 border-b"),
+                    )),
+                    Tbody(*reconcil_rows),
+                    cls="w-full border border-slate-200 rounded-lg overflow-hidden"
+                ) if reconcil_rows else P("✓ 100% Match! PDF and Excel result grades match perfectly.", cls="text-xs font-semibold text-green-700 bg-green-50 p-3 rounded"),
+                cls="overflow-x-auto mb-4"
+            ),
+            cls="card p-5 border-l-4 border-l-blue-600 mb-6"
+        )
+
     return layout("PDF Result Preflight Review", "upload", Div(
         Div(
             H1("COE PDF Analysis & Data Quality Review", cls="text-2xl font-bold text-slate-800 mb-1"),
@@ -6899,6 +7307,7 @@ def page_pdf_preview() -> Tuple:
         ),
         doc_meta_card,
         stats_cards,
+        reconcil_card if reconcil_card else None,
         inspector_card,
         Form(
             Div(
@@ -6987,6 +7396,14 @@ def page_pdf_to_excel(pdf_report: "PDFExtractionReport", ca: "ClassAnalysis", fi
     staff_form = Form(
         Div(
             H3("Subject Staff Mapping", cls="text-sm font-bold text-slate-800 mb-1"),
+            (Div(
+                Span("⚠️ ACTION REQUIRED: Please review the extracted/entered staff names below and click 'Save Staff Names' to verify.", 
+                     cls="text-xs font-bold text-amber-800"),
+                cls="mb-3 p-3 bg-amber-50 border border-amber-200 rounded-lg"
+            ) if not SESSION.get("staff_verified", False) else Div(
+                Span("✓ Staff names manually verified.", cls="text-xs font-bold text-green-800"),
+                cls="mb-3 p-3 bg-green-50 border border-green-200 rounded-lg"
+            )),
             P("Course codes come from the PDF and subject names come from the R2024 syllabus catalog — the only "
               "manual field required is Staff Name. Leave a field blank to flag it as not entered rather than "
               "guessing.", cls="text-xs text-slate-500 mb-3"),
@@ -7028,12 +7445,12 @@ def page_pdf_to_excel(pdf_report: "PDFExtractionReport", ca: "ClassAnalysis", fi
     ia_upload_form = Form(
         Div(
             H3("Analysis 4 — Internal Assessment (Cycle Test) Mark Sheets", cls="text-sm font-bold text-slate-800 mb-1"),
-            P("Upload Cycle Test mark sheet files (.mhtml, .html, .xlsx, .csv) to populate IA-1, IA-2, and IA-3 marks of failed students in Analysis 4:", cls="text-xs text-slate-500 mb-4"),
+            P("Upload Cycle Test mark sheet files (.mhtml, .html, .xlsx, .csv — select multiple files if department has multiple classes) to populate IA-1, IA-2, and IA-3 marks of failed students in Analysis 4:", cls="text-xs text-slate-500 mb-4"),
             
             Div(
                 Div(
                     Label("IA 1 / Cycle Test 1 Mark Sheet", cls="block text-xs font-semibold text-slate-700 mb-1"),
-                    Input(type="file", name="ia1_file", accept=".mhtml,.mht,.html,.htm,.xlsx,.xls,.csv",
+                    Input(type="file", name="ia1_file", accept=".mhtml,.mht,.html,.htm,.xlsx,.xls,.csv", multiple=True,
                           cls="w-full text-xs text-slate-500 file:mr-2 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"),
                     Span(f"✓ {ia1_count} students loaded" if ia1_count else "Not uploaded yet",
                          cls=f"text-[10px] font-bold mt-1.5 inline-block px-2 py-0.5 rounded {('bg-green-100 text-green-800' if ia1_count else 'bg-slate-100 text-slate-500')}"),
@@ -7041,7 +7458,7 @@ def page_pdf_to_excel(pdf_report: "PDFExtractionReport", ca: "ClassAnalysis", fi
                 ),
                 Div(
                     Label("IA 2 / Cycle Test 2 Mark Sheet", cls="block text-xs font-semibold text-slate-700 mb-1"),
-                    Input(type="file", name="ia2_file", accept=".mhtml,.mht,.html,.htm,.xlsx,.xls,.csv",
+                    Input(type="file", name="ia2_file", accept=".mhtml,.mht,.html,.htm,.xlsx,.xls,.csv", multiple=True,
                           cls="w-full text-xs text-slate-500 file:mr-2 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"),
                     Span(f"✓ {ia2_count} students loaded" if ia2_count else "Not uploaded yet",
                          cls=f"text-[10px] font-bold mt-1.5 inline-block px-2 py-0.5 rounded {('bg-green-100 text-green-800' if ia2_count else 'bg-slate-100 text-slate-500')}"),
@@ -7049,7 +7466,7 @@ def page_pdf_to_excel(pdf_report: "PDFExtractionReport", ca: "ClassAnalysis", fi
                 ),
                 Div(
                     Label("IA 3 / Cycle Test 3 Mark Sheet", cls="block text-xs font-semibold text-slate-700 mb-1"),
-                    Input(type="file", name="ia3_file", accept=".mhtml,.mht,.html,.htm,.xlsx,.xls,.csv",
+                    Input(type="file", name="ia3_file", accept=".mhtml,.mht,.html,.htm,.xlsx,.xls,.csv", multiple=True,
                           cls="w-full text-xs text-slate-500 file:mr-2 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"),
                     Span(f"✓ {ia3_count} students loaded" if ia3_count else "Not uploaded yet",
                          cls=f"text-[10px] font-bold mt-1.5 inline-block px-2 py-0.5 rounded {('bg-green-100 text-green-800' if ia3_count else 'bg-slate-100 text-slate-500')}"),
@@ -7068,24 +7485,6 @@ def page_pdf_to_excel(pdf_report: "PDFExtractionReport", ca: "ClassAnalysis", fi
             cls="p-5"
         ),
         action="/pdf-to-excel/upload-ia", method="POST", enctype="multipart/form-data", cls="card mb-6 border-l-4 border-l-indigo-600"
-    )
-
-    staff_html_form = Form(
-        Div(
-            H3("Upload Staff Allocation / IA Mark HTML", cls="text-sm font-bold text-slate-800 mb-1"),
-            P("Upload the staff allocation, timetable, or IA mark sheet webpage downloaded as an HTML file (.html, .htm, .mhtml). "
-              "The system will automatically identify the faculty assigned to each subject and prefill the staff name mapping below.",
-              cls="text-xs text-slate-500 mb-3"),
-            Div(
-                Input(type="file", name="staff_html_file", accept=".html,.htm,.mhtml,.mht", required=True,
-                      cls="block w-full text-xs text-slate-500 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 border border-slate-200 rounded-lg p-1 bg-white mb-3 sm:mb-0"),
-                Button("📤 Extract Staff Names from HTML", type="submit",
-                       cls="px-4 py-2 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors whitespace-nowrap"),
-                cls="flex flex-col sm:flex-row items-start sm:items-center gap-3"
-            ),
-            cls="p-5"
-        ),
-        action="/pdf-to-excel/upload-staff-html", method="POST", enctype="multipart/form-data", cls="card mb-4 border-l-4 border-l-blue-600"
     )
 
     ok, issues = validate_export_dataset(ca)
@@ -7116,7 +7515,6 @@ def page_pdf_to_excel(pdf_report: "PDFExtractionReport", ca: "ClassAnalysis", fi
               cls="text-sm text-slate-500 mb-6"),
         ),
         meta_card,
-        staff_html_form,
         staff_form,
         clear_form,
         ia_upload_form,
@@ -7140,7 +7538,7 @@ async def route_upload_pdf(request):
         filename = re.sub(r"[^\w\.\-]", "_", filename)
 
         if not filename.lower().endswith(".pdf"):
-            push_alert("Only .pdf files are accepted. Please upload an official COE Result PDF.", "red")
+            push_alert("Only .pdf files are accepted in Mode A.", "red")
             return RedirectResponse("/upload", status_code=303)
 
         pdf_bytes = await file.read()
@@ -7156,10 +7554,54 @@ async def route_upload_pdf(request):
         SESSION["preview_pdf_bytes"] = pdf_bytes
         SESSION["preview_pdf_filename"] = filename
         SESSION["preview_pdf_report"] = pdf_report
+        SESSION["reconciliation_report"] = None
 
         return page_pdf_preview()
     except Exception as e:
         push_alert(f"PDF extraction error: {e}", "red")
+        return RedirectResponse("/upload", status_code=303)
+
+
+@app.post("/upload-dual")
+async def route_upload_dual(request):
+    try:
+        form = await request.form()
+        file_pdf = form.get("file_pdf")
+        file_excel = form.get("file_excel")
+        if not file_pdf or not file_excel:
+            push_alert("Please select both PDF and Excel files for dual reconciliation.", "red")
+            return RedirectResponse("/upload", status_code=303)
+
+        pdf_bytes = await file_pdf.read()
+        excel_bytes = await file_excel.read()
+
+        pdf_filename = os.path.basename(getattr(file_pdf, "filename", "") or "result.pdf")
+        excel_filename = os.path.basename(getattr(file_excel, "filename", "") or "result.xlsx")
+
+        pdf_report = extract_coe_pdf(pdf_bytes, pdf_filename)
+        if not pdf_report.ok:
+            push_alert(f"PDF error: {pdf_report.fatal_error}", "red")
+            return RedirectResponse("/upload", status_code=303)
+
+        excel_res = validate_and_clean(excel_bytes, excel_filename)
+        if not excel_res.ok:
+            push_alert(f"Excel error: {excel_res.report.fatal_error}", "red")
+            return RedirectResponse("/upload", status_code=303)
+
+        reconcil_report = reconcile_pdf_and_excel(pdf_report.records, excel_res.records)
+
+        SESSION["preview_pdf_bytes"] = pdf_bytes
+        SESSION["preview_pdf_filename"] = pdf_filename
+        SESSION["preview_pdf_report"] = pdf_report
+        SESSION["preview_raw_bytes"] = excel_bytes
+        SESSION["preview_filename"] = excel_filename
+        SESSION["preview_report"] = excel_res.report
+        SESSION["reconciliation_report"] = reconcil_report
+
+        push_alert(f"Dual Reconciliation complete: {reconcil_report.matched_count} matched, {reconcil_report.mismatched_count} mismatches.", "blue")
+        return page_pdf_preview()
+    except Exception as e:
+        push_alert(f"Dual upload error: {e}", "red")
         return RedirectResponse("/upload", status_code=303)
 
 
@@ -7221,36 +7663,8 @@ async def route_pdf_to_excel_save_staff(request):
         key = f"staff__{code}"
         if key in form:
             directory[code] = str(form[key]).strip()
-    push_alert("Staff names saved.", "green")
-    return page_pdf_to_excel(pdf_report, ca, SESSION.get("preview_pdf_filename", "coe_result.pdf"))
-
-
-@app.post("/pdf-to-excel/upload-staff-html")
-async def route_pdf_to_excel_upload_staff_html(request):
-    pdf_report, ca = _get_pdf_to_excel_context()
-    if not pdf_report or not ca:
-        push_alert("Upload a COE PDF first to convert it to a department Excel workbook.", "amber")
-        return RedirectResponse("/upload", status_code=303)
-
-    form = await request.form()
-    file_obj = form.get("staff_html_file")
-    if file_obj and getattr(file_obj, "filename", ""):
-        raw_bytes = await file_obj.read()
-        fname = getattr(file_obj, "filename", "staff.html")
-        extracted = parse_staff_names_from_html(raw_bytes, fname)
-        if extracted:
-            directory = SESSION.setdefault("staff_directory", {})
-            updated_count = 0
-            for code, sname in extracted.items():
-                if sname:
-                    directory[code] = sname
-                    updated_count += 1
-            push_alert(f"Successfully extracted staff names for {updated_count} subject(s) from HTML file.", "green")
-        else:
-            push_alert("No subject/staff mappings could be extracted from the uploaded HTML file.", "amber")
-    else:
-        push_alert("No HTML file selected.", "amber")
-
+    SESSION["staff_verified"] = True
+    push_alert("Staff names saved and verified.", "green")
     return page_pdf_to_excel(pdf_report, ca, SESSION.get("preview_pdf_filename", "coe_result.pdf"))
 
 
@@ -7270,33 +7684,49 @@ async def route_pdf_to_excel_upload_ia(request):
 
     form = await request.form()
     ia_store = SESSION.setdefault("ia_marks_directory", {"ia1": {}, "ia2": {}, "ia3": {}})
-    directory = SESSION.setdefault("staff_directory", {})
     uploaded_counts = []
-    staff_extracted_total = 0
+    has_new_staff = False
 
     for test_key, field_name in [("ia1", "ia1_file"), ("ia2", "ia2_file"), ("ia3", "ia3_file")]:
-        file_obj = form.get(field_name)
-        if file_obj and getattr(file_obj, "filename", ""):
-            raw_bytes = await file_obj.read()
-            if raw_bytes:
-                fname = getattr(file_obj, "filename", "marks.mhtml")
-                parsed_marks, _titles = parse_ia_marks_content(raw_bytes, fname)
-                if parsed_marks:
-                    ia_store[test_key] = parsed_marks
-                    uploaded_counts.append(f"{test_key.upper()} ({len(parsed_marks)} students)")
-                
-                # Also extract staff names if present in HTML mark sheet
-                extracted_staff = parse_staff_names_from_html(raw_bytes, fname)
-                for code, sname in extracted_staff.items():
-                    if sname:
-                        directory[code] = sname
-                        staff_extracted_total += 1
+        file_objs = form.getlist(field_name)
+        merged_marks = dict(ia_store.get(test_key, {}))
+        processed_files_count = 0
+
+        for file_obj in file_objs:
+            if file_obj and getattr(file_obj, "filename", ""):
+                raw_bytes = await file_obj.read()
+                if raw_bytes:
+                    fname = getattr(file_obj, "filename", "marks.mhtml")
+                    parsed_marks, _titles, parsed_staff = parse_ia_marks_content(raw_bytes, fname)
+                    if parsed_marks:
+                        merged_marks.update(parsed_marks)
+                        processed_files_count += 1
+                    if parsed_staff:
+                        staff_directory = SESSION.setdefault("staff_directory", {})
+                        for code, staff_name in parsed_staff.items():
+                            staff_name = staff_name.strip()
+                            if not staff_name:
+                                continue
+                            existing_staff = staff_directory.get(code, "").strip()
+                            if not existing_staff:
+                                staff_directory[code] = staff_name
+                                has_new_staff = True
+                            else:
+                                existing_names = [s.strip() for s in existing_staff.split(" & ")]
+                                if staff_name not in existing_names:
+                                    staff_directory[code] = f"{existing_staff} & {staff_name}"
+                                    has_new_staff = True
+
+        if merged_marks:
+            ia_store[test_key] = merged_marks
+            if processed_files_count > 0:
+                uploaded_counts.append(f"{test_key.upper()} ({len(merged_marks)} students from {processed_files_count} file(s))")
 
     if uploaded_counts:
-        msg = f"Successfully processed IA mark sheets: {', '.join(uploaded_counts)}."
-        if staff_extracted_total > 0:
-            msg += f" (Extracted staff names for {staff_extracted_total} subject(s))."
-        push_alert(msg, "green")
+        push_alert(f"Successfully processed IA mark sheets: {', '.join(uploaded_counts)}.", "green")
+        if has_new_staff:
+            SESSION["staff_verified"] = False
+            push_alert("Staff names extracted from cycle test mark sheet(s). Please manually verify them below and click 'Save Staff Names' to confirm.", "amber")
     else:
         push_alert("No valid IA mark sheet files were uploaded.", "amber")
 
@@ -7332,6 +7762,136 @@ def route_pdf_to_excel_download():
     )
 
 
+
+@app.post("/upload-preview")
+async def route_upload_preview(request):
+    try:
+        form = await request.form()
+        file = form.get("file")
+        if file is None:
+            push_alert("No file selected.", "red")
+            return RedirectResponse("/upload", status_code=303)
+
+        raw_filename = getattr(file, "filename", "") or ""
+        filename = os.path.basename(raw_filename)
+        filename = re.sub(r"[^\w\.\-]", "_", filename)
+
+        if not filename.lower().endswith(".xlsx"):
+            push_alert("Only .xlsx files are accepted.", "red")
+            return RedirectResponse("/upload", status_code=303)
+
+        max_bytes = CFG["max_upload_mb"] * 1024 * 1024
+        chunks = []
+        total_size = 0
+        while True:
+            chunk = await file.read(64 * 1024)
+            if not chunk:
+                break
+            total_size += len(chunk)
+            if total_size > max_bytes:
+                push_alert(f"File exceeds maximum allowed size of {CFG['max_upload_mb']} MB.", "red")
+                return RedirectResponse("/upload", status_code=303)
+            chunks.append(chunk)
+
+        data = b"".join(chunks)
+        if not data:
+            push_alert("Uploaded file is empty.", "red")
+            return RedirectResponse("/upload", status_code=303)
+
+        df, report = _read_workbook(data)
+        if report.has_fatal():
+            push_alert(report.fatal_error, "red")
+            return RedirectResponse("/upload", status_code=303)
+
+        cols = [str(c) for c in df.columns.tolist()]
+        mapping = _columns_to_targets(cols)
+        report.mapped_columns = mapping
+
+        full_res = validate_and_clean(data, filename, mapping)
+
+        SESSION["preview_raw_bytes"] = data
+        SESSION["preview_filename"] = filename
+        SESSION["preview_cols"] = cols
+        SESSION["preview_report"] = full_res.report
+
+        return page_upload_mapping()
+    except Exception as e:
+        push_alert(f"File analysis error: {e}", "red")
+        return RedirectResponse("/upload", status_code=303)
+
+
+@app.post("/upload-confirm")
+async def route_upload_confirm(request):
+    try:
+        start_t = time.time()
+        data = SESSION.get("preview_raw_bytes")
+        filename = SESSION.get("preview_filename", "result.xlsx")
+        if not data:
+            push_alert("Upload session expired. Please re-upload your file.", "amber")
+            return RedirectResponse("/upload", status_code=303)
+
+        form = await request.form()
+        custom_mapping = {}
+        for f in REQUIRED_FIELDS + OPTIONAL_FIELDS:
+            val = form.get(f"map_{f}", "").strip()
+            if val:
+                custom_mapping[f] = val
+
+        result = validate_and_clean(data, filename, custom_mapping)
+
+        if not result.ok:
+            SESSION["records"] = None
+            SESSION["analytics"] = None
+            SESSION["validation"] = result.report
+            push_alert(f"Validation error: {result.report.fatal_error}", "red")
+            return RedirectResponse("/upload", status_code=303)
+
+        ca = compute_class_analysis(result.records, filename)
+        ca.subject_mappings = result.report.subject_mappings
+        ca.quarantined_tokens = result.report.quarantined_tokens
+        ca.copy_paste_cleaned_count = result.report.copy_paste_cleaned_count
+        ca.format_detected = result.report.format_detected
+
+        SESSION["records"] = result.records
+        SESSION["analytics"] = ca
+        SESSION["file_name"] = filename
+        SESSION["validation"] = result.report
+        SESSION["ptm_briefs"] = {}
+        SESSION["analysis_duration"] = round(time.time() - start_t, 2)
+
+        msg = f"Successfully processed {result.report.valid_records} records for {ca.student_count} students across {ca.subject_count} subjects in {SESSION['analysis_duration']}s."
+        if result.report.copy_paste_cleaned_count > 0:
+            msg += f" (Sanitized {result.report.copy_paste_cleaned_count} PDF copy-paste formatting anomalies)."
+        push_alert(msg, "green")
+        return RedirectResponse("/dashboard", status_code=303)
+    except Exception as e:
+        push_alert(f"Processing error: {e}", "red")
+        return RedirectResponse("/upload", status_code=303)
+
+
+@app.post("/alias-override")
+async def route_alias_override(request):
+    try:
+        form = await request.form()
+        raw_token = form.get("raw_token", "").strip()
+        canonical_target = form.get("canonical_target", "").strip()
+        if raw_token and canonical_target:
+            overrides = SESSION.get("custom_alias_overrides", {})
+            overrides[raw_token.upper()] = canonical_target
+            SESSION["custom_alias_overrides"] = overrides
+            push_alert(f"Added custom alias override: '{raw_token}' → '{canonical_target}'. Re-analyzing spreadsheet...", "green")
+            
+            data = SESSION.get("preview_raw_bytes")
+            filename = SESSION.get("preview_filename", "result.xlsx")
+            if data:
+                full_res = validate_and_clean(data, filename, overrides)
+                SESSION["preview_report"] = full_res.report
+        return RedirectResponse("/upload-preview", status_code=303)
+    except Exception as e:
+        push_alert(f"Alias override error: {e}", "red")
+        return RedirectResponse("/upload-preview", status_code=303)
+
+
 @app.post("/reset")
 def route_reset():
     SESSION["records"] = None
@@ -7339,6 +7899,8 @@ def route_reset():
     SESSION["validation"] = None
     SESSION["preview_raw_bytes"] = None
     SESSION["ptm_briefs"] = {}
+    SESSION["staff_directory"] = {}
+    SESSION["staff_verified"] = False
     push_alert("Session cleared. Upload a new file to begin.", "blue")
     return RedirectResponse("/", status_code=303)
 
