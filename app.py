@@ -1461,6 +1461,8 @@ def build_department_excel(
     staff_map: Dict[str, str],
     source_filename: str = "",
     ia_marks_dir: Optional[Dict[str, Dict[str, Dict[str, Any]]]] = None,
+    prev_ca: Optional["ClassAnalysis"] = None,
+    prev_pdf_report: Optional["PDFExtractionReport"] = None,
 ) -> bytes:
     """
     Build the departmental official result-analysis workbook: Analysis 1_New, 2_New,
@@ -1574,6 +1576,44 @@ def build_department_excel(
              value="Note: Absent-count is not separately tracked by COE PDF extraction; shown as 0 rather than fabricated.")
     ws1.merge_cells(start_row=r, start_column=1, end_row=r, end_column=ncols1)
     ws1.cell(row=r, column=1).font = NOTE_FONT
+
+    # Add Overall Pass Percentage from 1.txt if exists
+    try:
+        current_dir = os.path.dirname(__file__)
+        path_1 = os.path.join(current_dir, "1.txt")
+        if os.path.exists(path_1):
+            r_val = r + 2
+            with open(path_1, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    parts = line.split("\t")
+                    if len(parts) >= 2:
+                        key, val = parts[0], parts[1]
+                        ws1.cell(row=r_val, column=3, value=key)
+                        try:
+                            val_float = float(val)
+                            val_cell = ws1.cell(row=r_val, column=4, value=val_float)
+                            val_cell.number_format = '0.00'
+                        except ValueError:
+                            ws1.cell(row=r_val, column=4, value=val)
+                        
+                        # Style the row cells with border and bold font
+                        for col_idx in range(1, ncols1 + 1):
+                            cell = ws1.cell(row=r_val, column=col_idx)
+                            cell.border = BORDER
+                            if col_idx in (3, 4):
+                                cell.font = Font(bold=True, size=10, color="0F1B33")
+                                if col_idx == 3:
+                                    cell.alignment = Alignment(horizontal="left", vertical="center")
+                                else:
+                                    cell.alignment = Alignment(horizontal="center", vertical="center")
+                        r_val += 1
+            r = r_val - 1
+    except Exception as e:
+        print(f"Error reading 1.txt: {e}")
+
     ws1.column_dimensions["A"].width = 6
     ws1.column_dimensions["B"].width = 14
     ws1.column_dimensions["C"].width = 34
@@ -1585,16 +1625,141 @@ def build_department_excel(
     # Analysis 2 - Comparison of Previous Batch Results
     # ---------------------------------------------------------------
     ws2 = wb.create_sheet("Analysis 2_New")
-    start_row = title_block(ws2, 6, [programme_line, ay_line, session_line],
+    ncols2 = 6
+    start_row = title_block(ws2, ncols2, [programme_line, ay_line, session_line],
                              "ANALYSIS 2 - COMPARISON OF PREVIOUS BATCH RESULTS")
-    ws2.merge_cells(start_row=start_row, start_column=1, end_row=start_row, end_column=6)
-    cell = ws2.cell(row=start_row, column=1,
-                     value="Previous batch comparison data is not available in the uploaded COE PDF.")
-    cell.font = Font(italic=True, bold=True, size=10, color="B45309")
-    cell.alignment = CENTER
-    for c in range(1, 7):
-        ws2.column_dimensions[get_column_letter(c)].width = 20
-    page_setup(ws2, 6, start_row, landscape=False)
+    
+    def calc_batch_stats(c_analysis: Optional["ClassAnalysis"]) -> Dict[str, Any]:
+        if not c_analysis:
+            return {
+                "total": "N/A", "appeared": "N/A", "passed": "N/A", "failed": "N/A",
+                "pass_pct": "N/A", "u1": "N/A", "u2": "N/A", "u3": "N/A", "u4": "N/A",
+                "u5_plus": "N/A", "wh": "N/A"
+            }
+        st_count = c_analysis.student_count
+        app_count = max(0, st_count - getattr(c_analysis, "sa_student_count", 0))
+        pass_c = getattr(c_analysis, "cleared_count", 0)
+        fail_c = getattr(c_analysis, "arrear_student_count", 0)
+        p_pct = round(c_analysis.pass_rate, 2) if c_analysis.pass_rate is not None else 0.0
+        
+        u1 = sum(1 for s in c_analysis.students if (s.u_count + s.ra_count + s.ua_count) == 1)
+        u2 = sum(1 for s in c_analysis.students if (s.u_count + s.ra_count + s.ua_count) == 2)
+        u3 = sum(1 for s in c_analysis.students if (s.u_count + s.ra_count + s.ua_count) == 3)
+        u4 = sum(1 for s in c_analysis.students if (s.u_count + s.ra_count + s.ua_count) == 4)
+        u5_plus = sum(1 for s in c_analysis.students if (s.u_count + s.ra_count + s.ua_count) >= 5)
+        wh = sum(1 for s in c_analysis.students if getattr(s, "wh2_count", 0) > 0 or getattr(s, "mm_count", 0) > 0)
+        
+        return {
+            "total": st_count, "appeared": app_count, "passed": pass_c, "failed": fail_c,
+            "pass_pct": p_pct, "u1": u1, "u2": u2, "u3": u3, "u4": u4,
+            "u5_plus": u5_plus, "wh": wh
+        }
+
+    curr_stats = calc_batch_stats(ca)
+    prev_stats = calc_batch_stats(prev_ca)
+
+    r = start_row
+    # Summary Header
+    ws2.cell(row=r, column=2, value="BATCH: previous")
+    ws2.cell(row=r, column=3, value="OVERALL METRICS")
+    ws2.cell(row=r, column=4, value="BATCH: current")
+    style_header_row(ws2, r, ncols2)
+    r += 1
+
+    metrics_rows = [
+        ("Total Strength", "total"),
+        ("No. of Students appeared", "appeared"),
+        ("No. of Students passed", "passed"),
+        ("No. of Students failed", "failed"),
+        ("Percentage of Pass", "pass_pct"),
+        ("One Arrear", "u1"),
+        ("Two Arrear", "u2"),
+        ("Three Arrear", "u3"),
+        ("Four Arrear", "u4"),
+        ("Five Arrear & More", "u5_plus"),
+        ("Withheld", "wh"),
+    ]
+
+    for label, key in metrics_rows:
+        pv = prev_stats[key]
+        cv = curr_stats[key]
+        ws2.cell(row=r, column=2, value=pv)
+        ws2.cell(row=r, column=3, value=label)
+        ws2.cell(row=r, column=4, value=cv)
+        style_body_row(ws2, r, ncols2)
+        
+        if key == "pass_pct":
+            if isinstance(pv, float): ws2.cell(row=r, column=2).number_format = '0.00'
+            if isinstance(cv, float): ws2.cell(row=r, column=4).number_format = '0.00'
+            
+        ws2.cell(row=r, column=3).alignment = LEFT_WRAP
+        ws2.cell(row=r, column=3).font = Font(bold=True, size=9)
+        r += 1
+
+    r += 1 # Spacer row
+
+    # 2. Subject-by-Subject Comparison Block
+    ws2.merge_cells(start_row=r, start_column=1, end_row=r, end_column=2)
+    ws2.cell(row=r, column=1, value="BATCH: previous")
+    ws2.merge_cells(start_row=r, start_column=3, end_row=r, end_column=6)
+    ws2.cell(row=r, column=3, value="Batch current")
+    style_header_row(ws2, r, ncols2)
+    r += 1
+
+    sub_headers = ["Pass %", "Subject Name*", "Sub. code", "Subject Name", "Staff Name", "Pass%"]
+    for c_idx, sh in enumerate(sub_headers, start=1):
+        ws2.cell(row=r, column=c_idx, value=sh)
+    style_header_row(ws2, r, ncols2)
+    r += 1
+
+    prev_subj_map: Dict[str, Any] = {}
+    if prev_ca and prev_ca.subjects:
+        for ps in prev_ca.subjects:
+            code_c = re.sub(r"[^A-Z0-9]", "", ps.course_code.upper())
+            name_c = re.sub(r"[^A-Z0-9]", "", ps.subject.upper())
+            prev_subj_map[ps.course_code.upper()] = ps
+            prev_subj_map[code_c] = ps
+            prev_subj_map[name_c] = ps
+
+    for i, m in enumerate(mappings, start=1):
+        c_code = m["course_code"]
+        curr_s = code_to_subj.get(c_code)
+        c_name = m["official_subject_name"]
+        c_staff = code_to_staff.get(c_code, "") or "(Staff name not entered)"
+        c_pass = round(curr_s.pass_pct, 2) if curr_s and curr_s.pass_pct is not None else 0.0
+
+        p_pass = "N/A"
+        p_name = "N/A"
+        if prev_subj_map:
+            c_code_clean = re.sub(r"[^A-Z0-9]", "", c_code.upper())
+            c_name_clean = re.sub(r"[^A-Z0-9]", "", c_name.upper())
+            matched_ps = prev_subj_map.get(c_code.upper()) or prev_subj_map.get(c_code_clean) or prev_subj_map.get(c_name_clean)
+            if matched_ps:
+                p_name = f"{matched_ps.course_code} - {matched_ps.subject}"
+                p_pass = round(matched_ps.pass_pct, 2) if matched_ps.pass_pct is not None else 0.0
+
+        p_pass_cell = ws2.cell(row=r, column=1, value=p_pass)
+        if isinstance(p_pass, float): p_pass_cell.number_format = '0.00'
+        ws2.cell(row=r, column=2, value=p_name)
+        ws2.cell(row=r, column=3, value=c_code)
+        ws2.cell(row=r, column=4, value=c_name)
+        ws2.cell(row=r, column=5, value=c_staff)
+        c_pass_cell = ws2.cell(row=r, column=6, value=c_pass)
+        if isinstance(c_pass, float): c_pass_cell.number_format = '0.00'
+
+        style_body_row(ws2, r, ncols2)
+        ws2.cell(row=r, column=2).alignment = LEFT_WRAP
+        ws2.cell(row=r, column=4).alignment = LEFT_WRAP
+        ws2.cell(row=r, column=5).alignment = LEFT_WRAP
+        r += 1
+
+    ws2.column_dimensions["A"].width = 12
+    ws2.column_dimensions["B"].width = 30
+    ws2.column_dimensions["C"].width = 14
+    ws2.column_dimensions["D"].width = 32
+    ws2.column_dimensions["E"].width = 22
+    ws2.column_dimensions["F"].width = 12
+    page_setup(ws2, ncols2, r, landscape=True, freeze=f"C{start_row + 15}")
 
     # ---------------------------------------------------------------
     # Analysis 3 - Result Analysis of Failed Students
@@ -1639,9 +1804,13 @@ def build_department_excel(
     # Analysis 4 - Internal Assessment Marks of Failed Students
     # ---------------------------------------------------------------
     ws4 = wb.create_sheet("Analysis 4_New")
-    headers4 = ["S.No.", "REGISTER NUMBER", "NAME OF THE STUDENT", "BATCH NO", "SUBJECT CODE", "SUBJECT NAME", "IA-1 MARK", "IA-2 MARK", "IA-3 MARK", "AVERAGE IA"]
+    headers4 = [
+        "S. No", "STAFF NAME", "SUB. CODE", "SUBJECT NAME", "NO.OF FAILURES",
+        "REGISTER NUMBER", "NAME OF THE STUDENT", "QUOTA",
+        "IAT 1", "MUT 1", "IAT 2", "MUT 2", "IAT 3"
+    ]
     ncols4 = len(headers4)
-    start_row = title_block(ws4, ncols4, [programme_line, ay_line, session_line],
+    start_row = title_block(ws4, ncols4, [programme_line, ay_line, session_line, "MARK SCALE: OUT OF 100"],
                              "ANALYSIS 4 - INTERNAL ASSESSMENT MARKS OF FAILED STUDENTS")
     for c, h in enumerate(headers4, start=1):
         ws4.cell(row=start_row, column=c, value=h)
@@ -1652,22 +1821,14 @@ def build_department_excel(
     ia1_dict = ia_data.get("ia1", {})
     ia2_dict = ia_data.get("ia2", {})
     ia3_dict = ia_data.get("ia3", {})
+    mut1_dict = ia_data.get("mut1", {})
+    mut2_dict = ia_data.get("mut2", {})
 
     s_no = 0
     for s in ca.students:
         arrear_courses = [c for c in s.courses if c.grade in ARREAR_GRADES]
         if not arrear_courses:
             continue
-
-        # Extract student batch number
-        batch_no = s.meta.get("batch", "")
-        if not batch_no:
-            for ia_dict in (ia1_dict, ia2_dict, ia3_dict):
-                if s.regno in ia_dict and ia_dict[s.regno].get("batch_no"):
-                    batch_no = ia_dict[s.regno]["batch_no"]
-                    break
-        if not batch_no:
-            batch_no = "N/A"
 
         for c in arrear_courses:
             s_no += 1
@@ -1683,34 +1844,35 @@ def build_department_excel(
                         return str(v)
                 return "N/A"
 
-            mark1 = get_mark(ia1_dict, s.regno, code_key)
-            mark2 = get_mark(ia2_dict, s.regno, code_key)
-            mark3 = get_mark(ia3_dict, s.regno, code_key)
+            mark_iat1 = get_mark(ia1_dict, s.regno, code_key)
+            mark_mut1 = get_mark(mut1_dict, s.regno, code_key)
+            mark_iat2 = get_mark(ia2_dict, s.regno, code_key)
+            mark_mut2 = get_mark(mut2_dict, s.regno, code_key)
+            mark_iat3 = get_mark(ia3_dict, s.regno, code_key)
 
-            num_marks = []
-            for m_val in (mark1, mark2, mark3):
-                try:
-                    num_marks.append(float(m_val))
-                except ValueError:
-                    pass
-            avg_ia = round(sum(num_marks) / len(num_marks), 2) if num_marks else "N/A"
+            staff_name = code_to_staff.get(c.course_code, "") or "(Staff name not entered)"
+            subj_obj = code_to_subj.get(c.course_code)
+            num_failures = subj_obj.arrear_count if subj_obj else 0
+            quota = s.meta.get("quota", "N/A")
 
             ws4.cell(row=r, column=1, value=s_no)
-            ws4.cell(row=r, column=2, value=s.regno)
-            ws4.cell(row=r, column=3, value=s.name)
-            ws4.cell(row=r, column=4, value=batch_no)
-            ws4.cell(row=r, column=5, value=c.course_code)
-            ws4.cell(row=r, column=6, value=c.subject)
-            ws4.cell(row=r, column=7, value=mark1)
-            ws4.cell(row=r, column=8, value=mark2)
-            ws4.cell(row=r, column=9, value=mark3)
-            
-            avg_cell = ws4.cell(row=r, column=10, value=avg_ia)
-            if isinstance(avg_ia, float):
-                avg_cell.number_format = '0.00'
+            ws4.cell(row=r, column=2, value=staff_name)
+            ws4.cell(row=r, column=3, value=c.course_code)
+            ws4.cell(row=r, column=4, value=c.subject)
+            ws4.cell(row=r, column=5, value=num_failures)
+            ws4.cell(row=r, column=6, value=s.regno)
+            ws4.cell(row=r, column=7, value=s.name)
+            ws4.cell(row=r, column=8, value=quota)
+            ws4.cell(row=r, column=9, value=mark_iat1)
+            ws4.cell(row=r, column=10, value=mark_mut1)
+            ws4.cell(row=r, column=11, value=mark_iat2)
+            ws4.cell(row=r, column=12, value=mark_mut2)
+            ws4.cell(row=r, column=13, value=mark_iat3)
 
             style_body_row(ws4, r, ncols4)
-            ws4.cell(row=r, column=6).alignment = LEFT_WRAP
+            ws4.cell(row=r, column=2).alignment = LEFT_WRAP
+            ws4.cell(row=r, column=4).alignment = LEFT_WRAP
+            ws4.cell(row=r, column=7).alignment = LEFT_WRAP
             r += 1
 
     if s_no == 0:
@@ -1718,22 +1880,25 @@ def build_department_excel(
         ws4.cell(row=r, column=1, value="No students with academic arrears (U / RA) were found.")
         r += 1
     elif not ia1_dict and not ia2_dict and not ia3_dict:
-        ws4.cell(row=r, column=1, value="Note: Internal Assessment (Cycle Test) mark sheets can be uploaded on the PDF-to-Excel page to populate IA 1, IA 2, and IA 3 marks.")
+        ws4.cell(row=r, column=1, value="Note: Internal Assessment (Cycle Test) mark sheets can be uploaded on the PDF-to-Excel page to populate IAT 1, MUT 1, IAT 2, MUT 2, and IAT 3 marks.")
         ws4.merge_cells(start_row=r, start_column=1, end_row=r, end_column=ncols4)
         ws4.cell(row=r, column=1).font = NOTE_FONT
         r += 1
 
     ws4.column_dimensions["A"].width = 6
-    ws4.column_dimensions["B"].width = 16
-    ws4.column_dimensions["C"].width = 26
-    ws4.column_dimensions["D"].width = 12
+    ws4.column_dimensions["B"].width = 22
+    ws4.column_dimensions["C"].width = 14
+    ws4.column_dimensions["D"].width = 30
     ws4.column_dimensions["E"].width = 14
-    ws4.column_dimensions["F"].width = 32
-    ws4.column_dimensions["G"].width = 12
-    ws4.column_dimensions["H"].width = 12
-    ws4.column_dimensions["I"].width = 12
-    ws4.column_dimensions["J"].width = 14
-    page_setup(ws4, ncols4, r, landscape=True, freeze=f"E{start_row + 1}")
+    ws4.column_dimensions["F"].width = 16
+    ws4.column_dimensions["G"].width = 26
+    ws4.column_dimensions["H"].width = 10
+    ws4.column_dimensions["I"].width = 10
+    ws4.column_dimensions["J"].width = 10
+    ws4.column_dimensions["K"].width = 10
+    ws4.column_dimensions["L"].width = 10
+    ws4.column_dimensions["M"].width = 10
+    page_setup(ws4, ncols4, r, landscape=True, freeze=f"F{start_row + 1}")
 
 
     # ---------------------------------------------------------------
@@ -1990,7 +2155,58 @@ def build_department_excel(
     ws7.column_dimensions["C"].width = 26
     for c in range(4, ncols7 + 1):
         ws7.column_dimensions[get_column_letter(c)].width = 9
-    page_setup(ws7, ncols7, r + 16, landscape=True, freeze=f"D{hdr_bot + 1}")
+
+    # Add class metrics from 7.txt if exists
+    last_row_7 = r + 16
+    try:
+        current_dir = os.path.dirname(__file__)
+        path_7 = os.path.join(current_dir, "7.txt")
+        if os.path.exists(path_7):
+            r_val_7 = r + 18
+            with open(path_7, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    parts = line.split("\t")
+                    if len(parts) >= 2:
+                        key, val = parts[0], parts[1]
+                        ws7.cell(row=r_val_7, column=3, value=key)
+                        try:
+                            val_num = int(val)
+                            ws7.cell(row=r_val_7, column=4, value=val_num)
+                        except ValueError:
+                            try:
+                                val_num = float(val)
+                                val_cell = ws7.cell(row=r_val_7, column=4, value=val_num)
+                                val_cell.number_format = '0.00'
+                            except ValueError:
+                                ws7.cell(row=r_val_7, column=4, value=val)
+                        
+                        # Style the row cells
+                        style_body_row(ws7, r_val_7, ncols7)
+                        
+                        # Bold and left-align the key in Column 3
+                        cell_key = ws7.cell(row=r_val_7, column=3)
+                        cell_key.font = summary_font
+                        cell_key.alignment = Alignment(horizontal="left", vertical="center")
+                        
+                        # Bold and center-align the value in Column 4
+                        cell_val = ws7.cell(row=r_val_7, column=4)
+                        cell_val.font = summary_font
+                        cell_val.alignment = Alignment(horizontal="center", vertical="center")
+                        
+                        # Style other cells in that row to have summary font
+                        for c in range(1, ncols7 + 1):
+                            if c not in (3, 4):
+                                cell = ws7.cell(row=r_val_7, column=c)
+                                cell.font = summary_font
+                        r_val_7 += 1
+            last_row_7 = r_val_7 - 1
+    except Exception as e:
+        print(f"Error reading 7.txt: {e}")
+
+    page_setup(ws7, ncols7, last_row_7, landscape=True, freeze=f"D{hdr_bot + 1}")
 
     # ---------------------------------------------------------------
     # Hidden metadata sheet - PDF provenance (section 19)
@@ -3831,17 +4047,17 @@ def reset_plotly_flag() -> None:
 
 def _default_layout(fig: go.Figure, height: Optional[int] = None) -> go.Figure:
     fig.update_layout(
-        template="plotly_white",
-        font=dict(family="Inter, ui-sans-serif, system-ui, sans-serif", size=12, color="#1e293b"),
+        template="plotly_dark",
+        font=dict(family="Inter, JetBrains Mono, system-ui, sans-serif", size=12, color="#cbd5e1"),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
         margin=dict(l=40, r=20, t=48, b=40),
         height=height or 360,
-        title_font_size=15,
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
-        hoverlabel=dict(bgcolor="#0f1b33", font_color="white", font_size=12),
-        xaxis=dict(gridcolor="#eef2f7", zeroline=False),
-        yaxis=dict(gridcolor="#eef2f7", zeroline=False),
+        title_font=dict(family="Inter", size=15, color="#f8fafc"),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0, font=dict(color="#94a3b8")),
+        hoverlabel=dict(bgcolor="#0f172a", font_color="#00f0ff", font_size=12, bordercolor="rgba(0, 240, 255, 0.4)"),
+        xaxis=dict(gridcolor="rgba(255, 255, 255, 0.08)", zeroline=False, tickfont=dict(color="#94a3b8")),
+        yaxis=dict(gridcolor="rgba(255, 255, 255, 0.08)", zeroline=False, tickfont=dict(color="#94a3b8")),
     )
     return fig
 
@@ -5090,6 +5306,17 @@ def data_table(headers: List[str], rows: List, sortable: bool = False, table_id:
 
 
 def sidebar(active: str, ca: Optional[ClassAnalysis] = None) -> Div:
+    ICONS = {
+        "upload": '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>',
+        "dashboard": '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1" stroke-linecap="round" stroke-linejoin="round"/><rect x="14" y="3" width="7" height="7" rx="1" stroke-linecap="round" stroke-linejoin="round"/><rect x="3" y="14" width="7" height="7" rx="1" stroke-linecap="round" stroke-linejoin="round"/><rect x="14" y="14" width="7" height="7" rx="1" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+        "students": '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>',
+        "subjects": '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>',
+        "attention": '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>',
+        "rankings": '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>',
+        "ai-insights": '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>',
+        "reports": '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>',
+    }
+
     items = [
         ("/upload", "Upload", "upload"),
         ("/dashboard", "Dashboard", "dashboard"),
@@ -5106,6 +5333,7 @@ def sidebar(active: str, ca: Optional[ClassAnalysis] = None) -> Div:
         active_cls = "active" if is_active else ""
         nav_items.append(
             A(
+                NotStr(ICONS.get(key, "")),
                 Span(label, cls="sidebar-text"),
                 href=href,
                 cls=f"sidebar-link {active_cls}",
@@ -5115,16 +5343,41 @@ def sidebar(active: str, ca: Optional[ClassAnalysis] = None) -> Div:
 
     return Div(
         Div(
+            # College Brand Header
             Div(
-                H3(CFG["app_title"], cls="text-white font-bold text-sm tracking-wide"),
-                Span(CFG["app_version"], cls="inline-block px-2 py-0.5 mt-1 bg-blue-500/20 text-blue-300 text-[10px] font-semibold rounded-full border border-blue-400/30"),
-                P(CFG["app_subtitle"], cls="text-slate-400 text-[10px] mt-1"),
-                cls="px-5 pt-6 pb-4 border-b border-white/10 mb-2"
+                Img(src="/logo", alt="Saranathan College of Engineering", cls="sidebar-brand-logo"),
+                Span("SARANATHAN", cls="sidebar-brand-name"),
+                Span("COLLEGE OF ENGINEERING", cls="sidebar-brand-sub"),
+                Span("TIRUCHIRAPPALLI", cls="sidebar-brand-city"),
+                Div(
+                    Span(CFG["app_title"], cls="portal-name"),
+                    Span(f"{CFG['app_version']} · R2024 Compatible", cls="portal-ver"),
+                    cls="sidebar-portal-label"
+                ),
+                cls="sidebar-brand"
             ),
-            *nav_items,
+            # Navigation
+            Div(
+                Span("NAVIGATION", cls="sidebar-nav-label"),
+                *nav_items,
+                cls="sidebar-nav-section"
+            ),
+            # User Profile Footer
+            Div(
+                Div(
+                    Div("F", cls="sidebar-avatar"),
+                    Div(
+                        Span("Faculty", cls="sidebar-user-name"),
+                        Span("AI & Data Science", cls="sidebar-user-role"),
+                    ),
+                    cls="sidebar-user"
+                ),
+                cls="sidebar-footer"
+            ),
             cls="sidebar hidden lg:flex flex-col w-64 min-h-screen fixed left-0 top-0"
         ),
     )
+
 
 
 def mobile_header(active: str) -> Div:
@@ -5141,23 +5394,30 @@ def mobile_header(active: str) -> Div:
     links = []
     for href, label, key in items:
         is_active = active == key
-        active_cls = "bg-white/10 text-white" if is_active else "text-slate-300"
-        links.append(A(label, href=href, cls=f"block px-4 py-2.5 text-sm font-medium {active_cls} hover:bg-white/5 hover:text-white"))
+        active_cls = "bg-blue-50 text-blue-700 font-semibold" if is_active else "text-slate-600"
+        links.append(A(label, href=href, cls=f"block px-4 py-2.5 text-sm font-medium {active_cls} hover:bg-slate-50 hover:text-slate-900 transition-colors"))
     return Div(
         Div(
-            Button("☰", onclick="document.getElementById('mobnav').classList.toggle('hidden')",
-                   cls="text-white text-lg p-2 hover:bg-white/10 rounded-lg",
-                   aria_label="Toggle Navigation"),
-            Div(
-                Span(CFG["app_title"], cls="text-sm font-bold text-white block"),
-                Span(f"{CFG['app_version']} · Regulations 2024 Compatible", cls="text-[10px] text-slate-300 block"),
-                cls="flex-1"
+            Button(
+                NotStr('<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" style="width:20px;height:20px"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"/></svg>'),
+                onclick="document.getElementById('mobnav').classList.toggle('hidden')",
+                cls="p-2 hover:bg-slate-100 rounded-lg text-slate-600 border-0 bg-transparent shadow-none",
+                aria_label="Toggle Navigation"
             ),
-            cls="flex items-center gap-3 px-4 py-3 mobile-nav"
+            Div(
+                Img(src="/logo", alt="SCE", style="width:32px;height:32px;border-radius:50%;border:1px solid #e5eaf3;object-fit:contain;"),
+                Div(
+                    Span(CFG["app_title"], cls="text-sm font-bold text-slate-900 block leading-tight"),
+                    Span("Saranathan College of Engineering", cls="text-[10px] text-slate-500 block"),
+                ),
+                cls="flex items-center gap-2 flex-1"
+            ),
+            cls="flex items-center gap-3 px-4 py-3 mobile-header-bar mobile-nav"
         ),
-        Div(*links, id="mobnav", cls="hidden bg-navy-800 pb-2 lg:hidden"),
+        Div(*links, id="mobnav", cls="hidden bg-white border-b border-slate-200 pb-2 lg:hidden shadow-sm"),
         cls="lg:hidden"
     )
+
 
 
 def layout(title: str, active: str, content, ca: Optional[ClassAnalysis] = None) -> Tuple:
@@ -5213,42 +5473,189 @@ def layout(title: str, active: str, content, ca: Optional[ClassAnalysis] = None)
 
 def page_upload() -> Tuple:
     return layout("Upload", "upload", Div(
-        # Top Navigation / Hero Header
+        # ── TOP HEADER BAR ──────────────────────────────────────────────
         Div(
             Div(
-                Span("Faculty Grade Analytics Portal", cls="text-xs font-bold uppercase tracking-wider text-blue-600 bg-blue-50 px-3 py-1 rounded-full border border-blue-200 inline-block mb-3"),
-                Span("R2024 • AI & Data Science", cls="ml-2 text-xs font-medium text-slate-500"),
+                Span("FACULTY GRADE ANALYTICS PORTAL", cls="text-[11px] font-extrabold uppercase tracking-wider text-blue-700 bg-blue-50 px-3.5 py-1 rounded-full border border-blue-200/80 inline-block shadow-2xs"),
+                Span("R2024 • AI & Data Science", cls="ml-3 text-xs font-medium text-slate-500"),
+                cls="flex items-center"
             ),
-            H1("Turn COE Results into Actionable Academic Insights", cls="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight mb-3"),
-            P("Upload official COE result PDFs or Excel spreadsheets. Automatically parse records, identify U/RA arrears, map subjects to the R2024 syllabus, and generate faculty-ready analytics.",
-              cls="text-slate-600 text-base max-w-2xl mx-auto leading-relaxed mb-8"),
-            cls="text-center max-w-3xl mx-auto mb-10"
+            Div(
+                # Light/Dark Theme Toggle
+                Button(
+                    NotStr('<svg id="theme-toggle-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" style="width:15px;height:15px;"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg>'),
+                    id="theme-toggle-btn",
+                    onclick="toggleTheme()",
+                    title="Toggle dark / light mode",
+                    cls="w-8 h-8 rounded-full border border-slate-200 bg-white hover:bg-slate-50 flex items-center justify-center cursor-pointer transition-all"
+                ),
+                # User Profile Avatar Dropdown Pill
+                Div(
+                    Div("AD", cls="w-7 h-7 rounded-full bg-blue-600 text-white font-extrabold text-[11px] flex items-center justify-center shadow-xs"),
+                    NotStr('<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;color:#64748b"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>'),
+                    cls="flex items-center gap-1.5 p-1 pr-2.5 bg-white border border-slate-200/80 rounded-full shadow-xs cursor-pointer hover:bg-slate-50 transition-all"
+                ),
+                cls="flex items-center gap-3"
+            ),
+            cls="flex items-center justify-between mb-8 pb-3 border-b border-slate-200/60"
         ),
 
-        # Upload Cards Container
+        # ── HERO SECTION ────────────────────────────────────────────────
+        Div(
+            # Left illustration — classical institution building + college logo
+            Div(
+                NotStr("""<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;">
+  <!-- Soft Cloud Background -->
+  <path d="M 20,130 Q 10,90 50,70 Q 70,40 110,40 Q 150,40 170,75 Q 195,95 180,130 Z" fill="#dbeafe" opacity="0.65"/>
+  <ellipse cx="100" cy="120" rx="85" ry="45" fill="#bfdbfe" opacity="0.45"/>
+  <!-- College Logo Badge above Building -->
+  <circle cx="100" cy="30" r="19" fill="#ffffff" stroke="#93c5fd" stroke-width="2"/>
+  <image href="/logo" x="83" y="13" width="34" height="34"/>
+  <!-- Institution Temple Roof / Pediment -->
+  <polygon points="100,54 38,80 162,80" fill="#0052cc"/>
+  <polygon points="100,58 46,78 154,78" fill="#1d4ed8"/>
+  <rect x="42" y="80" width="116" height="9" fill="#ffffff" stroke="#93c5fd" stroke-width="1"/>
+  <!-- Columns -->
+  <rect x="50" y="89" width="13" height="53" rx="2" fill="#ffffff" stroke="#93c5fd" stroke-width="1.5"/>
+  <rect x="73" y="89" width="13" height="53" rx="2" fill="#ffffff" stroke="#93c5fd" stroke-width="1.5"/>
+  <rect x="94" y="89" width="13" height="53" rx="2" fill="#ffffff" stroke="#93c5fd" stroke-width="1.5"/>
+  <rect x="115" y="89" width="13" height="53" rx="2" fill="#ffffff" stroke="#93c5fd" stroke-width="1.5"/>
+  <rect x="137" y="89" width="13" height="53" rx="2" fill="#ffffff" stroke="#93c5fd" stroke-width="1.5"/>
+  <!-- Entrance Steps / Base -->
+  <rect x="34" y="142" width="132" height="14" rx="3" fill="#2563eb"/>
+  <rect x="26" y="156" width="148" height="8" rx="2" fill="#1d4ed8"/>
+  <!-- Doorway -->
+  <path d="M 89,142 L 89,108 A 11,11 0 0,1 111,108 L 111,142 Z" fill="#1e3a8a"/>
+  <!-- Windows behind columns -->
+  <rect x="57" y="99" width="9" height="15" rx="1" fill="#60a5fa" opacity="0.6"/>
+  <rect x="135" y="99" width="9" height="15" rx="1" fill="#60a5fa" opacity="0.6"/>
+  <!-- Side Foliage / Trees -->
+  <circle cx="22" cy="138" r="14" fill="#0052cc" opacity="0.85"/>
+  <circle cx="14" cy="148" r="10" fill="#1d4ed8" opacity="0.85"/>
+  <circle cx="178" cy="138" r="14" fill="#0052cc" opacity="0.85"/>
+  <circle cx="186" cy="148" r="10" fill="#1d4ed8" opacity="0.85"/>
+</svg>"""),
+                cls="hidden lg:block w-40 xl:w-48 flex-shrink-0"
+            ),
+            # Center content
+            Div(
+                H1(
+                    Span("Turn COE Results into ", cls="text-slate-900 block sm:inline"),
+                    Span("Actionable Academic Insights", cls="text-blue-600 block sm:inline"),
+                    cls="text-3xl sm:text-4xl font-extrabold tracking-tight mb-3"
+                ),
+                P("Upload official COE result PDFs or Excel spreadsheets. Automatically parse records, identify U/RA arrears, map subjects to the R2024 syllabus, and generate faculty-ready analytics.",
+                  cls="text-slate-600 text-base max-w-xl mx-auto leading-relaxed mb-6"),
+                # Stats row
+                Div(
+                    Div(Span("R2024", cls="text-lg font-extrabold text-blue-700 block"), Span("Regulation", cls="text-xs text-slate-500"), cls="text-center px-4"),
+                    Div(cls="w-px bg-slate-200 self-stretch"),
+                    Div(Span("AI", cls="text-lg font-extrabold text-blue-700 block"), Span("Powered", cls="text-xs text-slate-500"), cls="text-center px-4"),
+                    Div(cls="w-px bg-slate-200 self-stretch"),
+                    Div(Span("PDF", cls="text-lg font-extrabold text-blue-700 block"), Span("Extraction", cls="text-xs text-slate-500"), cls="text-center px-4"),
+                    Div(cls="w-px bg-slate-200 self-stretch"),
+                    Div(Span("Arrear", cls="text-lg font-extrabold text-blue-700 block"), Span("Intelligence", cls="text-xs text-slate-500"), cls="text-center px-4"),
+                    cls="flex items-center justify-center gap-1 p-3 bg-white border border-slate-200 rounded-2xl shadow-sm w-fit mx-auto"
+                ),
+                cls="text-center flex-1"
+            ),
+            # Right illustration — analytics dashboard + magnifying glass
+            Div(
+                NotStr("""<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;">
+  <!-- Soft Cloud Background -->
+  <path d="M 20,130 Q 10,90 50,70 Q 70,40 110,40 Q 150,40 170,75 Q 195,95 180,130 Z" fill="#dbeafe" opacity="0.65"/>
+  <!-- Dashboard Window -->
+  <rect x="25" y="35" width="145" height="110" rx="10" fill="#ffffff" stroke="#93c5fd" stroke-width="2"/>
+  <!-- Header Bar -->
+  <path d="M 25,45 A 10,10 0 0,1 35,35 L 160,35 A 10,10 0 0,1 170,45 L 170,56 L 25,56 Z" fill="#edf4ff"/>
+  <circle cx="40" cy="45.5" r="3.5" fill="#ef4444"/>
+  <circle cx="51" cy="45.5" r="3.5" fill="#f59e0b"/>
+  <circle cx="62" cy="45.5" r="3.5" fill="#10b981"/>
+  <!-- Line Chart -->
+  <path d="M 40,115 L 65,90 L 85,100 L 115,70 L 140,85 L 155,60" fill="none" stroke="#0052cc" stroke-width="3" stroke-linecap="round"/>
+  <!-- Bar Charts -->
+  <rect x="42" y="115" width="10" height="20" rx="2" fill="#93c5fd"/>
+  <rect x="62" y="95" width="10" height="40" rx="2" fill="#60a5fa"/>
+  <rect x="82" y="105" width="10" height="30" rx="2" fill="#3b82f6"/>
+  <rect x="102" y="75" width="10" height="60" rx="2" fill="#2563eb"/>
+  <rect x="122" y="90" width="10" height="45" rx="2" fill="#1d4ed8"/>
+  <rect x="142" y="65" width="10" height="70" rx="2" fill="#1e3a8a"/>
+  <!-- Small Floating Donut Chart Card -->
+  <rect x="10" y="95" width="60" height="55" rx="8" fill="#ffffff" stroke="#bfdbfe" stroke-width="1.5"/>
+  <circle cx="40" cy="122.5" r="16" fill="none" stroke="#0052cc" stroke-width="7"/>
+  <circle cx="40" cy="122.5" r="16" fill="none" stroke="#60a5fa" stroke-width="7" stroke-dasharray="35 100"/>
+  <!-- Large Floating Blue Magnifying Glass -->
+  <g transform="translate(125, 80) rotate(-20)">
+    <circle cx="20" cy="20" r="22" fill="#ffffff" stroke="#0052cc" stroke-width="5.5"/>
+    <circle cx="20" cy="20" r="16" fill="#dbeafe" opacity="0.45"/>
+    <rect x="16" y="42" width="8" height="26" rx="4" fill="#0052cc"/>
+  </g>
+</svg>"""),
+                cls="hidden lg:block w-40 xl:w-48 flex-shrink-0"
+            ),
+            cls="flex items-center gap-6 max-w-5xl mx-auto mb-10 py-4"
+        ),
+
+        # ── UPLOAD CARD ─────────────────────────────────────────────────
         Div(
             # Mode A: PDF Direct Upload (Primary)
             Form(
                 Div(
-                    Div(
                         Div(
+                            # Card header
                             Div(
-                                Span("📄", cls="text-3xl mr-2"),
                                 Div(
-                                    Span("RECOMMENDED: COE PDF", cls="inline-block text-[10px] font-bold bg-blue-600 text-white px-2 py-0.5 rounded uppercase tracking-wider mb-0.5"),
-                                    H3("Upload COE Result PDF", cls="text-base font-bold text-slate-900 leading-tight"),
+                                    Div(
+                                        NotStr('<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="#1a56db" stroke-width="2" style="width:22px;height:22px"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>'),
+                                        cls="w-10 h-10 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center flex-shrink-0"
+                                    ),
+                                    Div(
+                                        Div(
+                                            Span("★ RECOMMENDED FORMAT", cls="inline-flex items-center text-[10px] font-bold text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-200 tracking-wider uppercase"),
+                                        ),
+                                        H3("Upload Official COE Result PDF", cls="text-base font-extrabold text-slate-900 leading-tight mt-1"),
+                                    ),
+                                    cls="flex items-start gap-3"
                                 ),
-                                cls="flex items-center"
+                                cls="mb-3"
                             ),
-                            cls="mb-3"
-                        ),
-                        P("Drop your official result PDF here or click to browse. Automatically extracts grades & verifies page provenance.", cls="text-xs text-slate-500 mb-4 leading-relaxed"),
+                            P("Drop your official result PDF here or click to browse. Automatically extracts student records & verifies page provenance.", cls="text-xs text-slate-500 mb-4 leading-relaxed"),
 
                         # PDF Input & Select
                         Div(
-                            Input(type="file", name="file_pdf", accept=".pdf", required=True, id="file_pdf_input",
-                                  cls="block w-full text-xs text-slate-500 file:mr-3 file:py-2.5 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer border border-slate-200 rounded-lg p-1 bg-white",
-                                  onchange="handlePdfFileSelect(this)"),
+                            # Primary Batch PDF Input Dropzone
+                            Div(
+                                Div(
+                                    Div(
+                                        NotStr('<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="#1a56db" stroke-width="2" style="width:22px;height:22px;flex-shrink:0"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>'),
+                                        Div(
+                                            Label("Current Batch COE Result PDF:", cls="block text-xs font-bold text-slate-800 leading-snug"),
+                                            Span("Select official Anna University grade sheet PDF", cls="block text-[11px] text-slate-500 font-normal"),
+                                        ),
+                                        cls="flex items-center gap-2.5 mb-2"
+                                    ),
+                                    Input(type="file", name="file_pdf", accept=".pdf", required=True, id="file_pdf_input",
+                                          cls="block w-full text-xs text-slate-600 bg-white border border-slate-200 rounded-lg p-1.5 cursor-pointer shadow-sm",
+                                          onchange="handlePdfFileSelect(this)"),
+                                ),
+                                cls="fancy-file-dropzone mb-3"
+                            ),
+                            # Optional Previous Batch PDF Dropzone
+                            Div(
+                                Div(
+                                    Div(
+                                        NotStr('<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="#64748b" stroke-width="2" style="width:20px;height:20px;flex-shrink:0"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2"/></svg>'),
+                                        Div(
+                                            Label("Previous Batch COE Result PDF (Optional):", cls="block text-xs font-bold text-slate-700 leading-snug"),
+                                            Span("Optional for Sheet 2 comparison", cls="block text-[11px] text-slate-400 font-normal"),
+                                        ),
+                                        cls="flex items-center gap-2 mb-2"
+                                    ),
+                                    Input(type="file", name="file_prev_pdf", accept=".pdf", id="file_prev_pdf_input",
+                                          cls="block w-full text-xs text-slate-600 bg-white border border-slate-200 rounded-lg p-1.5 cursor-pointer shadow-sm"),
+                                ),
+                                cls="fancy-file-dropzone mb-3"
+                            ),
                             Div(
                                 Span("✓ Selected PDF:", cls="text-xs font-bold text-blue-700 block mb-0.5"),
                                 Span("", id="pdf_file_name", cls="text-xs font-mono font-semibold text-slate-800 break-all block"),
@@ -5273,72 +5680,121 @@ def page_upload() -> Tuple:
                             ),
                             id="pdf_progress_card", cls="hidden mt-3"
                         ),
-                        cls="card p-6 border-2 border-blue-500/20 hover:border-blue-500/50 transition-all shadow-sm flex flex-col justify-between h-full"
+                        cls="card p-6 border-t-4 border-t-blue-600 hover:border-blue-600/70 transition-all shadow-sm flex flex-col justify-between h-full"
                     ),
                 ),
                 action="/upload-pdf", method="POST", enctype="multipart/form-data",
                 onsubmit="handleUploadFormSubmit(this, 'pdf_progress_card', 'Analyzing COE PDF...')"
             ),
-            cls="max-w-md mx-auto mb-12"
+            cls="max-w-md mx-auto mb-14"
         ),
 
-        # Section 13: Trust / Capability Cards
+        # ── PLATFORM CAPABILITIES ────────────────────────────────────────
         Div(
-            H3("Platform Capabilities & Academic Features", cls="text-sm font-bold uppercase tracking-wider text-slate-400 text-center mb-6"),
             Div(
+                Div(cls="flex-1 h-px bg-slate-200"),
+                H3("Platform Capabilities & Academic Features", cls="text-xs font-bold uppercase tracking-wider text-slate-400 px-4 whitespace-nowrap"),
+                Div(cls="flex-1 h-px bg-slate-200"),
+                cls="flex items-center mb-8"
+            ),
+            Div(
+                # Card 1 — Smart Extraction
                 Div(
-                    Span("📄", cls="text-2xl mb-2 block"),
-                    H4("Direct COE Extraction", cls="text-sm font-bold text-slate-800 mb-1"),
+                    NotStr('<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="#1a56db" stroke-width="2" style="width:28px;height:28px;margin-bottom:10px"><path stroke-linecap="round" stroke-linejoin="round" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>'),
+                    H4("Smart Extraction", cls="text-sm font-bold text-slate-800 mb-1"),
                     P("Extracts student & subject results directly from official result PDFs with page provenance traceability.", cls="text-xs text-slate-500 leading-relaxed"),
-                    cls="card p-4 border border-slate-100 hover:shadow-md transition-all"
+                    cls="card p-5 border border-slate-100 hover:border-blue-200 hover:shadow-md transition-all flex flex-col"
                 ),
+                # Card 2 — R2024 Mapping
                 Div(
-                    Span("🎓", cls="text-2xl mb-2 block"),
-                    H4("R2024 Syllabus Mapping", cls="text-sm font-bold text-slate-800 mb-1"),
+                    NotStr('<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="#1a56db" stroke-width="2" style="width:28px;height:28px;margin-bottom:10px"><path stroke-linecap="round" stroke-linejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/></svg>'),
+                    H4("R2024 Mapping", cls="text-sm font-bold text-slate-800 mb-1"),
                     P("Automatically identifies course codes, titles, credits, and semester categories against R2024 catalog.", cls="text-xs text-slate-500 leading-relaxed"),
-                    cls="card p-4 border border-slate-100 hover:shadow-md transition-all"
+                    cls="card p-5 border border-slate-100 hover:border-blue-200 hover:shadow-md transition-all flex flex-col"
                 ),
+                # Card 3 — Arrear Intelligence
                 Div(
-                    Span("🚨", cls="text-2xl mb-2 block"),
+                    NotStr('<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="#dc2626" stroke-width="2" style="width:28px;height:28px;margin-bottom:10px"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>'),
                     H4("Arrear Intelligence", cls="text-sm font-bold text-slate-800 mb-1"),
                     P("Identifies U/RA arrears, multiple-arrear students, and active Sem 1-4 foundation backlogs.", cls="text-xs text-slate-500 leading-relaxed"),
-                    cls="card p-4 border border-slate-100 hover:shadow-md transition-all"
+                    cls="card p-5 border border-slate-100 hover:border-red-200 hover:shadow-md transition-all flex flex-col"
                 ),
+                # Card 4 — Academic Dashboards
                 Div(
-                    Span("📊", cls="text-2xl mb-2 block"),
-                    H4("Faculty Analytics", cls="text-sm font-bold text-slate-800 mb-1"),
+                    NotStr('<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="#1a56db" stroke-width="2" style="width:28px;height:28px;margin-bottom:10px"><path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>'),
+                    H4("Academic Dashboards", cls="text-sm font-bold text-slate-800 mb-1"),
                     P("Generates credit-weighted GPA, cohort rankings, risk groups, and PTM advisory briefs.", cls="text-xs text-slate-500 leading-relaxed"),
-                    cls="card p-4 border border-slate-100 hover:shadow-md transition-all"
+                    cls="card p-5 border border-slate-100 hover:border-blue-200 hover:shadow-md transition-all flex flex-col"
                 ),
-                cls="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-12 max-w-5xl mx-auto"
+                # Card 5 — Export & Reports
+                Div(
+                    NotStr('<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="#16a34a" stroke-width="2" style="width:28px;height:28px;margin-bottom:10px"><path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>'),
+                    H4("Export & Reports", cls="text-sm font-bold text-slate-800 mb-1"),
+                    P("Faculty-ready PDF and Excel export with class summaries, subject analytics, and remedial plans.", cls="text-xs text-slate-500 leading-relaxed"),
+                    cls="card p-5 border border-slate-100 hover:border-green-200 hover:shadow-md transition-all flex flex-col"
+                ),
+                # Card 6 — Secure & Reliable
+                Div(
+                    NotStr('<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="#7c3aed" stroke-width="2" style="width:28px;height:28px;margin-bottom:10px"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>'),
+                    H4("Secure & Reliable", cls="text-sm font-bold text-slate-800 mb-1"),
+                    P("Results are processed locally. AI receives only structured metrics. Student PII never leaves your system.", cls="text-xs text-slate-500 leading-relaxed"),
+                    cls="card p-5 border border-slate-100 hover:border-purple-200 hover:shadow-md transition-all flex flex-col"
+                ),
+                cls="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-12 max-w-5xl mx-auto"
             ),
         ),
 
-        # Section 14: How It Works
+        # ── HOW IT WORKS ────────────────────────────────────────────────
         Div(
             H3("How It Works", cls="text-sm font-bold uppercase tracking-wider text-slate-400 text-center mb-2"),
             P("From result document to faculty action in minutes.", cls="text-xs text-slate-500 text-center mb-6"),
             Div(
-                Div(Span("01", cls="text-blue-600 font-extrabold text-lg block mb-1"), H4("Upload", cls="text-xs font-bold text-slate-800"), P("Select PDF or Excel file", cls="text-[11px] text-slate-500"), cls="text-center p-3 card border border-slate-100"),
+                Div(
+                    Span("01", cls="text-blue-600 font-extrabold text-lg block mb-1"),
+                    H4("Upload", cls="text-xs font-bold text-slate-800"),
+                    P("Select PDF or Excel file", cls="text-[11px] text-slate-500"),
+                    cls="text-center p-3 card border border-slate-100"
+                ),
                 Div(Span("→", cls="text-slate-300 hidden sm:block text-xl self-center")),
-                Div(Span("02", cls="text-blue-600 font-extrabold text-lg block mb-1"), H4("Verify", cls="text-xs font-bold text-slate-800"), P("Review preflight mapping", cls="text-[11px] text-slate-500"), cls="text-center p-3 card border border-slate-100"),
+                Div(
+                    Span("02", cls="text-blue-600 font-extrabold text-lg block mb-1"),
+                    H4("Verify", cls="text-xs font-bold text-slate-800"),
+                    P("Review preflight mapping", cls="text-[11px] text-slate-500"),
+                    cls="text-center p-3 card border border-slate-100"
+                ),
                 Div(Span("→", cls="text-slate-300 hidden sm:block text-xl self-center")),
-                Div(Span("03", cls="text-blue-600 font-extrabold text-lg block mb-1"), H4("Analyze", cls="text-xs font-bold text-slate-800"), P("Compute cohort metrics", cls="text-[11px] text-slate-500"), cls="text-center p-3 card border border-slate-100"),
+                Div(
+                    Span("03", cls="text-blue-600 font-extrabold text-lg block mb-1"),
+                    H4("Analyze", cls="text-xs font-bold text-slate-800"),
+                    P("Compute cohort metrics", cls="text-[11px] text-slate-500"),
+                    cls="text-center p-3 card border border-slate-100"
+                ),
                 Div(Span("→", cls="text-slate-300 hidden sm:block text-xl self-center")),
-                Div(Span("04", cls="text-blue-600 font-extrabold text-lg block mb-1"), H4("Act", cls="text-xs font-bold text-slate-800"), P("Execute remedial plan", cls="text-[11px] text-slate-500"), cls="text-center p-3 card border border-slate-100"),
+                Div(
+                    Span("04", cls="text-blue-600 font-extrabold text-lg block mb-1"),
+                    H4("Act", cls="text-xs font-bold text-slate-800"),
+                    P("Execute remedial plan", cls="text-[11px] text-slate-500"),
+                    cls="text-center p-3 card border border-slate-100"
+                ),
                 cls="grid grid-cols-2 sm:grid-cols-7 gap-2 max-w-4xl mx-auto items-center mb-12"
             ),
         ),
 
-        # Section 15: Data Privacy Message
+        # ── DATA PRIVACY ─────────────────────────────────────────────────
         Div(
             Div(
-                Span("🔒", cls="text-lg mr-2"),
+                NotStr('<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" style="width:18px;height:18px;flex-shrink:0;color:#475569"><path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>'),
                 Span("Academic Data Protection", cls="font-bold text-slate-800 text-xs mr-2"),
                 Span("• Results are processed locally for academic analysis. AI receives only structured metrics required for advisory generation.", cls="text-xs text-slate-500"),
-                cls="flex items-center justify-center flex-wrap gap-1 p-3 bg-slate-100 border border-slate-200 rounded-xl max-w-3xl mx-auto text-center"
+                cls="flex items-center justify-center flex-wrap gap-2 p-3 bg-slate-100 border border-slate-200 rounded-xl max-w-3xl mx-auto text-center"
             ),
             cls="mb-8"
+        ),
+
+        # ── FOOTER ────────────────────────────────────────────────────────
+        Div(
+            P("© 2024 Saranathan College of Engineering, Tiruchirappalli. All rights reserved.", cls="text-xs text-slate-400 text-center"),
+            cls="border-t border-slate-200 pt-6 mt-4 pb-2"
         ),
 
         Script("""
@@ -6873,272 +7329,550 @@ app = FastHTML(
         Link(rel="stylesheet", href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css"),
         Link(rel="preconnect", href="https://fonts.googleapis.com"),
         Link(rel="preconnect", href="https://fonts.gstatic.com", crossorigin=""),
-        Link(rel="stylesheet", href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"),
+        Link(rel="stylesheet", href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap"),
         Style("""
             :root {
-                --navy-900: #0c1929;
-                --navy-800: #0f1b33;
-                --navy-700: #1e3a5f;
-                --slate-50: #f8fafc;
-                --slate-100: #f1f5f9;
-                --slate-200: #e2e8f0;
-                --slate-300: #cbd5e1;
-                --slate-400: #94a3b8;
-                --slate-500: #64748b;
-                --slate-600: #475569;
-                --slate-700: #334155;
-                --slate-800: #1e293b;
-                --slate-900: #0f172a;
-                --green-500: #22c55e;
-                --green-600: #16a34a;
-                --green-700: #15803d;
-                --amber-500: #f59e0b;
-                --amber-600: #d97706;
-                --red-500: #ef4444;
-                --red-600: #dc2626;
-                --blue-500: #3b82f6;
-                --blue-600: #2563eb;
-                --purple-500: #a855f7;
-                --purple-600: #9333ea;
-                --indigo-600: #7c3aed;
+                --blue-primary: #0052cc;
+                --blue-hover: #0043a8;
+                --blue-dark: #0033a0;
+                --blue-light: #edf4ff;
+                --blue-mid: #2563eb;
+                --blue-border: #bfdbfe;
+                --bg-canvas: #f4f8fc;
+                --bg-card: #ffffff;
+                --border-card: #e8eef8;
+                --shadow-card: 0 10px 30px -5px rgba(0, 82, 204, 0.04), 0 4px 12px -2px rgba(0,0,0,0.02);
+                --shadow-card-hover: 0 16px 36px -4px rgba(0, 82, 204, 0.12);
+                --text-heading: #0b192c;
+                --text-body: #334155;
+                --text-muted: #64748b;
+                --text-subtle: #94a3b8;
             }
 
             * { box-sizing: border-box; }
             body {
                 font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                background: var(--slate-50);
-                color: var(--slate-800);
+                background-color: #f4f8fc;
+                background-image: 
+                    radial-gradient(ellipse 90% 45% at 50% -10%, rgba(219, 234, 254, 0.85), rgba(244, 248, 252, 0)),
+                    radial-gradient(circle at 15% 25%, rgba(219, 234, 254, 0.5), transparent 450px),
+                    radial-gradient(circle at 85% 25%, rgba(219, 234, 254, 0.5), transparent 450px),
+                    linear-gradient(180deg, #edf4ff 0%, #f4f8fc 380px, #f8fafc 100%);
+                background-attachment: fixed;
+                color: var(--text-body);
                 line-height: 1.6;
                 -webkit-font-smoothing: antialiased;
                 -moz-osx-font-smoothing: grayscale;
             }
 
-            /* Typography */
-            h1 { font-size: 1.75rem; font-weight: 700; color: var(--slate-900); line-height: 1.2; letter-spacing: -0.025em; }
-            h2 { font-size: 1.25rem; font-weight: 600; color: var(--slate-800); line-height: 1.3; }
-            h3 { font-size: 1rem; font-weight: 600; color: var(--slate-700); line-height: 1.4; }
-            h4 { font-size: 0.875rem; font-weight: 600; color: var(--slate-600); line-height: 1.5; }
-
-            /* Cards */
-            .card {
-                background: #fff;
-                border: 1px solid var(--slate-200);
-                border-radius: 0.75rem;
-                box-shadow: 0 1px 2px rgba(0,0,0,0.04), 0 1px 3px rgba(0,0,0,0.02);
-                transition: box-shadow 0.2s ease, border-color 0.2s ease;
+            /* Technical & Data Typography */
+            .font-mono, th, td, .badge, .grade-badge, .stat-value {
+                font-family: 'JetBrains Mono', monospace;
             }
-            .card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.06), 0 2px 4px rgba(0,0,0,0.03); }
+
+            /* Headings */
+            h1 { font-size: 2rem; font-weight: 800; color: var(--text-heading); line-height: 1.2; letter-spacing: -0.03em; }
+            h2 { font-size: 1.35rem; font-weight: 700; color: #1e293b; line-height: 1.3; }
+            h3 { font-size: 1.05rem; font-weight: 600; color: #334155; line-height: 1.4; }
+            h4 { font-size: 0.875rem; font-weight: 600; color: #475569; line-height: 1.5; }
+
+            /* ============ CARDS ============ */
+            .card {
+                background: var(--bg-card);
+                border: 1px solid var(--border-card);
+                border-radius: 1rem;
+                box-shadow: var(--shadow-card);
+                transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+            }
+            .card:hover {
+                transform: translateY(-2px);
+                box-shadow: var(--shadow-card-hover);
+                border-color: #c3d4f4;
+            }
 
             /* Stat Cards */
             .stat-card {
-                background: #fff;
-                border: 1px solid var(--slate-200);
-                border-radius: 0.75rem;
+                background: var(--bg-card);
+                border: 1px solid var(--border-card);
+                border-radius: 1rem;
                 padding: 1.25rem 1.5rem;
-                transition: all 0.2s ease;
                 position: relative;
                 overflow: hidden;
+                box-shadow: var(--shadow-card);
+                transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
             }
             .stat-card::before {
                 content: '';
                 position: absolute;
-                top: 0;
-                left: 0;
-                right: 0;
+                top: 0; left: 0; right: 0;
                 height: 3px;
-                background: var(--accent-color, var(--blue-500));
-                opacity: 0;
-                transition: opacity 0.2s ease;
+                background: var(--accent-color, var(--blue-primary));
             }
-            .stat-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
-            .stat-card:hover::before { opacity: 1; }
-
-            /* Tables */
-            table { border-collapse: collapse; width: 100%; }
-            thead th {
-                background: var(--slate-50);
-                border-bottom: 2px solid var(--slate-200);
-                font-weight: 600;
-                font-size: 0.75rem;
-                text-transform: uppercase;
-                letter-spacing: 0.05em;
-                color: var(--slate-500);
-                padding: 0.75rem 1rem;
-                text-align: left;
-                white-space: nowrap;
+            .stat-card:hover {
+                transform: translateY(-2px);
+                box-shadow: var(--shadow-card-hover);
             }
-            tbody td {
-                padding: 0.75rem 1rem;
-                border-bottom: 1px solid var(--slate-100);
-                font-size: 0.875rem;
-                color: var(--slate-700);
-                transition: background-color 0.15s ease;
-            }
-            tbody tr:hover td { background-color: var(--slate-50); }
-            tbody tr:last-child td { border-bottom: none; }
+            .stat-card:hover::before { height: 4px; }
 
-            /* Filter Buttons */
-            .filter-btn {
-                padding: 0.375rem 0.75rem;
-                font-size: 0.75rem;
-                font-weight: 500;
-                border-radius: 9999px;
-                transition: all 0.2s ease;
-                border: 1px solid transparent;
-                cursor: pointer;
-            }
-            .filter-btn:hover { transform: translateY(-1px); box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-            .filter-btn.active { background: var(--navy-800); color: #fff; border-color: var(--navy-700); }
-            .filter-btn:not(.active) { background: #fff; border-color: var(--slate-200); color: var(--slate-600); }
-            .filter-btn:not(.active):hover { background: var(--slate-50); border-color: var(--slate-300); }
-
-            /* Links */
-            a { color: inherit; text-decoration: none; transition: color 0.15s ease; }
-            a.text-blue { color: var(--blue-600); }
-            a.text-blue:hover { color: var(--blue-700); text-decoration: underline; }
-
-            /* Focus States */
-            *:focus-visible {
-                outline: 2px solid var(--blue-500);
-                outline-offset: 2px;
-                border-radius: 4px;
-            }
-            input:focus-visible, select:focus-visible, button:focus-visible {
-                outline: 2px solid var(--blue-500);
-                outline-offset: 2px;
-            }
-
-            /* Badges */
-            .badge {
-                display: inline-flex;
-                align-items: center;
-                padding: 0.25rem 0.625rem;
-                font-size: 0.75rem;
-                font-weight: 600;
-                border-radius: 9999px;
-                line-height: 1;
-            }
-            .badge-green { background: #dcfce7; color: var(--green-700); }
-            .badge-red { background: #fee2e2; color: var(--red-600); }
-            .badge-amber { background: #fef3c7; color: var(--amber-600); }
-            .badge-purple { background: #f3e8ff; color: var(--purple-600); }
-            .badge-indigo { background: #ede9fe; color: var(--indigo-600); }
-            .badge-slate { background: var(--slate-100); color: var(--slate-600); }
-
-            /* Grade Badges */
-            .grade-badge {
-                display: inline-flex;
-                align-items: center;
-                justify-content: center;
-                min-width: 2rem;
-                padding: 0.25rem 0.5rem;
-                font-size: 0.75rem;
-                font-weight: 700;
-                border-radius: 0.375rem;
-                color: #fff;
-            }
-            .grade-O { background: var(--green-600); }
-            .grade-APLUS { background: #22c55e; }
-            .grade-A { background: #4ade80; color: var(--slate-900); }
-            .grade-BPLUS { background: #86efac; color: var(--slate-900); }
-            .grade-B { background: var(--slate-400); }
-            .grade-C { background: var(--slate-300); color: var(--slate-700); }
-            .grade-U { background: var(--red-500); }
-            .grade-RA { background: #ef4444; }
-            .grade-SA { background: var(--amber-500); }
-            .grade-WD { background: var(--purple-500); }
-            .grade-MM { background: #7c3aed; }
-            .grade-WH2 { background: #6b21a8; }
-
-            /* Alerts */
-            .alert {
-                padding: 0.75rem 1rem;
-                border-radius: 0.5rem;
-                font-size: 0.875rem;
-                font-weight: 500;
-                display: flex;
-                align-items: center;
-                gap: 0.5rem;
-                margin-bottom: 1rem;
-            }
-            .alert-blue { background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; }
-            .alert-green { background: #f0fdf4; color: var(--green-700); border: 1px solid #bbf7d0; }
-            .alert-red { background: #fef2f2; color: var(--red-600); border: 1px solid #fecaca; }
-            .alert-amber { background: #fffbeb; color: #92400e; border: 1px solid #fde68a; }
-
-            /* Prose (AI content) */
-            .prose { font-size: 0.875rem; line-height: 1.7; color: var(--slate-700); }
-            .prose li { margin: 0.375rem 0; list-style: disc; padding-left: 1.25rem; }
-            .prose p { margin: 0.5rem 0; }
-            .prose h4 { margin: 1rem 0 0.375rem 0; font-weight: 600; color: var(--slate-800); }
-            .prose strong { font-weight: 600; color: var(--slate-900); }
-
-            /* Sidebar */
+            /* ============ SIDEBAR ============ */
             .sidebar {
-                background: linear-gradient(180deg, var(--navy-900) 0%, var(--navy-800) 100%);
-                border-right: 1px solid rgba(255,255,255,0.05);
+                background: #ffffff;
+                border-right: 1px solid #e5eaf3;
+                box-shadow: 2px 0 20px rgba(0,0,0,0.04);
+                display: flex;
+                flex-direction: column;
+            }
+            .sidebar-brand {
+                padding: 1.125rem 1rem 0.875rem;
+                border-bottom: 1px solid #f0f4fa;
+                flex-shrink: 0;
+            }
+            .sidebar-brand-logo {
+                width: 54px;
+                height: 54px;
+                object-fit: contain;
+                border-radius: 50%;
+                border: 2px solid #e5eaf3;
+                background: #fff;
+                display: block;
+                margin: 0 auto 0.5rem;
+                box-shadow: 0 2px 8px rgba(26,86,219,0.1);
+            }
+            .sidebar-brand-name {
+                font-size: 0.75rem;
+                font-weight: 800;
+                color: #1a56db;
+                letter-spacing: 0.07em;
+                text-align: center;
+                display: block;
+                line-height: 1.2;
+            }
+            .sidebar-brand-sub {
+                font-size: 0.6rem;
+                font-weight: 600;
+                color: #475569;
+                letter-spacing: 0.04em;
+                text-align: center;
+                display: block;
+                line-height: 1.4;
+                margin-top: 0.1rem;
+            }
+            .sidebar-brand-city {
+                font-size: 0.58rem;
+                color: #94a3b8;
+                text-align: center;
+                font-weight: 500;
+                display: block;
+                margin-top: 0.1rem;
+                margin-bottom: 0.5rem;
+            }
+            .sidebar-portal-label {
+                background: #ebf5ff;
+                border: 1px solid #a4cafe;
+                border-radius: 0.5rem;
+                padding: 0.35rem 0.6rem;
+                text-align: center;
+            }
+            .portal-name {
+                font-size: 0.58rem;
+                font-weight: 800;
+                color: #1a56db;
+                text-transform: uppercase;
+                letter-spacing: 0.06em;
+                display: block;
+                line-height: 1.3;
+            }
+            .portal-ver {
+                font-size: 0.54rem;
+                color: #64748b;
+                display: block;
+                margin-top: 0.1rem;
+            }
+            .sidebar-nav-section {
+                padding: 0.75rem 0.75rem 0.5rem;
+                flex: 1;
+                overflow-y: auto;
+            }
+            .sidebar-nav-label {
+                font-size: 0.54rem;
+                font-weight: 700;
+                letter-spacing: 0.1em;
+                color: #94a3b8;
+                text-transform: uppercase;
+                padding: 0 0.5rem;
+                margin-bottom: 0.375rem;
+                display: block;
             }
             .sidebar-link {
                 display: flex;
                 align-items: center;
-                gap: 0.75rem;
-                padding: 0.625rem 1rem;
-                font-size: 0.875rem;
+                gap: 0.6rem;
+                padding: 0.575rem 0.75rem;
+                font-size: 0.8125rem;
                 font-weight: 500;
-                color: rgba(255,255,255,0.6);
-                border-radius: 0.5rem;
-                transition: all 0.2s ease;
-                margin: 0.125rem 0.5rem;
+                color: #64748b;
+                border-radius: 0.625rem;
+                transition: all 0.16s ease;
+                margin-bottom: 0.125rem;
+                border: 1px solid transparent;
+                position: relative;
             }
-            .sidebar-link:hover {
-                background: rgba(255,255,255,0.08);
-                color: rgba(255,255,255,0.9);
+            .sidebar-link svg {
+                width: 1rem;
+                height: 1rem;
+                flex-shrink: 0;
+                transition: all 0.16s ease;
+                opacity: 0.7;
             }
+            .sidebar-link:hover:not(.active) {
+                background: #f1f5f9;
+                color: #0f172a;
+            }
+            .sidebar-link:hover:not(.active) svg { opacity: 1; }
             .sidebar-link.active {
-                background: rgba(255,255,255,0.12);
-                color: #fff;
-                font-weight: 600;
+                background: #ebf5ff;
+                color: #1a56db;
+                font-weight: 700;
+                border-color: #a4cafe;
+                box-shadow: 0 2px 8px rgba(26,86,219,0.08);
             }
-
-            /* Empty State */
-            .empty-state {
-                text-align: center;
-                padding: 3rem 1.5rem;
-                color: var(--slate-400);
+            .sidebar-link.active svg { opacity: 1; color: #1a56db; }
+            .sidebar-link.active::before {
+                content: '';
+                position: absolute;
+                left: -0.75rem;
+                top: 20%;
+                height: 60%;
+                width: 3px;
+                background: #1a56db;
+                border-radius: 0 3px 3px 0;
             }
-
-            /* Loading */
-            .loading { display: flex; align-items: center; justify-content: center; padding: 3rem; }
-            .spinner {
+            .sidebar-text { flex: 1; }
+            .sidebar-footer {
+                border-top: 1px solid #f0f4fa;
+                padding: 0.75rem;
+                flex-shrink: 0;
+            }
+            .sidebar-user {
+                display: flex;
+                align-items: center;
+                gap: 0.6rem;
+                padding: 0.5rem 0.625rem;
+                border-radius: 0.625rem;
+                background: #f8fafc;
+                border: 1px solid #e5eaf3;
+            }
+            .sidebar-avatar {
                 width: 2rem;
                 height: 2rem;
-                border: 3px solid var(--slate-200);
-                border-top-color: var(--blue-500);
                 border-radius: 50%;
-                animation: spin 0.8s linear infinite;
+                background: linear-gradient(135deg, #1a56db, #3b82f6);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 0.75rem;
+                font-weight: 700;
+                color: #fff;
+                flex-shrink: 0;
             }
-            @keyframes spin { to { transform: rotate(360deg); } }
+            .sidebar-user-name { font-size: 0.75rem; font-weight: 600; color: #0f172a; display: block; line-height: 1.3; }
+            .sidebar-user-role { font-size: 0.65rem; color: #64748b; display: block; }
 
-            /* Chart Container */
+            /* ============ MOBILE HEADER ============ */
+            .mobile-header-bar {
+                background: #ffffff;
+                border-bottom: 1px solid #e5eaf3;
+                box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+            }
+
+            /* ============ DATA TABLES ============ */
+            table {
+                border-collapse: separate;
+                border-spacing: 0;
+                width: 100%;
+                border-radius: 0.875rem;
+                overflow: hidden;
+                border: 1px solid var(--border-card);
+                box-shadow: var(--shadow-card);
+            }
+            thead th {
+                background: #f8fafc;
+                border-bottom: 1px solid var(--border-card);
+                font-weight: 700;
+                font-size: 0.72rem;
+                text-transform: uppercase;
+                letter-spacing: 0.08em;
+                color: #475569;
+                padding: 0.875rem 1rem;
+                text-align: left;
+                white-space: nowrap;
+            }
+            tbody td {
+                padding: 0.875rem 1rem;
+                border-bottom: 1px solid #f1f5f9;
+                font-size: 0.875rem;
+                color: var(--text-body);
+                background: #ffffff;
+                transition: all 0.12s ease;
+            }
+            tbody tr { transition: all 0.12s ease; }
+            tbody tr:hover td { background: #f0f6ff; color: #0f172a; }
+            tbody tr:last-child td { border-bottom: none; }
+
+            /* ============ FILTER BUTTONS ============ */
+            .filter-btn {
+                padding: 0.4rem 0.875rem;
+                font-size: 0.75rem;
+                font-weight: 600;
+                border-radius: 9999px;
+                transition: all 0.18s ease;
+                cursor: pointer;
+                font-family: 'JetBrains Mono', monospace;
+                display: inline-flex;
+                align-items: center;
+                gap: 0.4rem;
+            }
+            .filter-btn:not(.active) {
+                background: #fff;
+                border: 1px solid #e5eaf3;
+                color: #64748b;
+                box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+            }
+            .filter-btn:not(.active):hover {
+                background: #f8fafc;
+                color: #0f172a;
+                border-color: #94a3b8;
+                transform: translateY(-1px);
+            }
+            .filter-btn.active {
+                background: var(--blue-primary);
+                color: #fff;
+                font-weight: 700;
+                border: 1px solid var(--blue-primary);
+                box-shadow: 0 4px 12px rgba(26,86,219,0.3);
+            }
+
+            /* ============ LINKS ============ */
+            a { color: inherit; text-decoration: none; transition: all 0.15s ease; }
+            a.text-blue, a.text-blue-600 { color: var(--blue-primary); }
+            a.text-blue:hover, a.text-blue-600:hover { color: var(--blue-hover); }
+
+            /* ============ BUTTONS ============ */
+            button, .btn {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                background: #ffffff;
+                border: 1px solid #cbd5e1;
+                border-radius: 0.5rem;
+                font-weight: 600;
+                color: #1e293b;
+                box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+                transition: all 0.16s ease;
+                cursor: pointer;
+            }
+            button:hover, .btn:hover {
+                background: #f8fafc;
+                border-color: #94a3b8;
+                color: #0f172a;
+                transform: translateY(-1px);
+                box-shadow: 0 3px 8px rgba(0,0,0,0.08);
+            }
+            button:active, .btn:active { transform: translateY(0); }
+            button[type="submit"], .btn-primary, .bg-blue-600 {
+                background: linear-gradient(160deg, #2563eb 0%, #1a56db 100%) !important;
+                border: 1px solid #1a56db !important;
+                color: #ffffff !important;
+                box-shadow: 0 4px 14px rgba(26,86,219,0.35) !important;
+            }
+            button[type="submit"]:hover, .btn-primary:hover, .bg-blue-600:hover {
+                background: linear-gradient(160deg, #1e429f 0%, #1e3a8a 100%) !important;
+                box-shadow: 0 6px 18px rgba(26,86,219,0.45) !important;
+                transform: translateY(-1px) !important;
+            }
+            button[type="submit"]:active {
+                transform: translateY(0) !important;
+            }
+
+            /* ============ FORM INPUTS & FANCY FILE PICKERS ============ */
+            input, select, textarea {
+                background: #ffffff;
+                border: 1px solid #cbd5e1;
+                border-radius: 0.5rem;
+                color: #0f172a;
+                box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+                transition: all 0.18s ease;
+            }
+            input:focus, select:focus, textarea:focus {
+                background: #fff;
+                border-color: var(--blue-primary);
+                box-shadow: 0 0 0 3px rgba(26,86,219,0.12);
+                outline: none;
+                color: #0f172a;
+            }
+            *:focus-visible {
+                outline: 2px solid var(--blue-primary);
+                outline-offset: 2px;
+                border-radius: 6px;
+            }
+
+            /* Fancy File Input Buttons */
+            input[type="file"] {
+                cursor: pointer;
+            }
+            input[type="file"]::file-selector-button,
+            input[type="file"]::-webkit-file-upload-button {
+                background: linear-gradient(135deg, #1a56db 0%, #2563eb 100%);
+                color: #ffffff !important;
+                border: none;
+                padding: 0.45rem 1rem;
+                border-radius: 0.45rem;
+                font-weight: 700;
+                font-size: 0.75rem;
+                letter-spacing: 0.02em;
+                cursor: pointer;
+                box-shadow: 0 2px 8px rgba(26, 86, 219, 0.25);
+                transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+                margin-right: 0.75rem;
+            }
+            input[type="file"]::file-selector-button:hover,
+            input[type="file"]::-webkit-file-upload-button:hover {
+                background: linear-gradient(135deg, #1e429f 0%, #1d4ed8 100%);
+                box-shadow: 0 4px 12px rgba(26, 86, 219, 0.38);
+                transform: translateY(-1px);
+            }
+            .fancy-file-dropzone {
+                border: 2px dashed #cbd5e1;
+                border-radius: 0.875rem;
+                padding: 0.875rem 1rem;
+                background: #f8fafc;
+                transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+                cursor: pointer;
+            }
+            .fancy-file-dropzone:hover, .fancy-file-dropzone:focus-within {
+                border-color: #1a56db;
+                background: #ebf5ff;
+                box-shadow: 0 4px 16px rgba(26, 86, 219, 0.08);
+            }
+
+            /* ============ BADGES ============ */
+            .badge {
+                display: inline-flex;
+                align-items: center;
+                padding: 0.275rem 0.7rem;
+                font-size: 0.72rem;
+                font-weight: 700;
+                border-radius: 9999px;
+                line-height: 1;
+                border: 1px solid transparent;
+            }
+            .badge-green { background: #dcfce7; color: #15803d; border-color: #bbf7d0; }
+            .badge-red { background: #fee2e2; color: #b91c1c; border-color: #fecaca; }
+            .badge-amber { background: #fef3c7; color: #b45309; border-color: #fde68a; }
+            .badge-purple { background: #f3e8ff; color: #7e22ce; border-color: #e9d5ff; }
+            .badge-indigo { background: #e0e7ff; color: #4338ca; border-color: #c7d2fe; }
+            .badge-slate { background: #f1f5f9; color: #475569; border-color: #e2e8f0; }
+            .badge-blue { background: #ebf5ff; color: #1a56db; border-color: #a4cafe; }
+
+            /* ============ GRADE BADGES ============ */
+            .grade-badge {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                min-width: 2.2rem;
+                padding: 0.25rem 0.55rem;
+                font-size: 0.75rem;
+                font-weight: 800;
+                border-radius: 0.45rem;
+                color: #fff;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                transition: transform 0.15s ease;
+            }
+            .grade-badge:hover { transform: scale(1.08); }
+            .grade-O { background: #16a34a; }
+            .grade-APLUS { background: #22c55e; }
+            .grade-A { background: #10b981; }
+            .grade-BPLUS { background: #1a56db; }
+            .grade-B { background: #3b82f6; }
+            .grade-C { background: #64748b; }
+            .grade-U { background: #ef4444; }
+            .grade-RA { background: #dc2626; }
+            .grade-SA { background: #f59e0b; }
+            .grade-WD { background: #a855f7; }
+            .grade-MM { background: #7c3aed; }
+            .grade-WH2 { background: #6b21a8; }
+
+            /* ============ ALERTS ============ */
+            .alert {
+                padding: 0.875rem 1.125rem;
+                border-radius: 0.75rem;
+                font-size: 0.875rem;
+                font-weight: 600;
+                display: flex;
+                align-items: center;
+                gap: 0.625rem;
+                margin-bottom: 1.25rem;
+            }
+            .alert-blue { background: #ebf5ff; color: #1e40af; border: 1px solid #a4cafe; }
+            .alert-green { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
+            .alert-red { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+            .alert-amber { background: #fffbeb; color: #92400e; border: 1px solid #fde68a; }
+
+            /* ============ AI / PROSE ============ */
+            .prose { font-size: 0.875rem; line-height: 1.75; color: var(--text-body); }
+            .prose li { margin: 0.4rem 0; list-style: disc; padding-left: 1.25rem; }
+            .prose p { margin: 0.6rem 0; }
+            .prose h4 { margin: 1.1rem 0 0.4rem 0; font-weight: 700; color: #0f172a; }
+            .prose strong { font-weight: 700; color: var(--blue-primary); }
+
+            /* ============ CHART CONTAINER ============ */
             .chart-container {
                 background: #fff;
-                border: 1px solid var(--slate-200);
-                border-radius: 0.75rem;
+                border: 1px solid var(--border-card);
+                border-radius: 1rem;
                 padding: 1.25rem;
                 min-height: 20rem;
+                box-shadow: var(--shadow-card);
+                transition: all 0.22s ease;
+            }
+            .chart-container:hover {
+                box-shadow: var(--shadow-card-hover);
+                border-color: #c3d4f4;
             }
             .chart-container .js-plotly-plot { width: 100% !important; }
 
-            /* Mobile */
+            /* ============ EMPTY STATE / LOADING ============ */
+            .empty-state {
+                text-align: center;
+                padding: 3.5rem 1.5rem;
+                color: #64748b;
+            }
+            .loading { display: flex; align-items: center; justify-content: center; padding: 3rem; }
+            .spinner {
+                width: 2.25rem;
+                height: 2.25rem;
+                border: 3px solid #e0f2fe;
+                border-top-color: var(--blue-primary);
+                border-radius: 50%;
+                animation: spin 0.8s cubic-bezier(0.6, 0.2, 0.4, 0.8) infinite;
+            }
+            @keyframes spin { to { transform: rotate(360deg); } }
+
+            /* ============ SCROLLBAR ============ */
+            ::-webkit-scrollbar { width: 7px; height: 7px; }
+            ::-webkit-scrollbar-track { background: #f1f5f9; }
+            ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+            ::-webkit-scrollbar-thumb:hover { background: var(--blue-primary); }
+
+            /* ============ RESPONSIVE / MOBILE ============ */
             @media (max-width: 1023px) {
                 .mobile-nav {
                     position: fixed;
-                    top: 0;
-                    left: 0;
-                    right: 0;
+                    top: 0; left: 0; right: 0;
                     z-index: 50;
-                    background: var(--navy-900);
-                    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+                    background: #ffffff;
+                    border-bottom: 1px solid #e5eaf3;
+                    box-shadow: 0 4px 16px rgba(0,0,0,0.06);
                 }
             }
             @media (min-width: 1024px) {
@@ -7146,11 +7880,224 @@ app = FastHTML(
                 .main-content { margin-left: 16rem; }
             }
 
-            /* Scrollbar */
-            ::-webkit-scrollbar { width: 6px; height: 6px; }
-            ::-webkit-scrollbar-track { background: var(--slate-100); }
-            ::-webkit-scrollbar-thumb { background: var(--slate-300); border-radius: 3px; }
-            ::-webkit-scrollbar-thumb:hover { background: var(--slate-400); }
+            /* ============ UTILITY OVERRIDES ============ */
+            .text-slate-800, .text-slate-900 { color: #0f172a !important; }
+            .text-white { color: #0f172a !important; }
+            .sidebar .text-white { color: #0f172a !important; }
+            .text-slate-700 { color: #1e293b !important; }
+            .text-slate-600 { color: #334155 !important; }
+            .text-slate-500, .text-slate-400 { color: #64748b !important; }
+            .bg-white { background: #ffffff !important; }
+            .bg-slate-50 { background: #f8fafc !important; }
+            .bg-slate-100 { background: #f1f5f9 !important; }
+            .border-slate-200, .border-slate-300 { border-color: #e5eaf3 !important; }
+
+            /* ============================================================
+               DARK MODE
+               Applied via class="dark" on <body>
+            ============================================================ */
+            body.dark {
+                --blue-primary: #4d94ff;
+                --blue-hover: #6ba8ff;
+                --blue-light: #1a2845;
+                --blue-border: #2d4a7a;
+                --bg-canvas: #0d1117;
+                --bg-card: #161b22;
+                --border-card: #21262d;
+                --shadow-card: 0 4px 16px rgba(0,0,0,0.4), 0 1px 4px rgba(0,0,0,0.3);
+                --shadow-card-hover: 0 12px 28px rgba(0,0,0,0.6);
+                --text-heading: #f0f6ff;
+                --text-body: #c9d1d9;
+                --text-muted: #8b949e;
+                --text-subtle: #6e7681;
+                background-color: #0d1117;
+                background-image:
+                    radial-gradient(ellipse 90% 40% at 50% -5%, rgba(30, 60, 120, 0.55), rgba(13, 17, 23, 0)),
+                    radial-gradient(circle at 15% 25%, rgba(26, 40, 80, 0.4), transparent 400px),
+                    radial-gradient(circle at 85% 25%, rgba(26, 40, 80, 0.4), transparent 400px),
+                    linear-gradient(180deg, #111827 0%, #0d1117 400px, #0a0e15 100%);
+                color: var(--text-body);
+            }
+
+            /* Dark: Headings */
+            body.dark h1, body.dark h2, body.dark h3, body.dark h4 { color: var(--text-heading); }
+
+            /* Dark: Cards */
+            body.dark .card {
+                background: var(--bg-card);
+                border-color: var(--border-card);
+            }
+            body.dark .card:hover { border-color: #2d4a7a; }
+            body.dark .stat-card { background: var(--bg-card); border-color: var(--border-card); }
+
+            /* Dark: Sidebar */
+            body.dark .sidebar {
+                background: #111827;
+                border-right-color: #21262d;
+                box-shadow: 2px 0 20px rgba(0,0,0,0.5);
+            }
+            body.dark .sidebar-brand { border-bottom-color: #21262d; }
+            body.dark .sidebar-brand-logo { border-color: #21262d; background: #1a2236; }
+            body.dark .sidebar-brand-name { color: #4d94ff; }
+            body.dark .sidebar-brand-sub { color: #8b949e; }
+            body.dark .sidebar-brand-city { color: #6e7681; }
+            body.dark .sidebar-portal-label { background: #1a2845; border-color: #2d4a7a; }
+            body.dark .portal-name { color: #4d94ff; }
+            body.dark .portal-ver { color: #8b949e; }
+            body.dark .sidebar-nav-label { color: #6e7681; }
+            body.dark .sidebar-link { color: #8b949e; }
+            body.dark .sidebar-link:hover:not(.active) { background: #1a2236; color: #e6edf3; }
+            body.dark .sidebar-link.active {
+                background: #1a2845;
+                color: #4d94ff;
+                border-color: #2d4a7a;
+            }
+            body.dark .sidebar-link.active::before { background: #4d94ff; }
+            body.dark .sidebar-footer { border-top-color: #21262d; }
+            body.dark .sidebar-user { background: #161b22; border-color: #21262d; }
+            body.dark .sidebar-user-name { color: #e6edf3; }
+            body.dark .sidebar-user-role { color: #8b949e; }
+
+            /* Dark: Mobile Header */
+            body.dark .mobile-header-bar {
+                background: #111827;
+                border-bottom-color: #21262d;
+                box-shadow: 0 2px 12px rgba(0,0,0,0.5);
+            }
+            body.dark .mobile-nav {
+                background: #111827;
+                border-bottom-color: #21262d;
+            }
+
+            /* Dark: Main content area */
+            body.dark .main-content { background: transparent; }
+            body.dark .bg-slate-50 { background: #111827 !important; }
+            body.dark .bg-white { background: #161b22 !important; }
+            body.dark .bg-slate-100 { background: #1a2236 !important; }
+            body.dark .border-slate-200, body.dark .border-slate-300 { border-color: #21262d !important; }
+            body.dark .text-slate-900, body.dark .text-slate-800 { color: #e6edf3 !important; }
+            body.dark .text-slate-700 { color: #c9d1d9 !important; }
+            body.dark .text-slate-600 { color: #b1bac4 !important; }
+            body.dark .text-slate-500, body.dark .text-slate-400 { color: #8b949e !important; }
+            body.dark .text-white { color: #ffffff !important; }
+
+            /* Dark: Tables */
+            body.dark table { border-color: #21262d; }
+            body.dark thead th { background: #1a2236; color: #8b949e; border-bottom-color: #21262d; }
+            body.dark tbody td { background: #161b22; color: #c9d1d9; border-bottom-color: #21262d; }
+            body.dark tbody tr:hover td { background: #1a2845; color: #e6edf3; }
+
+            /* Dark: Inputs */
+            body.dark input, body.dark select, body.dark textarea {
+                background: #1a2236;
+                border-color: #30363d;
+                color: #e6edf3;
+            }
+            body.dark input:focus, body.dark select:focus, body.dark textarea:focus {
+                background: #1d2a3e;
+                border-color: #4d94ff;
+                box-shadow: 0 0 0 3px rgba(77, 148, 255, 0.15);
+                color: #e6edf3;
+            }
+            body.dark .fancy-file-dropzone {
+                background: #1a2236;
+                border-color: #30363d;
+            }
+            body.dark .fancy-file-dropzone:hover, body.dark .fancy-file-dropzone:focus-within {
+                border-color: #4d94ff;
+                background: #1a2845;
+                box-shadow: 0 4px 16px rgba(77, 148, 255, 0.12);
+            }
+
+            /* Dark: Buttons */
+            body.dark button:not([type="submit"]):not(.btn-primary):not(.bg-blue-600):not(.filter-btn) {
+                background: #1a2236;
+                border-color: #30363d;
+                color: #c9d1d9;
+            }
+            body.dark button:not([type="submit"]):not(.btn-primary):not(.bg-blue-600):not(.filter-btn):hover {
+                background: #21262d;
+                border-color: #4d94ff;
+                color: #e6edf3;
+            }
+            body.dark .filter-btn:not(.active) {
+                background: #1a2236;
+                border-color: #30363d;
+                color: #8b949e;
+            }
+            body.dark .filter-btn:not(.active):hover {
+                background: #21262d;
+                border-color: #4d94ff;
+                color: #e6edf3;
+            }
+
+            /* Dark: Badges */
+            body.dark .badge-green { background: #0d2a1a; color: #56d364; border-color: #196132; }
+            body.dark .badge-red { background: #2d0f0f; color: #ff7b7b; border-color: #6d1a1a; }
+            body.dark .badge-amber { background: #2a1f08; color: #e3b341; border-color: #5e3f08; }
+            body.dark .badge-blue { background: #1a2845; color: #4d94ff; border-color: #2d4a7a; }
+            body.dark .badge-slate { background: #1a2236; color: #8b949e; border-color: #21262d; }
+            body.dark .badge-purple { background: #21103a; color: #c084fc; border-color: #4a1880; }
+            body.dark .badge-indigo { background: #1a1f45; color: #818cf8; border-color: #2d3578; }
+
+            /* Dark: Alerts */
+            body.dark .alert-blue { background: #1a2845; color: #93c5fd; border-color: #2d4a7a; }
+            body.dark .alert-green { background: #0d2a1a; color: #56d364; border-color: #196132; }
+            body.dark .alert-red { background: #2d0f0f; color: #ff7b7b; border-color: #6d1a1a; }
+            body.dark .alert-amber { background: #2a1f08; color: #e3b341; border-color: #5e3f08; }
+
+            /* Dark: Chart containers */
+            body.dark .chart-container { background: #161b22; border-color: #21262d; }
+            body.dark .chart-container:hover { border-color: #2d4a7a; }
+
+            /* Dark: Scrollbar */
+            body.dark ::-webkit-scrollbar-track { background: #0d1117; }
+            body.dark ::-webkit-scrollbar-thumb { background: #30363d; }
+            body.dark ::-webkit-scrollbar-thumb:hover { background: #4d94ff; }
+
+            /* Dark: Header bar divider */
+            body.dark [class*="border-slate-200"] { border-color: rgba(33, 38, 45, 0.8) !important; }
+
+            /* Theme toggle icon transition */
+            #theme-toggle-icon { transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.2s ease; }
+            body.dark #theme-toggle-btn { background: #1a2236; border-color: #30363d; color: #e6edf3; }
+        """),
+        Script("""
+            // Apply dark mode immediately before paint to avoid flash
+            (function() {
+                var saved = localStorage.getItem('theme');
+                var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                if (saved === 'dark' || (!saved && prefersDark)) {
+                    document.body ? document.body.classList.add('dark') : document.addEventListener('DOMContentLoaded', function(){ document.body.classList.add('dark'); });
+                }
+            })();
+
+            function toggleTheme() {
+                var body = document.body;
+                var isDark = body.classList.toggle('dark');
+                localStorage.setItem('theme', isDark ? 'dark' : 'light');
+
+                // Update all toggle button icons
+                document.querySelectorAll('#theme-toggle-icon').forEach(function(el) {
+                    if (isDark) {
+                        el.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>';
+                        el.setAttribute('fill', 'none');
+                    } else {
+                        el.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>';
+                    }
+                });
+            }
+
+            // Sync icon state on load
+            document.addEventListener('DOMContentLoaded', function() {
+                var isDark = document.body.classList.contains('dark');
+                document.querySelectorAll('#theme-toggle-icon').forEach(function(el) {
+                    if (isDark) {
+                        el.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>';
+                        el.setAttribute('fill', 'none');
+                    }
+                });
+            });
         """),
     ),
     exception_handlers={404: lambda req, exc: page_upload()},
@@ -7162,9 +8109,21 @@ def route_favicon():
     return Response(status_code=204)
 
 
+@app.get("/logo")
+def route_logo():
+    logo_path = os.path.join(os.path.dirname(__file__), "sara.webp")
+    try:
+        with open(logo_path, "rb") as f:
+            data = f.read()
+        return Response(content=data, media_type="image/webp", headers={"Cache-Control": "public, max-age=86400"})
+    except FileNotFoundError:
+        return Response(status_code=404)
+
+
 @app.get("/")
 def route_root():
     return page_upload()
+
 
 
 @app.get("/upload")
@@ -7556,6 +8515,24 @@ async def route_upload_pdf(request):
         SESSION["preview_pdf_report"] = pdf_report
         SESSION["reconciliation_report"] = None
 
+        # Extract previous batch PDF if provided
+        file_prev = form.get("file_prev_pdf")
+        prev_pdf_report = None
+        prev_ca = None
+        if file_prev and getattr(file_prev, "filename", ""):
+            prev_bytes = await file_prev.read()
+            if prev_bytes:
+                p_filename = os.path.basename(getattr(file_prev, "filename", "prev_result.pdf"))
+                p_filename = re.sub(r"[^\w\.\-]", "_", p_filename)
+                prev_pdf_report = extract_coe_pdf(prev_bytes, p_filename)
+                if prev_pdf_report.ok and prev_pdf_report.records:
+                    p_df = pdf_records_to_dataframe(prev_pdf_report.records)
+                    prev_ca = compute_class_analysis(p_df, p_filename)
+                    prev_ca.subject_mappings = build_subject_mapping_log(prev_pdf_report.records)
+
+        SESSION["prev_pdf_report"] = prev_pdf_report
+        SESSION["prev_ca"] = prev_ca
+
         return page_pdf_preview()
     except Exception as e:
         push_alert(f"PDF extraction error: {e}", "red")
@@ -7753,7 +8730,9 @@ def route_pdf_to_excel_download():
     staff_map = SESSION.get("staff_directory", {})
     ia_store = SESSION.get("ia_marks_directory", {})
     filename = SESSION.get("preview_pdf_filename", "coe_result.pdf")
-    xlsx_bytes = build_department_excel(ca, pdf_report, staff_map, filename, ia_store)
+    prev_ca = SESSION.get("prev_ca")
+    prev_pdf_report = SESSION.get("prev_pdf_report")
+    xlsx_bytes = build_department_excel(ca, pdf_report, staff_map, filename, ia_store, prev_ca=prev_ca, prev_pdf_report=prev_pdf_report)
     fname = department_excel_filename(pdf_report)
     return Response(
         content=xlsx_bytes,
