@@ -1,0 +1,2625 @@
+{
+  "catalog_version": "1.0",
+  "status": "ACTIVE",
+  "department": "CSE (Artificial Intelligence and Machine Learning)",
+  "department_code": "AIML",
+  "programme": "B.E. - CSE (Artificial Intelligence and Machine Learning)",
+  "regulation": "R2024",
+  "source": "B.E. - CSE (Artificial Intelligence and Machine Learning) R2024 Curriculum & Syllabi (Saranathan College of Engineering)",
+  "approved_by": "Academic Council",
+  "created_date": "2026-08-15",
+  "academic_structure": {
+    "semesters": 8,
+    "total_credits": 168
+  },
+  "courses": [
+    {
+      "id": "AIML_R2024_24IP101",
+      "code": "24IP101",
+      "name": "Induction Programme",
+      "short_name": "",
+      "semester": 1,
+      "credits": 0.0,
+      "type": "MANDATORY",
+      "category": "Induction Programme",
+      "aliases": [
+        "24IP101",
+        "IP24101",
+        "IP101",
+        "IP",
+        "INDUCTION PROGRAMME",
+        "INDUCTION",
+        "24IP101A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24EN101",
+      "code": "24EN101",
+      "name": "Professional English I",
+      "short_name": "",
+      "semester": 1,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Sem 1-4 Foundation",
+      "aliases": [
+        "24EN101",
+        "EN24101",
+        "EN101",
+        "PEI",
+        "PROFESSIONAL ENGLISH I",
+        "PROFESSIONAL ENGLISH",
+        "ENGLISH I",
+        "PROF ENG I",
+        "TECH ENGLISH",
+        "ENG 1",
+        "ENGLISH",
+        "24EN101A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24MA101",
+      "code": "24MA101",
+      "name": "Engineering Mathematics I",
+      "short_name": "",
+      "semester": 1,
+      "credits": 4.0,
+      "type": "THEORY",
+      "category": "Sem 1-4 Foundation",
+      "aliases": [
+        "24MA101",
+        "MA24101",
+        "MA101",
+        "EMI",
+        "ENGINEERING MATHEMATICS I",
+        "ENGINEERING MATHEMATICS",
+        "MATHS I",
+        "MATH I",
+        "MATHEMATICS I",
+        "M1",
+        "ENGG MATHS I",
+        "MATHS",
+        "MATHEMATICS",
+        "24MA101A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24PH101",
+      "code": "24PH101",
+      "name": "Engineering Physics",
+      "short_name": "",
+      "semester": 1,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Sem 1-4 Foundation",
+      "aliases": [
+        "24PH101",
+        "PH24101",
+        "PH101",
+        "EP",
+        "ENGINEERING PHYSICS",
+        "PHYSICS",
+        "PHY",
+        "ENGG PHYSICS",
+        "24PH101A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24CH101",
+      "code": "24CH101",
+      "name": "Engineering Chemistry",
+      "short_name": "",
+      "semester": 1,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Sem 1-4 Foundation",
+      "aliases": [
+        "24CH101",
+        "CH24101",
+        "CH101",
+        "EC",
+        "ENGINEERING CHEMISTRY",
+        "CHEMISTRY",
+        "CHEM",
+        "ENGG CHEMISTRY",
+        "24CH101A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24ES101",
+      "code": "24ES101",
+      "name": "Problem Solving and Python Programming",
+      "short_name": "",
+      "semester": 1,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Sem 1-4 Foundation",
+      "aliases": [
+        "24ES101",
+        "ES24101",
+        "ES101",
+        "PSAPP",
+        "PROBLEM SOLVING AND PYTHON PROGRAMMING",
+        "PSPP",
+        "PYTHON",
+        "PYTHON PROGRAMMING",
+        "PROBLEM SOLVING AND PYTHON",
+        "24ES101A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24ES102",
+      "code": "24ES102",
+      "name": "Engineering Graphics",
+      "short_name": "",
+      "semester": 1,
+      "credits": 4.0,
+      "type": "THEORY",
+      "category": "Sem 1-4 Foundation",
+      "aliases": [
+        "24ES102",
+        "ES24102",
+        "ES102",
+        "EG",
+        "ENGINEERING GRAPHICS",
+        "GRAPHICS",
+        "ENGINEERING DRAWING",
+        "ENGG GRAPHICS",
+        "24ES102A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24TA101",
+      "code": "24TA101",
+      "name": "தமிழர் மரபு / Heritage of Tamils",
+      "short_name": "",
+      "semester": 1,
+      "credits": 1.0,
+      "type": "THEORY",
+      "category": "Sem 1-4 Foundation",
+      "aliases": [
+        "24TA101",
+        "TA24101",
+        "TA101",
+        "தமHOT",
+        "தமிழர் மரபு / HERITAGE OF TAMILS",
+        "HERITAGE OF TAMILS",
+        "TAMIL 1",
+        "TAMILAR MARABU",
+        "24TA101A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24PH111",
+      "code": "24PH111",
+      "name": "Physics and Chemistry Laboratory",
+      "short_name": "",
+      "semester": 1,
+      "credits": 2.0,
+      "type": "LAB",
+      "category": "Sem 1-4 Foundation",
+      "aliases": [
+        "24PH111",
+        "PH24111",
+        "PH111",
+        "PACL",
+        "PHYSICS AND CHEMISTRY LABORATORY",
+        "PHYSICS AND CHEMISTRY LAB",
+        "PHY CHEM LAB",
+        "EP/EC LAB",
+        "24PH111A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24ES111",
+      "code": "24ES111",
+      "name": "Python Programming Laboratory",
+      "short_name": "",
+      "semester": 1,
+      "credits": 2.0,
+      "type": "LAB",
+      "category": "Sem 1-4 Foundation",
+      "aliases": [
+        "24ES111",
+        "ES24111",
+        "ES111",
+        "PPL",
+        "PYTHON PROGRAMMING LABORATORY",
+        "PYTHON LAB",
+        "PSPP LAB",
+        "PYTHON PROGRAMMING LAB",
+        "24ES111A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24EM111",
+      "code": "24EM111",
+      "name": "Communication Laboratory I",
+      "short_name": "",
+      "semester": 1,
+      "credits": 1.0,
+      "type": "LAB",
+      "category": "Sem 1-4 Foundation",
+      "aliases": [
+        "24EM111",
+        "EM24111",
+        "EM111",
+        "CLI",
+        "COMMUNICATION LABORATORY I",
+        "COMMUNICATION LABORATORY",
+        "COMM LAB 1",
+        "COMMUNICATION LAB I",
+        "ENGLISH LAB I",
+        "24EM111A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24EN201",
+      "code": "24EN201",
+      "name": "Professional English II",
+      "short_name": "",
+      "semester": 2,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Sem 1-4 Foundation",
+      "aliases": [
+        "24EN201",
+        "EN24201",
+        "EN201",
+        "PEI",
+        "PROFESSIONAL ENGLISH II",
+        "PROFESSIONAL ENGLISH",
+        "ENGLISH II",
+        "PROF ENG II",
+        "TECH ENGLISH II",
+        "ENG 2",
+        "ENGLISH",
+        "24EN201A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24MA201",
+      "code": "24MA201",
+      "name": "Engineering Mathematics II",
+      "short_name": "",
+      "semester": 2,
+      "credits": 4.0,
+      "type": "THEORY",
+      "category": "Sem 1-4 Foundation",
+      "aliases": [
+        "24MA201",
+        "MA24201",
+        "MA201",
+        "EMI",
+        "ENGINEERING MATHEMATICS II",
+        "ENGINEERING MATHEMATICS",
+        "MATHS II",
+        "MATH II",
+        "MATHEMATICS II",
+        "M2",
+        "ENGG MATHS II",
+        "MATHS",
+        "MATHEMATICS",
+        "24MA201A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24PH201",
+      "code": "24PH201",
+      "name": "Physics for Information Science",
+      "short_name": "",
+      "semester": 2,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Sem 1-4 Foundation",
+      "aliases": [
+        "24PH201",
+        "PH24201",
+        "PH201",
+        "PFIS",
+        "PHYSICS FOR INFORMATION SCIENCE",
+        "PHYSICS FOR INFO SCIENCE",
+        "PIS",
+        "PHYSICS II",
+        "PHY II",
+        "24PH201A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24CS201",
+      "code": "24CS201",
+      "name": "Programming in C",
+      "short_name": "",
+      "semester": 2,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Sem 1-4 Foundation",
+      "aliases": [
+        "24CS201",
+        "CS24201",
+        "CS201",
+        "PIC",
+        "PROGRAMMING IN C",
+        "C PROGRAMMING",
+        "C PROG",
+        "C",
+        "24CS201A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24TA201",
+      "code": "24TA201",
+      "name": "தமிழரும் தொழில்நுட்பமும் / Tamils and Technology",
+      "short_name": "",
+      "semester": 2,
+      "credits": 1.0,
+      "type": "THEORY",
+      "category": "Sem 1-4 Foundation",
+      "aliases": [
+        "24TA201",
+        "TA24201",
+        "TA201",
+        "ததTAT",
+        "தமிழரும் தொழில்நுட்பமும் / TAMILS AND TECHNOLOGY",
+        "TAMILS AND TECHNOLOGY",
+        "TAMIL 2",
+        "TAMILARUM THOZHILNUTPAMUM",
+        "24TA201A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24ES201",
+      "code": "24ES201",
+      "name": "Basic Electrical and Electronics Engineering",
+      "short_name": "",
+      "semester": 2,
+      "credits": 4.0,
+      "type": "THEORY_CUM_PRACTICAL",
+      "category": "Sem 1-4 Foundation",
+      "aliases": [
+        "24ES201",
+        "ES24201",
+        "ES201",
+        "BEAEE",
+        "BASIC ELECTRICAL AND ELECTRONICS ENGINEERING",
+        "BEEE",
+        "BEE",
+        "BASIC ELECTRICAL & ELECTRONICS",
+        "24ES201A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24CS211",
+      "code": "24CS211",
+      "name": "Programming in C Laboratory",
+      "short_name": "",
+      "semester": 2,
+      "credits": 2.0,
+      "type": "LAB",
+      "category": "Sem 1-4 Foundation",
+      "aliases": [
+        "24CS211",
+        "CS24211",
+        "CS211",
+        "PICL",
+        "PROGRAMMING IN C LABORATORY",
+        "C LAB",
+        "PROGRAMMING IN C LAB",
+        "C PROGRAMMING LABORATORY",
+        "24CS211A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24EM211",
+      "code": "24EM211",
+      "name": "Communication Laboratory II",
+      "short_name": "",
+      "semester": 2,
+      "credits": 1.0,
+      "type": "LAB",
+      "category": "Sem 1-4 Foundation",
+      "aliases": [
+        "24EM211",
+        "EM24211",
+        "EM211",
+        "CLI",
+        "COMMUNICATION LABORATORY II",
+        "COMMUNICATION LABORATORY",
+        "COMM LAB 2",
+        "COMMUNICATION LAB II",
+        "ENGLISH LAB II",
+        "24EM211A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24MA301",
+      "code": "24MA301",
+      "name": "Probability and Statistics",
+      "short_name": "",
+      "semester": 3,
+      "credits": 4.0,
+      "type": "THEORY",
+      "category": "Sem 1-4 Foundation",
+      "aliases": [
+        "24MA301",
+        "MA24301",
+        "MA301",
+        "PAS",
+        "PROBABILITY AND STATISTICS",
+        "P&S",
+        "PROBABILITY & STATISTICS",
+        "M3",
+        "24MA301A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24CS301",
+      "code": "24CS301",
+      "name": "Data Structures",
+      "short_name": "",
+      "semester": 3,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Sem 1-4 Foundation",
+      "aliases": [
+        "24CS301",
+        "CS24301",
+        "CS301",
+        "DS",
+        "DATA STRUCTURES",
+        "24CS301A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24CS302",
+      "code": "24CS302",
+      "name": "Object Oriented Programming",
+      "short_name": "",
+      "semester": 3,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Sem 1-4 Foundation",
+      "aliases": [
+        "24CS302",
+        "CS24302",
+        "CS302",
+        "OOP",
+        "OBJECT ORIENTED PROGRAMMING",
+        "OOPS",
+        "JAVA",
+        "24CS302A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24ES301",
+      "code": "24ES301",
+      "name": "Digital Principles and Computer Organization",
+      "short_name": "",
+      "semester": 3,
+      "credits": 4.0,
+      "type": "THEORY_CUM_PRACTICAL",
+      "category": "Sem 1-4 Foundation",
+      "aliases": [
+        "24ES301",
+        "ES24301",
+        "ES301",
+        "DPACO",
+        "DIGITAL PRINCIPLES AND COMPUTER ORGANIZATION",
+        "DPCO",
+        "DP&CO",
+        "COA",
+        "24ES301A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24CS303",
+      "code": "24CS303",
+      "name": "Essentials of Web Development",
+      "short_name": "",
+      "semester": 3,
+      "credits": 4.0,
+      "type": "THEORY_CUM_PRACTICAL",
+      "category": "Sem 1-4 Foundation",
+      "aliases": [
+        "24CS303",
+        "CS24303",
+        "CS303",
+        "EOWD",
+        "ESSENTIALS OF WEB DEVELOPMENT",
+        "EWD",
+        "WEB DEV",
+        "ESSENTIALS OF WEB DEV",
+        "24CS303A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24CS304",
+      "code": "24CS304",
+      "name": "Foundations of Data Science",
+      "short_name": "",
+      "semester": 3,
+      "credits": 4.0,
+      "type": "THEORY_CUM_PRACTICAL",
+      "category": "Sem 1-4 Foundation",
+      "aliases": [
+        "24CS304",
+        "CS24304",
+        "CS304",
+        "FODS",
+        "FOUNDATIONS OF DATA SCIENCE",
+        "FDS",
+        "DATA SCIENCE",
+        "24CS304A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24CS311",
+      "code": "24CS311",
+      "name": "Data Structures Laboratory",
+      "short_name": "",
+      "semester": 3,
+      "credits": 1.5,
+      "type": "LAB",
+      "category": "Sem 1-4 Foundation",
+      "aliases": [
+        "24CS311",
+        "CS24311",
+        "CS311",
+        "DSL",
+        "DATA STRUCTURES LABORATORY",
+        "DS LAB",
+        "DATA STRUCTURES LAB",
+        "24CS311A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24CS312",
+      "code": "24CS312",
+      "name": "Object Oriented Programming Laboratory",
+      "short_name": "",
+      "semester": 3,
+      "credits": 1.5,
+      "type": "LAB",
+      "category": "Sem 1-4 Foundation",
+      "aliases": [
+        "24CS312",
+        "CS24312",
+        "CS312",
+        "OOPL",
+        "OBJECT ORIENTED PROGRAMMING LABORATORY",
+        "OOP LAB",
+        "OOPS LAB",
+        "JAVA LAB",
+        "24CS312A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24EM301",
+      "code": "24EM301",
+      "name": "Employability Skills I",
+      "short_name": "",
+      "semester": 3,
+      "credits": 1.0,
+      "type": "LAB",
+      "category": "Sem 1-4 Foundation",
+      "aliases": [
+        "24EM301",
+        "EM24301",
+        "EM301",
+        "ESI",
+        "EMPLOYABILITY SKILLS I",
+        "ES 1",
+        "ES I",
+        "EMPLOYABILITY SKILLS 1",
+        "24EM301A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24MA401",
+      "code": "24MA401",
+      "name": "Discrete Mathematics",
+      "short_name": "",
+      "semester": 4,
+      "credits": 4.0,
+      "type": "THEORY",
+      "category": "Sem 1-4 Foundation",
+      "aliases": [
+        "24MA401",
+        "MA24401",
+        "MA401",
+        "DM",
+        "DISCRETE MATHEMATICS",
+        "DISCRETE MATHS",
+        "M4",
+        "24MA401A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24CH401",
+      "code": "24CH401",
+      "name": "Environmental Sciences and Sustainability",
+      "short_name": "",
+      "semester": 4,
+      "credits": 2.0,
+      "type": "THEORY",
+      "category": "Sem 1-4 Foundation",
+      "aliases": [
+        "24CH401",
+        "CH24401",
+        "CH401",
+        "ESAS",
+        "ENVIRONMENTAL SCIENCES AND SUSTAINABILITY",
+        "EVS",
+        "ENVIRONMENTAL SCIENCE",
+        "ESS",
+        "24CH401A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24IT401",
+      "code": "24IT401",
+      "name": "Automata Theory and Formal Languages",
+      "short_name": "",
+      "semester": 4,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Sem 1-4 Foundation",
+      "aliases": [
+        "24IT401",
+        "IT24401",
+        "IT401",
+        "ATAFL",
+        "AUTOMATA THEORY AND FORMAL LANGUAGES",
+        "ATFL",
+        "FLAT",
+        "AUTOMATA",
+        "TOC",
+        "24IT401A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24CS402",
+      "code": "24CS402",
+      "name": "Database Management Systems",
+      "short_name": "",
+      "semester": 4,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Sem 1-4 Foundation",
+      "aliases": [
+        "24CS402",
+        "CS24402",
+        "CS402",
+        "DMS",
+        "DATABASE MANAGEMENT SYSTEMS",
+        "DBMS",
+        "DATABASE",
+        "24CS402A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24CS403",
+      "code": "24CS403",
+      "name": "Operating Systems",
+      "short_name": "",
+      "semester": 4,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Sem 1-4 Foundation",
+      "aliases": [
+        "24CS403",
+        "CS24403",
+        "CS403",
+        "OS",
+        "OPERATING SYSTEMS",
+        "24CS403A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24CS404",
+      "code": "24CS404",
+      "name": "Design and Analysis of Algorithms",
+      "short_name": "",
+      "semester": 4,
+      "credits": 4.0,
+      "type": "THEORY_CUM_PRACTICAL",
+      "category": "Sem 1-4 Foundation",
+      "aliases": [
+        "24CS404",
+        "CS24404",
+        "CS404",
+        "DAAOA",
+        "DESIGN AND ANALYSIS OF ALGORITHMS",
+        "DAA",
+        "ALGORITHMS",
+        "DESIGN & ANALYSIS OF ALGORITHMS",
+        "24CS404A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24CS411",
+      "code": "24CS411",
+      "name": "Database Management Systems Laboratory",
+      "short_name": "",
+      "semester": 4,
+      "credits": 1.5,
+      "type": "LAB",
+      "category": "Sem 1-4 Foundation",
+      "aliases": [
+        "24CS411",
+        "CS24411",
+        "CS411",
+        "DMSL",
+        "DATABASE MANAGEMENT SYSTEMS LABORATORY",
+        "DBMS LAB",
+        "DATABASE LAB",
+        "24CS411A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24CS412",
+      "code": "24CS412",
+      "name": "Operating Systems Laboratory",
+      "short_name": "",
+      "semester": 4,
+      "credits": 1.5,
+      "type": "LAB",
+      "category": "Sem 1-4 Foundation",
+      "aliases": [
+        "24CS412",
+        "CS24412",
+        "CS412",
+        "OSL",
+        "OPERATING SYSTEMS LABORATORY",
+        "OS LAB",
+        "OPERATING SYSTEMS LAB",
+        "24CS412A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24EM401",
+      "code": "24EM401",
+      "name": "Employability Skills II",
+      "short_name": "",
+      "semester": 4,
+      "credits": 1.0,
+      "type": "LAB",
+      "category": "Sem 1-4 Foundation",
+      "aliases": [
+        "24EM401",
+        "EM24401",
+        "EM401",
+        "ESI",
+        "EMPLOYABILITY SKILLS II",
+        "ES 2",
+        "ES II",
+        "EMPLOYABILITY SKILLS 2",
+        "24EM401A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24AD401",
+      "code": "24AD401",
+      "name": "Machine Learning",
+      "short_name": "",
+      "semester": 5,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Sem 5-8 Advanced",
+      "aliases": [
+        "24AD401",
+        "AD24401",
+        "AD401",
+        "ML",
+        "MACHINE LEARNING",
+        "24AD401A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24CS502",
+      "code": "24CS502",
+      "name": "Web Technologies",
+      "short_name": "",
+      "semester": 5,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Sem 5-8 Advanced",
+      "aliases": [
+        "24CS502",
+        "CS24502",
+        "CS502",
+        "WT",
+        "WEB TECHNOLOGIES",
+        "WEB TECH",
+        "24CS502A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24AL501",
+      "code": "24AL501",
+      "name": "Computer Networks and Security",
+      "short_name": "",
+      "semester": 5,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Sem 5-8 Advanced",
+      "aliases": [
+        "24AL501",
+        "AL24501",
+        "AL501",
+        "CNAS",
+        "COMPUTER NETWORKS AND SECURITY",
+        "CNS",
+        "NETWORKS",
+        "COMPUTER NETWORKS & SECURITY",
+        "24AL501A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24CS503",
+      "code": "24CS503",
+      "name": "Object Oriented Software Engineering",
+      "short_name": "",
+      "semester": 5,
+      "credits": 4.0,
+      "type": "THEORY_CUM_PRACTICAL",
+      "category": "Sem 5-8 Advanced",
+      "aliases": [
+        "24CS503",
+        "CS24503",
+        "CS503",
+        "OOSE",
+        "OBJECT ORIENTED SOFTWARE ENGINEERING",
+        "SOFTWARE ENGINEERING",
+        "OBJECT ORIENTED SOFTWARE ENGG",
+        "24CS503A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24AD303",
+      "code": "24AD303",
+      "name": "Introduction to Artificial Intelligence",
+      "short_name": "",
+      "semester": 5,
+      "credits": 4.0,
+      "type": "THEORY_CUM_PRACTICAL",
+      "category": "Sem 5-8 Advanced",
+      "aliases": [
+        "24AD303",
+        "AD24303",
+        "AD303",
+        "ITAI",
+        "INTRODUCTION TO ARTIFICIAL INTELLIGENCE",
+        "AI",
+        "IAI",
+        "ARTIFICIAL INTELLIGENCE",
+        "INTRO TO AI",
+        "24AD303A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24AD411",
+      "code": "24AD411",
+      "name": "Machine Learning Lab",
+      "short_name": "",
+      "semester": 5,
+      "credits": 1.5,
+      "type": "LAB",
+      "category": "Sem 5-8 Advanced",
+      "aliases": [
+        "24AD411",
+        "AD24411",
+        "AD411",
+        "MLL",
+        "MACHINE LEARNING LAB",
+        "ML LAB",
+        "24AD411A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24CS511",
+      "code": "24CS511",
+      "name": "Web Technologies Lab",
+      "short_name": "",
+      "semester": 5,
+      "credits": 1.5,
+      "type": "LAB",
+      "category": "Sem 5-8 Advanced",
+      "aliases": [
+        "24CS511",
+        "CS24511",
+        "CS511",
+        "WTL",
+        "WEB TECHNOLOGIES LAB",
+        "WT LAB",
+        "WEB TECH LAB",
+        "24CS511A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24EM501",
+      "code": "24EM501",
+      "name": "Employability Skills III",
+      "short_name": "",
+      "semester": 5,
+      "credits": 1.0,
+      "type": "LAB",
+      "category": "Sem 5-8 Advanced",
+      "aliases": [
+        "24EM501",
+        "EM24501",
+        "EM501",
+        "ESI",
+        "EMPLOYABILITY SKILLS III",
+        "ES 3",
+        "ES III",
+        "EMPLOYABILITY SKILLS 3",
+        "24EM501A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24AD504",
+      "code": "24AD504",
+      "name": "Natural Language Processing",
+      "short_name": "",
+      "semester": 6,
+      "credits": 4.0,
+      "type": "THEORY_CUM_PRACTICAL",
+      "category": "Sem 5-8 Advanced",
+      "aliases": [
+        "24AD504",
+        "AD24504",
+        "AD504",
+        "NLP",
+        "NATURAL LANGUAGE PROCESSING",
+        "24AD504A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24AL601",
+      "code": "24AL601",
+      "name": "Neural Networks and Deep Learning",
+      "short_name": "",
+      "semester": 6,
+      "credits": 4.0,
+      "type": "THEORY_CUM_PRACTICAL",
+      "category": "Sem 5-8 Advanced",
+      "aliases": [
+        "24AL601",
+        "AL24601",
+        "AL601",
+        "NNADL",
+        "NEURAL NETWORKS AND DEEP LEARNING",
+        "NNDL",
+        "DEEP LEARNING",
+        "NEURAL NETWORKS & DEEP LEARNING",
+        "24AL601A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24EM601",
+      "code": "24EM601",
+      "name": "Employability Skills IV",
+      "short_name": "",
+      "semester": 6,
+      "credits": 1.0,
+      "type": "LAB",
+      "category": "Sem 5-8 Advanced",
+      "aliases": [
+        "24EM601",
+        "EM24601",
+        "EM601",
+        "ESI",
+        "EMPLOYABILITY SKILLS IV",
+        "ES 4",
+        "ES IV",
+        "EMPLOYABILITY SKILLS 4",
+        "24EM601A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24GE701",
+      "code": "24GE701",
+      "name": "Human Values and Ethics",
+      "short_name": "",
+      "semester": 7,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Sem 5-8 Advanced",
+      "aliases": [
+        "24GE701",
+        "GE24701",
+        "GE701",
+        "HVAE",
+        "HUMAN VALUES AND ETHICS",
+        "HVE",
+        "HUMAN VALUES & ETHICS",
+        "ETHICS",
+        "24GE701A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24AL711",
+      "code": "24AL711",
+      "name": "Summer Internship",
+      "short_name": "",
+      "semester": 7,
+      "credits": 1.0,
+      "type": "THEORY",
+      "category": "Internship & Project",
+      "aliases": [
+        "24AL711",
+        "AL24711",
+        "AL711",
+        "SI",
+        "SUMMER INTERNSHIP",
+        "INTERNSHIP",
+        "24AL711A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24AL712",
+      "code": "24AL712",
+      "name": "Mini Project",
+      "short_name": "",
+      "semester": 7,
+      "credits": 1.0,
+      "type": "THEORY",
+      "category": "Internship & Project",
+      "aliases": [
+        "24AL712",
+        "AL24712",
+        "AL712",
+        "MP",
+        "MINI PROJECT",
+        "MINIPROJECT",
+        "24AL712A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24AL811",
+      "code": "24AL811",
+      "name": "Project Work",
+      "short_name": "",
+      "semester": 8,
+      "credits": 10.0,
+      "type": "THEORY",
+      "category": "Internship & Project",
+      "aliases": [
+        "24AL811",
+        "AL24811",
+        "AL811",
+        "PW",
+        "PROJECT WORK",
+        "PROJECT",
+        "FINAL PROJECT",
+        "CAPSTONE PROJECT",
+        "24AL811A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24CS901",
+      "code": "24CS901",
+      "name": "Exploratory Data Analysis",
+      "short_name": "",
+      "semester": 5,
+      "credits": 3.0,
+      "type": "THEORY_CUM_PRACTICAL",
+      "category": "Professional Elective",
+      "aliases": [
+        "24CS901",
+        "CS24901",
+        "CS901",
+        "EDA",
+        "EXPLORATORY DATA ANALYSIS",
+        "24CS901A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24CS902",
+      "code": "24CS902",
+      "name": "Recommender Systems",
+      "short_name": "",
+      "semester": 5,
+      "credits": 3.0,
+      "type": "THEORY_CUM_PRACTICAL",
+      "category": "Professional Elective",
+      "aliases": [
+        "24CS902",
+        "CS24902",
+        "CS902",
+        "RS",
+        "RECOMMENDER SYSTEMS",
+        "24CS902A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24CS904",
+      "code": "24CS904",
+      "name": "Big Data Analytics",
+      "short_name": "",
+      "semester": 5,
+      "credits": 3.0,
+      "type": "THEORY_CUM_PRACTICAL",
+      "category": "Professional Elective",
+      "aliases": [
+        "24CS904",
+        "CS24904",
+        "CS904",
+        "BDA",
+        "BIG DATA ANALYTICS",
+        "24CS904A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24CS905",
+      "code": "24CS905",
+      "name": "Business Analytics",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY_CUM_PRACTICAL",
+      "category": "Professional Elective",
+      "aliases": [
+        "24CS905",
+        "CS24905",
+        "CS905",
+        "BA",
+        "BUSINESS ANALYTICS",
+        "24CS905A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24CS906",
+      "code": "24CS906",
+      "name": "Image and Video Analytics",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY_CUM_PRACTICAL",
+      "category": "Professional Elective",
+      "aliases": [
+        "24CS906",
+        "CS24906",
+        "CS906",
+        "IAVA",
+        "IMAGE AND VIDEO ANALYTICS",
+        "IVA",
+        "IMAGE & VIDEO ANALYTICS",
+        "24CS906A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24CS907",
+      "code": "24CS907",
+      "name": "Healthcare Analytics",
+      "short_name": "",
+      "semester": 7,
+      "credits": 3.0,
+      "type": "THEORY_CUM_PRACTICAL",
+      "category": "Professional Elective",
+      "aliases": [
+        "24CS907",
+        "CS24907",
+        "CS907",
+        "HA",
+        "HEALTHCARE ANALYTICS",
+        "HCA",
+        "24CS907A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24CS908",
+      "code": "24CS908",
+      "name": "Climate Science and Data Analytics",
+      "short_name": "",
+      "semester": 7,
+      "credits": 3.0,
+      "type": "THEORY_CUM_PRACTICAL",
+      "category": "Professional Elective",
+      "aliases": [
+        "24CS908",
+        "CS24908",
+        "CS908",
+        "CSADA",
+        "CLIMATE SCIENCE AND DATA ANALYTICS",
+        "CSDA",
+        "CLIMATE SCIENCE",
+        "24CS908A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24AL901",
+      "code": "24AL901",
+      "name": "Digital Imaging and Computer Vision",
+      "short_name": "",
+      "semester": 7,
+      "credits": 3.0,
+      "type": "THEORY_CUM_PRACTICAL",
+      "category": "Professional Elective",
+      "aliases": [
+        "24AL901",
+        "AL24901",
+        "AL901",
+        "DIACV",
+        "DIGITAL IMAGING AND COMPUTER VISION",
+        "DICV",
+        "COMPUTER VISION",
+        "DIGITAL IMAGING",
+        "24AL901A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24CS909",
+      "code": "24CS909",
+      "name": "Design Thinking and Innovation",
+      "short_name": "",
+      "semester": 5,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24CS909",
+        "CS24909",
+        "CS909",
+        "DTAI",
+        "DESIGN THINKING AND INNOVATION",
+        "DTI",
+        "DESIGN THINKING",
+        "24CS909A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24CS910",
+      "code": "24CS910",
+      "name": "Full Stack Web Development",
+      "short_name": "",
+      "semester": 5,
+      "credits": 3.0,
+      "type": "THEORY_CUM_PRACTICAL",
+      "category": "Professional Elective",
+      "aliases": [
+        "24CS910",
+        "CS24910",
+        "CS910",
+        "FSWD",
+        "FULL STACK WEB DEVELOPMENT",
+        "FULL STACK WEB DEV",
+        "FULL STACK",
+        "24CS910A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24CS911",
+      "code": "24CS911",
+      "name": "Software Testing and Automation",
+      "short_name": "",
+      "semester": 5,
+      "credits": 3.0,
+      "type": "THEORY_CUM_PRACTICAL",
+      "category": "Professional Elective",
+      "aliases": [
+        "24CS911",
+        "CS24911",
+        "CS911",
+        "STAA",
+        "SOFTWARE TESTING AND AUTOMATION",
+        "STA",
+        "SOFTWARE TESTING",
+        "24CS911A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24CS912",
+      "code": "24CS912",
+      "name": "UI and UX Design AndHuman Centered Design",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY_CUM_PRACTICAL",
+      "category": "Professional Elective",
+      "aliases": [
+        "24CS912",
+        "CS24912",
+        "CS912",
+        "UAUDACD",
+        "UI AND UX DESIGN ANDHUMAN CENTERED DESIGN",
+        "UIUX",
+        "UI/UX",
+        "UI AND UX DESIGN",
+        "24CS912A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24CS913",
+      "code": "24CS913",
+      "name": "Java Spring Boot",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY_CUM_PRACTICAL",
+      "category": "Professional Elective",
+      "aliases": [
+        "24CS913",
+        "CS24913",
+        "CS913",
+        "JSB",
+        "JAVA SPRING BOOT",
+        "SPRING BOOT",
+        "24CS913A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24CS914",
+      "code": "24CS914",
+      "name": "Vibe Coding",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24CS914",
+        "CS24914",
+        "CS914",
+        "VC",
+        "VIBE CODING",
+        "AI CODING",
+        "24CS914A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24CS916",
+      "code": "24CS916",
+      "name": "DevOps",
+      "short_name": "",
+      "semester": 7,
+      "credits": 3.0,
+      "type": "THEORY_CUM_PRACTICAL",
+      "category": "Professional Elective",
+      "aliases": [
+        "24CS916",
+        "CS24916",
+        "CS916",
+        "DEVOPS",
+        "24CS916A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24CS948",
+      "code": "24CS948",
+      "name": "MLOps",
+      "short_name": "",
+      "semester": 7,
+      "credits": 3.0,
+      "type": "THEORY_CUM_PRACTICAL",
+      "category": "Professional Elective",
+      "aliases": [
+        "24CS948",
+        "CS24948",
+        "CS948",
+        "MLOPS",
+        "ML OPERATIONS",
+        "24CS948A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24CS917",
+      "code": "24CS917",
+      "name": "Cloud Computing",
+      "short_name": "",
+      "semester": 5,
+      "credits": 3.0,
+      "type": "THEORY_CUM_PRACTICAL",
+      "category": "Professional Elective",
+      "aliases": [
+        "24CS917",
+        "CS24917",
+        "CS917",
+        "CC",
+        "CLOUD COMPUTING",
+        "24CS917A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24CS918",
+      "code": "24CS918",
+      "name": "Virtualization",
+      "short_name": "",
+      "semester": 5,
+      "credits": 3.0,
+      "type": "THEORY_CUM_PRACTICAL",
+      "category": "Professional Elective",
+      "aliases": [
+        "24CS918",
+        "CS24918",
+        "CS918",
+        "VIRTUALIZATION",
+        "VIRT",
+        "24CS918A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24CS919",
+      "code": "24CS919",
+      "name": "Cloud Services Management",
+      "short_name": "",
+      "semester": 5,
+      "credits": 3.0,
+      "type": "THEORY_CUM_PRACTICAL",
+      "category": "Professional Elective",
+      "aliases": [
+        "24CS919",
+        "CS24919",
+        "CS919",
+        "CSM",
+        "CLOUD SERVICES MANAGEMENT",
+        "CLOUD SERVICES",
+        "24CS919A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24CS920",
+      "code": "24CS920",
+      "name": "Data Warehousing",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY_CUM_PRACTICAL",
+      "category": "Professional Elective",
+      "aliases": [
+        "24CS920",
+        "CS24920",
+        "CS920",
+        "DW",
+        "DATA WAREHOUSING",
+        "DWH",
+        "24CS920A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24CS921",
+      "code": "24CS921",
+      "name": "Storage Technologies",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24CS921",
+        "CS24921",
+        "CS921",
+        "ST",
+        "STORAGE TECHNOLOGIES",
+        "SAN/NAS",
+        "24CS921A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24CS922",
+      "code": "24CS922",
+      "name": "Software Defined Networks",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY_CUM_PRACTICAL",
+      "category": "Professional Elective",
+      "aliases": [
+        "24CS922",
+        "CS24922",
+        "CS922",
+        "SDN",
+        "SOFTWARE DEFINED NETWORKS",
+        "24CS922A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24CS923",
+      "code": "24CS923",
+      "name": "Stream Processing",
+      "short_name": "",
+      "semester": 7,
+      "credits": 3.0,
+      "type": "THEORY_CUM_PRACTICAL",
+      "category": "Professional Elective",
+      "aliases": [
+        "24CS923",
+        "CS24923",
+        "CS923",
+        "SP",
+        "STREAM PROCESSING",
+        "24CS923A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24CS924",
+      "code": "24CS924",
+      "name": "Edge Computing",
+      "short_name": "",
+      "semester": 7,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24CS924",
+        "CS24924",
+        "CS924",
+        "EC",
+        "EDGE COMPUTING",
+        "24CS924A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24CS925",
+      "code": "24CS925",
+      "name": "Ethical Hacking",
+      "short_name": "",
+      "semester": 5,
+      "credits": 3.0,
+      "type": "THEORY_CUM_PRACTICAL",
+      "category": "Professional Elective",
+      "aliases": [
+        "24CS925",
+        "CS24925",
+        "CS925",
+        "EH",
+        "ETHICAL HACKING",
+        "24CS925A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24CS926",
+      "code": "24CS926",
+      "name": "Digital and Mobile Forensics",
+      "short_name": "",
+      "semester": 5,
+      "credits": 3.0,
+      "type": "THEORY_CUM_PRACTICAL",
+      "category": "Professional Elective",
+      "aliases": [
+        "24CS926",
+        "CS24926",
+        "CS926",
+        "DAMF",
+        "DIGITAL AND MOBILE FORENSICS",
+        "DMF",
+        "DIGITAL FORENSICS",
+        "24CS926A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24CS927",
+      "code": "24CS927",
+      "name": "Network and Web Security",
+      "short_name": "",
+      "semester": 5,
+      "credits": 3.0,
+      "type": "THEORY_CUM_PRACTICAL",
+      "category": "Professional Elective",
+      "aliases": [
+        "24CS927",
+        "CS24927",
+        "CS927",
+        "NAWS",
+        "NETWORK AND WEB SECURITY",
+        "NWS",
+        "NETWORK SECURITY",
+        "WEB SECURITY",
+        "24CS927A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24CS929",
+      "code": "24CS929",
+      "name": "Social NetworkSecurity",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24CS929",
+        "CS24929",
+        "CS929",
+        "SN",
+        "SOCIAL NETWORKSECURITY",
+        "SNS",
+        "SOCIAL NETWORK SECURITY",
+        "24CS929A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24CS930",
+      "code": "24CS930",
+      "name": "Cryptocurrency and Blockchain Technologies",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY_CUM_PRACTICAL",
+      "category": "Professional Elective",
+      "aliases": [
+        "24CS930",
+        "CS24930",
+        "CS930",
+        "CABT",
+        "CRYPTOCURRENCY AND BLOCKCHAIN TECHNOLOGIES",
+        "BLOCKCHAIN",
+        "CRYPTOCURRENCY",
+        "24CS930A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24CS931",
+      "code": "24CS931",
+      "name": "Security and Privacy in Cloud",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY_CUM_PRACTICAL",
+      "category": "Professional Elective",
+      "aliases": [
+        "24CS931",
+        "CS24931",
+        "CS931",
+        "SAPIC",
+        "SECURITY AND PRIVACY IN CLOUD",
+        "CLOUD SECURITY",
+        "SECURITY & PRIVACY IN CLOUD",
+        "24CS931A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24CS932",
+      "code": "24CS932",
+      "name": "IoT Security",
+      "short_name": "",
+      "semester": 7,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24CS932",
+        "CS24932",
+        "CS932",
+        "IS",
+        "IOT SECURITY",
+        "24CS932A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24AD918",
+      "code": "24AD918",
+      "name": "Quantum Cryptographic Techniques",
+      "short_name": "",
+      "semester": 7,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24AD918",
+        "AD24918",
+        "AD918",
+        "QCT",
+        "QUANTUM CRYPTOGRAPHIC TECHNIQUES",
+        "QUANTUM CRYPTOGRAPHY",
+        "24AD918A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24CS933",
+      "code": "24CS933",
+      "name": "Augmented Reality / Virtual Reality",
+      "short_name": "",
+      "semester": 5,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24CS933",
+        "CS24933",
+        "CS933",
+        "ARVR",
+        "AUGMENTED REALITY / VIRTUAL REALITY",
+        "AR/VR",
+        "AUGMENTED REALITY",
+        "24CS933A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24CS934",
+      "code": "24CS934",
+      "name": "Robotic ProcessAutomation",
+      "short_name": "",
+      "semester": 5,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24CS934",
+        "CS24934",
+        "CS934",
+        "RP",
+        "ROBOTIC PROCESSAUTOMATION",
+        "RPA",
+        "ROBOTIC PROCESS AUTOMATION",
+        "24CS934A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24CS940",
+      "code": "24CS940",
+      "name": "Embedded Systems and IoT Design",
+      "short_name": "",
+      "semester": 5,
+      "credits": 3.0,
+      "type": "THEORY_CUM_PRACTICAL",
+      "category": "Professional Elective",
+      "aliases": [
+        "24CS940",
+        "CS24940",
+        "CS940",
+        "ESAID",
+        "EMBEDDED SYSTEMS AND IOT DESIGN",
+        "ES & IOT",
+        "EMBEDDED SYSTEMS",
+        "24CS940A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24CS937",
+      "code": "24CS937",
+      "name": "QuantumComputing",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24CS937",
+        "CS24937",
+        "CS937",
+        "QUANTUMCOMPUTING",
+        "QC",
+        "QUANTUM COMPUTING",
+        "24CS937A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24CS938",
+      "code": "24CS938",
+      "name": "IoT and SmartCities",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24CS938",
+        "CS24938",
+        "CS938",
+        "IAS",
+        "IOT AND SMARTCITIES",
+        "IOT & SMART CITIES",
+        "SMART CITIES",
+        "24CS938A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24AL903",
+      "code": "24AL903",
+      "name": "Smart IoT Architecture",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24AL903",
+        "AL24903",
+        "AL903",
+        "SIA",
+        "SMART IOT ARCHITECTURE",
+        "24AL903A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24AL904",
+      "code": "24AL904",
+      "name": "Intelligent Robots and Drone Technology",
+      "short_name": "",
+      "semester": 7,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24AL904",
+        "AL24904",
+        "AL904",
+        "IRADT",
+        "INTELLIGENT ROBOTS AND DRONE TECHNOLOGY",
+        "DRONE TECHNOLOGY",
+        "INTELLIGENT ROBOTS",
+        "IRDT",
+        "24AL904A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24IT901",
+      "code": "24IT901",
+      "name": "Wearable Computing",
+      "short_name": "",
+      "semester": 7,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24IT901",
+        "IT24901",
+        "IT901",
+        "WC",
+        "WEARABLE COMPUTING",
+        "24IT901A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24CS941",
+      "code": "24CS941",
+      "name": "Soft Computing",
+      "short_name": "",
+      "semester": 5,
+      "credits": 3.0,
+      "type": "THEORY_CUM_PRACTICAL",
+      "category": "Professional Elective",
+      "aliases": [
+        "24CS941",
+        "CS24941",
+        "CS941",
+        "SC",
+        "SOFT COMPUTING",
+        "24CS941A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24CS945",
+      "code": "24CS945",
+      "name": "Generative AI and Prompt Engineering",
+      "short_name": "",
+      "semester": 5,
+      "credits": 3.0,
+      "type": "THEORY_CUM_PRACTICAL",
+      "category": "Professional Elective",
+      "aliases": [
+        "24CS945",
+        "CS24945",
+        "CS945",
+        "GAAPE",
+        "GENERATIVE AI AND PROMPT ENGINEERING",
+        "GEN AI",
+        "PROMPT ENGINEERING",
+        "GENAI & PE",
+        "24CS945A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24CS946",
+      "code": "24CS946",
+      "name": "Cognitive Science",
+      "short_name": "",
+      "semester": 5,
+      "credits": 3.0,
+      "type": "THEORY_CUM_PRACTICAL",
+      "category": "Professional Elective",
+      "aliases": [
+        "24CS946",
+        "CS24946",
+        "CS946",
+        "CS",
+        "COGNITIVE SCIENCE",
+        "COG SCI",
+        "24CS946A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24CS944",
+      "code": "24CS944",
+      "name": "Ethics and AI",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24CS944",
+        "CS24944",
+        "CS944",
+        "EAA",
+        "ETHICS AND AI",
+        "ETHICS & AI",
+        "AI ETHICS",
+        "24CS944A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24AL905",
+      "code": "24AL905",
+      "name": "Intelligent Transportation Systems",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24AL905",
+        "AL24905",
+        "AL905",
+        "ITS",
+        "INTELLIGENT TRANSPORTATION SYSTEMS",
+        "INTELLIGENT TRANSPORTATION",
+        "24AL905A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24AL906",
+      "code": "24AL906",
+      "name": "Explainable AI",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY_CUM_PRACTICAL",
+      "category": "Professional Elective",
+      "aliases": [
+        "24AL906",
+        "AL24906",
+        "AL906",
+        "EA",
+        "EXPLAINABLE AI",
+        "XAI",
+        "24AL906A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24CS947",
+      "code": "24CS947",
+      "name": "Agentic AI",
+      "short_name": "",
+      "semester": 7,
+      "credits": 3.0,
+      "type": "THEORY_CUM_PRACTICAL",
+      "category": "Professional Elective",
+      "aliases": [
+        "24CS947",
+        "CS24947",
+        "CS947",
+        "AA",
+        "AGENTIC AI",
+        "AGENTS",
+        "24CS947A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24AL907",
+      "code": "24AL907",
+      "name": "Computational Neuroscience",
+      "short_name": "",
+      "semester": 7,
+      "credits": 3.0,
+      "type": "THEORY_CUM_PRACTICAL",
+      "category": "Professional Elective",
+      "aliases": [
+        "24AL907",
+        "AL24907",
+        "AL907",
+        "CN",
+        "COMPUTATIONAL NEUROSCIENCE",
+        "CNS",
+        "24AL907A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24OE089",
+      "code": "24OE089",
+      "name": "Human Values and Ethics in Engineering",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Open Elective",
+      "aliases": [
+        "24OE089",
+        "OE24089",
+        "OE089",
+        "HVAEIE",
+        "HUMAN VALUES AND ETHICS IN ENGINEERING",
+        "HUMAN VALUES",
+        "ETHICS",
+        "HVEE",
+        "24OE089A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24OE051",
+      "code": "24OE051",
+      "name": "Principles of Management",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Open Elective",
+      "aliases": [
+        "24OE051",
+        "OE24051",
+        "OE051",
+        "POM",
+        "PRINCIPLES OF MANAGEMENT",
+        "24OE051A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24OE052",
+      "code": "24OE052",
+      "name": "Total Quality Management",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Open Elective",
+      "aliases": [
+        "24OE052",
+        "OE24052",
+        "OE052",
+        "TQM",
+        "TOTAL QUALITY MANAGEMENT",
+        "24OE052A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24OE053",
+      "code": "24OE053",
+      "name": "Knowledge Management",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Open Elective",
+      "aliases": [
+        "24OE053",
+        "OE24053",
+        "OE053",
+        "KM",
+        "KNOWLEDGE MANAGEMENT",
+        "24OE053A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24OE085",
+      "code": "24OE085",
+      "name": "Human Resource Management",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Open Elective",
+      "aliases": [
+        "24OE085",
+        "OE24085",
+        "OE085",
+        "HRM",
+        "HUMAN RESOURCE MANAGEMENT",
+        "24OE085A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24OE061",
+      "code": "24OE061",
+      "name": "Urban Agriculture",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Open Elective",
+      "aliases": [
+        "24OE061",
+        "OE24061",
+        "OE061",
+        "UA",
+        "URBAN AGRICULTURE",
+        "24OE061A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24OE062",
+      "code": "24OE062",
+      "name": "Drinking Water Supply and Treatment",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Open Elective",
+      "aliases": [
+        "24OE062",
+        "OE24062",
+        "OE062",
+        "DWSAT",
+        "DRINKING WATER SUPPLY AND TREATMENT",
+        "DWST",
+        "24OE062A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24OE063",
+      "code": "24OE063",
+      "name": "Lean Concepts, Tools and Practices",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Open Elective",
+      "aliases": [
+        "24OE063",
+        "OE24063",
+        "OE063",
+        "LCTAP",
+        "LEAN CONCEPTS, TOOLS AND PRACTICES",
+        "LEAN CONCEPTS",
+        "LCTP",
+        "24OE063A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24OE064",
+      "code": "24OE064",
+      "name": "Basics of Integrated Water Resources Management",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Open Elective",
+      "aliases": [
+        "24OE064",
+        "OE24064",
+        "OE064",
+        "BOIWRM",
+        "BASICS OF INTEGRATED WATER RESOURCES MANAGEMENT",
+        "IWRM",
+        "INTEGRATED WATER RESOURCES MANAGEMENT",
+        "24OE064A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24OE086",
+      "code": "24OE086",
+      "name": "IT in Agricultural System",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Open Elective",
+      "aliases": [
+        "24OE086",
+        "OE24086",
+        "OE086",
+        "IIAS",
+        "IT IN AGRICULTURAL SYSTEM",
+        "AGRI IT",
+        "24OE086A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24OE065",
+      "code": "24OE065",
+      "name": "Industrial Safety and Environmental Health Systems",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Open Elective",
+      "aliases": [
+        "24OE065",
+        "OE24065",
+        "OE065",
+        "ISAEHS",
+        "INDUSTRIAL SAFETY AND ENVIRONMENTAL HEALTH SYSTEMS",
+        "INDUSTRIAL SAFETY",
+        "ISEHS",
+        "24OE065A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24OE066",
+      "code": "24OE066",
+      "name": "3D Printing and Design",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY_CUM_PRACTICAL",
+      "category": "Open Elective",
+      "aliases": [
+        "24OE066",
+        "OE24066",
+        "OE066",
+        "3PAD",
+        "3D PRINTING AND DESIGN",
+        "3D PRINTING",
+        "24OE066A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24OE067",
+      "code": "24OE067",
+      "name": "Foundation Skills in Integrated Product Development",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Open Elective",
+      "aliases": [
+        "24OE067",
+        "OE24067",
+        "OE067",
+        "FSIIPD",
+        "FOUNDATION SKILLS IN INTEGRATED PRODUCT DEVELOPMENT",
+        "FSIPD",
+        "INTEGRATED PRODUCT DEVELOPMENT",
+        "24OE067A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24OE068",
+      "code": "24OE068",
+      "name": "Production Planning and Control",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Open Elective",
+      "aliases": [
+        "24OE068",
+        "OE24068",
+        "OE068",
+        "PPAC",
+        "PRODUCTION PLANNING AND CONTROL",
+        "PPC",
+        "24OE068A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24OE069",
+      "code": "24OE069",
+      "name": "Foundations of Robotics",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Open Elective",
+      "aliases": [
+        "24OE069",
+        "OE24069",
+        "OE069",
+        "FOR",
+        "FOUNDATIONS OF ROBOTICS",
+        "24OE069A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24OE070",
+      "code": "24OE070",
+      "name": "Industrial Management",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Open Elective",
+      "aliases": [
+        "24OE070",
+        "OE24070",
+        "OE070",
+        "IM",
+        "INDUSTRIAL MANAGEMENT",
+        "24OE070A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24OE081",
+      "code": "24OE081",
+      "name": "Introduction to PLC programming",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Open Elective",
+      "aliases": [
+        "24OE081",
+        "OE24081",
+        "OE081",
+        "ITPP",
+        "INTRODUCTION TO PLC PROGRAMMING",
+        "PLC",
+        "PLC PROGRAMMING",
+        "INTRO TO PLC PROGRAMMING",
+        "24OE081A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24OE082",
+      "code": "24OE082",
+      "name": "Introduction to Industrial Automation Systems",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Open Elective",
+      "aliases": [
+        "24OE082",
+        "OE24082",
+        "OE082",
+        "ITIAS",
+        "INTRODUCTION TO INDUSTRIAL AUTOMATION SYSTEMS",
+        "AUTOMATION",
+        "INDUSTRIAL AUTOMATION SYSTEMS",
+        "24OE082A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24OE083",
+      "code": "24OE083",
+      "name": "Sensors and Actuators",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Open Elective",
+      "aliases": [
+        "24OE083",
+        "OE24083",
+        "OE083",
+        "SAA",
+        "SENSORS AND ACTUATORS",
+        "SNA",
+        "24OE083A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24OE087",
+      "code": "24OE087",
+      "name": "Renewable Energy System",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Open Elective",
+      "aliases": [
+        "24OE087",
+        "OE24087",
+        "OE087",
+        "RES",
+        "RENEWABLE ENERGY SYSTEM",
+        "24OE087A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24OE088",
+      "code": "24OE088",
+      "name": "Electric Vehicle Technology",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Open Elective",
+      "aliases": [
+        "24OE088",
+        "OE24088",
+        "OE088",
+        "EVT",
+        "ELECTRIC VEHICLE TECHNOLOGY",
+        "EV",
+        "24OE088A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24OE084",
+      "code": "24OE084",
+      "name": "Energy Conservation and Management",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Open Elective",
+      "aliases": [
+        "24OE084",
+        "OE24084",
+        "OE084",
+        "ECAM",
+        "ENERGY CONSERVATION AND MANAGEMENT",
+        "ECM",
+        "24OE084A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24OE078",
+      "code": "24OE078",
+      "name": "Advanced Numerical Methods",
+      "short_name": "",
+      "semester": 7,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Open Elective",
+      "aliases": [
+        "24OE078",
+        "OE24078",
+        "OE078",
+        "ANM",
+        "ADVANCED NUMERICAL METHODS",
+        "24OE078A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24OE077",
+      "code": "24OE077",
+      "name": "Graph Theory",
+      "short_name": "",
+      "semester": 7,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Open Elective",
+      "aliases": [
+        "24OE077",
+        "OE24077",
+        "OE077",
+        "GT",
+        "GRAPH THEORY",
+        "24OE077A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24OE076",
+      "code": "24OE076",
+      "name": "Operations Research",
+      "short_name": "",
+      "semester": 7,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Open Elective",
+      "aliases": [
+        "24OE076",
+        "OE24076",
+        "OE076",
+        "OR",
+        "OPERATIONS RESEARCH",
+        "24OE076A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24OE079",
+      "code": "24OE079",
+      "name": "English for Competitive Examinations",
+      "short_name": "",
+      "semester": 7,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Open Elective",
+      "aliases": [
+        "24OE079",
+        "OE24079",
+        "OE079",
+        "EFCE",
+        "ENGLISH FOR COMPETITIVE EXAMINATIONS",
+        "ECE",
+        "ENGLISH FOR COMPETITIVE EXAMS",
+        "24OE079A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24OE080",
+      "code": "24OE080",
+      "name": "Project Report Writing",
+      "short_name": "",
+      "semester": 7,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Open Elective",
+      "aliases": [
+        "24OE080",
+        "OE24080",
+        "OE080",
+        "PRW",
+        "PROJECT REPORT WRITING",
+        "24OE080A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24OE073",
+      "code": "24OE073",
+      "name": "Wearable Technology",
+      "short_name": "",
+      "semester": 7,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Open Elective",
+      "aliases": [
+        "24OE073",
+        "OE24073",
+        "OE073",
+        "WT",
+        "WEARABLE TECHNOLOGY",
+        "24OE073A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24OE074",
+      "code": "24OE074",
+      "name": "IoT Systems Design",
+      "short_name": "",
+      "semester": 7,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Open Elective",
+      "aliases": [
+        "24OE074",
+        "OE24074",
+        "OE074",
+        "ISD",
+        "IOT SYSTEMS DESIGN",
+        "24OE074A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24OE075",
+      "code": "24OE075",
+      "name": "VLSI Design",
+      "short_name": "",
+      "semester": 7,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Open Elective",
+      "aliases": [
+        "24OE075",
+        "OE24075",
+        "OE075",
+        "VD",
+        "VLSI DESIGN",
+        "VLSI",
+        "24OE075A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24OE071",
+      "code": "24OE071",
+      "name": "Microprocessors and Interfacing",
+      "short_name": "",
+      "semester": 7,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Open Elective",
+      "aliases": [
+        "24OE071",
+        "OE24071",
+        "OE071",
+        "MAI",
+        "MICROPROCESSORS AND INTERFACING",
+        "MPI",
+        "MICROPROCESSORS",
+        "24OE071A"
+      ]
+    },
+    {
+      "id": "AIML_R2024_24OE072",
+      "code": "24OE072",
+      "name": "Wireless Sensor Networks",
+      "short_name": "",
+      "semester": 7,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Open Elective",
+      "aliases": [
+        "24OE072",
+        "OE24072",
+        "OE072",
+        "WSN",
+        "WIRELESS SENSOR NETWORKS",
+        "WIRELESS感 SENSOR NETWORKS",
+        "24OE072A"
+      ]
+    }
+  ],
+  "catalog_hash": "22e91f4f5e753a0d05accdb15ba1ef91bd78792ffa0bc3ece1e6b790fdd51425"
+}

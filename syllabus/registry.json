@@ -1,0 +1,216 @@
+{
+  "version": "1.0",
+  "institution": "Saranathan College of Engineering",
+  "departments": [
+    {
+      "code": "AI_DS",
+      "name": "Artificial Intelligence and Data Science",
+      "programme": "B.Tech. - Artificial Intelligence and Data Science",
+      "catalogs": {
+        "R2024": {
+          "status": "ACTIVE",
+          "file": "ai_ds/r2024.json",
+          "version": "1.0",
+          "hash": "0147dbcdc3c983b8b76da55de40ffdfe32a6259b9e049bbe238d5081dc5f32a7",
+          "published_at": "2026-08-15"
+        },
+        "R2026": {
+          "status": "ACTIVE",
+          "file": "ai_ds/r2026.json",
+          "version": "1.0",
+          "hash": "2fbafb9bd0590388c15e0e078c5f78bb00853826e0ee61414fb282e9a5882117",
+          "published_at": "2026-08-15"
+        }
+      }
+    },
+    {
+      "code": "AIML",
+      "name": "CSE (Artificial Intelligence and Machine Learning)",
+      "programme": "B.E - CSE (Artificial Intelligence and Machine Learning)",
+      "catalogs": {
+        "R2024": {
+          "status": "ACTIVE",
+          "file": "aiml/r2024.json",
+          "version": "1.0",
+          "hash": "22e91f4f5e753a0d05accdb15ba1ef91bd78792ffa0bc3ece1e6b790fdd51425",
+          "published_at": "2026-08-15"
+        },
+        "R2026": {
+          "status": "ACTIVE",
+          "file": "aiml/r2026.json",
+          "version": "1.0",
+          "hash": "778780f4a7a7f5a15f0c21d33fb0963849c0a688486fa151856ccb24b02d6346",
+          "published_at": "2026-08-15"
+        }
+      }
+    },
+    {
+      "code": "CIVIL",
+      "name": "Civil Engineering",
+      "programme": "B.E. - Civil Engineering",
+      "catalogs": {
+        "R2024": {
+          "status": "ACTIVE",
+          "file": "civil/r2024.json",
+          "version": "1.0",
+          "hash": "4e88caba7b9b984fb7bdec75000e0d144bfd9b3d9f1affed42af8d49a892ba50",
+          "published_at": "2026-08-15"
+        },
+        "R2026": {
+          "status": "ACTIVE",
+          "file": "civil/r2026.json",
+          "version": "1.0",
+          "hash": "6e06644a42dd1b534b8bddc130cf34b09fe6052904980b623d5a78edba847186",
+          "published_at": "2026-08-15"
+        }
+      }
+    },
+    {
+      "code": "CSBS",
+      "name": "Computer Science & Business System",
+      "programme": "B.Tech. - Computer Science & Business System",
+      "catalogs": {
+        "R2024": {
+          "status": "ACTIVE",
+          "file": "csbs/r2024.json",
+          "version": "1.0",
+          "hash": "816f0e315bd121b1d8c0ff6837d530d173d6bad7da67ebb1bec69a11f0d9d771",
+          "published_at": "2026-08-15"
+        },
+        "R2026": {
+          "status": "ACTIVE",
+          "file": "csbs/r2026.json",
+          "version": "1.0",
+          "hash": "480f632ee3e5084d06034b12695c1962200478549dbe26f8888b330c369cf9eb",
+          "published_at": "2026-08-15"
+        }
+      }
+    },
+    {
+      "code": "CSE",
+      "name": "Computer Science and Engineering",
+      "programme": "B.E. - Computer Science and Engineering",
+      "catalogs": {
+        "R2024": {
+          "status": "ACTIVE",
+          "file": "cse/r2024.json",
+          "version": "1.0",
+          "hash": "575b112b08b6d1b9d7cb805b08598ed13522ff29643a165d280504dd9fec5753",
+          "published_at": "2026-08-15"
+        },
+        "R2026": {
+          "status": "ACTIVE",
+          "file": "cse/r2026.json",
+          "version": "1.0",
+          "hash": "d97a52bb7a9e2f5b09fc2643ee2be017aa500001d1c3ffd3bd9d18e7f681571d",
+          "published_at": "2026-08-15"
+        }
+      }
+    },
+    {
+      "code": "ECE",
+      "name": "Electronics and Communication Engineering",
+      "programme": "B.E. - Electronics and Communication Engineering",
+      "catalogs": {
+        "R2024": {
+          "status": "ACTIVE",
+          "file": "ece/r2024.json",
+          "version": "1.0",
+          "hash": "6ab7c4555dab5f0ab7a6e3f2ebcdb9beef5f8febc0c7b9069c4d3eba2d01a88d",
+          "published_at": "2026-08-15"
+        },
+        "R2026": {
+          "status": "ACTIVE",
+          "file": "ece/r2026.json",
+          "version": "1.0",
+          "hash": "c87e673d8d01500a3c0e93ec7f67c03e70c9d6f724a150c24bab713ba71a0187",
+          "published_at": "2026-08-15"
+        }
+      }
+    },
+    {
+      "code": "EEE",
+      "name": "Electrical and Electronics Engineering",
+      "programme": "B.E. - Electrical and Electronics Engineering",
+      "catalogs": {
+        "R2024": {
+          "status": "ACTIVE",
+          "file": "eee/r2024.json",
+          "version": "1.0",
+          "hash": "2e6d62f9702fbe00c03a8ab5f61d776837a7aaa1b7ed9287a7e752a74e2360b5",
+          "published_at": "2026-08-15"
+        },
+        "R2026": {
+          "status": "ACTIVE",
+          "file": "eee/r2026.json",
+          "version": "1.0",
+          "hash": "9bf5f891b0810be72313657bcd103a00b0fa1e7c297d357083e2e9af9241886e",
+          "published_at": "2026-08-15"
+        }
+      }
+    },
+    {
+      "code": "ICE",
+      "name": "Instrumentation and Control Engineering",
+      "programme": "B.E. - Instrumentation and Control Engineering",
+      "catalogs": {
+        "R2024": {
+          "status": "ACTIVE",
+          "file": "ice/r2024.json",
+          "version": "1.0",
+          "hash": "ab52e270c382bb7074015f2bcb81a4a6772425970fa0dfc2ae8891216f1ea078",
+          "published_at": "2026-08-15"
+        },
+        "R2026": {
+          "status": "ACTIVE",
+          "file": "ice/r2026.json",
+          "version": "1.0",
+          "hash": "5f869685c6db05833faec67364f2e2cd8cefd5febae08f2dbbc807a9f991a1a8",
+          "published_at": "2026-08-15"
+        }
+      }
+    },
+    {
+      "code": "IT",
+      "name": "Information Technology",
+      "programme": "B.Tech. - Information Technology",
+      "catalogs": {
+        "R2024": {
+          "status": "ACTIVE",
+          "file": "it/r2024.json",
+          "version": "1.0",
+          "hash": "9b74356fe676136a4962804617a7e79e9a93f0ec91a2e92968a59b67544b6eae",
+          "published_at": "2026-08-15"
+        },
+        "R2026": {
+          "status": "ACTIVE",
+          "file": "it/r2026.json",
+          "version": "1.0",
+          "hash": "0d2de66406ff30fe8d354084626d012158094697e4f77c10b909bacee3e4603e",
+          "published_at": "2026-08-15"
+        }
+      }
+    },
+    {
+      "code": "MECH",
+      "name": "Mechanical Engineering",
+      "programme": "B.E. - Mechanical Engineering",
+      "catalogs": {
+        "R2024": {
+          "status": "ACTIVE",
+          "file": "mech/r2024.json",
+          "version": "1.0",
+          "hash": "1ece8aa43b20dcbe076f38b4fbb27b053a48fb0a616ee221282d91f8902495e1",
+          "published_at": "2026-08-15"
+        },
+        "R2026": {
+          "status": "ACTIVE",
+          "file": "mech/r2026.json",
+          "version": "1.0",
+          "hash": "7f0a2c233196096bf6a13198ee25f7243daee5b020dc10d13f339205a272429b",
+          "published_at": "2026-08-15"
+        }
+      }
+    }
+  ]
+}

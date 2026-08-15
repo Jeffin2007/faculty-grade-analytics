@@ -16,3 +16,8 @@ __pycache__/
 
 # Logs
 *.log
+
+# Data and Outputs
+*.pdf
+*.xlsx
+scratch/

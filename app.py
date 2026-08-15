@@ -176,18 +176,18 @@ CLASS_AI_INSTRUCTION = (
 # =============================================================================
 
 GRADE_POINTS = {
-    "O": 10, "A+": 9, "A": 8, "B+": 7, "B": 6, "C": 5,
+    "O": 10, "S": 10, "A+": 9, "A": 8, "B+": 7, "B": 6, "C+": 5.5, "C": 5,
     "U": 0, "RA": 0, "UA": 0, "SA": 0, "WD": 0, "MM": 0, "WH2": 0,
 }
-PASSING_GRADES = {"O", "A+", "A", "B+", "B", "C"}
+PASSING_GRADES = {"O", "S", "A+", "A", "B+", "B", "C+", "C"}
 FAILING_GRADES = {"U", "RA", "UA", "SA", "WD", "MM", "WH2"}
 ARREAR_GRADES = {"U", "RA", "UA"}
 ATTENDANCE_GRADES = {"SA"}
 WITHDRAWAL_GRADES = {"WD"}
 MALPRACTICE_GRADES = {"MM", "WH2"}
 
-GRADE_ORDER = ["O", "A+", "A", "B+", "B", "C", "U", "RA", "UA", "SA", "WD", "MM", "WH2"]
-PASS_GRADE_ORDER = ["O", "A+", "A", "B+", "B", "C"]
+GRADE_ORDER = ["O", "S", "A+", "A", "B+", "B", "C+", "C", "U", "RA", "UA", "SA", "WD", "MM", "WH2"]
+PASS_GRADE_ORDER = ["O", "S", "A+", "A", "B+", "B", "C+", "C"]
 FAIL_GRADE_ORDER = ["U", "RA", "UA", "SA", "WD", "MM", "WH2"]
 
 RESULT_STATUS = {
@@ -202,11 +202,13 @@ RESULT_STATUS = {
 
 GRADE_COLORS = {
     "O": "#16a34a",
+    "S": "#15803d",
     "A+": "#22c55e",
     "A": "#4ade80",
     "B+": "#86efac",
     "B": "#64748b",
-    "C": "#94a3b8",
+    "C+": "#94a3b8",
+    "C": "#cbd5e1",
     "U": "#dc2626",
     "RA": "#ef4444",
     "UA": "#f87171",
@@ -232,13 +234,14 @@ COLORWAY = [C_NAVY, C_BLUE, C_GREEN, C_AMBER, C_RED, C_SLATE, "#0ea5e9", "#a855f
 GRADE_ALIAS = {
     "A+": ("A+", "APLUS", "A PLUS", "A_+", "A.", "A++"),
     "B+": ("B+", "BPLUS", "B PLUS", "B_+"),
-    "C+": (),
+    "C+": ("C+", "CPLUS", "C PLUS", "C_+"),
 }
 
 GRADE_TOKEN_CLEAN = {
     "A+": "A+", "A PLUS": "A+", "AP": "A+", "A PLUS PLUS": "A+",
     "B+": "B+", "B PLUS": "B+", "BP": "B+",
-    "A0": "A+", "A1": "O", "O": "O", "A": "A", "B": "B", "C": "C",
+    "C+": "C+", "C PLUS": "C+", "CP": "C+",
+    "A0": "A+", "A1": "O", "O": "O", "S": "S", "A": "A", "B": "B", "C": "C",
     "U": "U", "FAIL": "U", "F": "U",
     "RA": "RA", "R.A": "RA", "R/A": "RA", "R A": "RA",
     "AB": "UA", "ABSENT": "UA", "UA": "UA", "ABS": "UA", "A B": "UA", "A.B": "UA", "A/B": "UA",
@@ -424,6 +427,10 @@ def _memoized_resolve_subject_info(norm: str, clean_code: str, _catalog_version:
     if clean_code in COURSE_CODE_INDEX:
         item = COURSE_CODE_INDEX[clean_code]
         return (item["name"], item["code"], item["credits"], item["semester"], item["category"], 1.0, False)
+    stripped_code = re.sub(r"[A-Z]$", "", clean_code)
+    if stripped_code and stripped_code in COURSE_CODE_INDEX:
+        item = COURSE_CODE_INDEX[stripped_code]
+        return (item["name"], item["code"], item["credits"], item["semester"], item["category"], 1.0, False)
 
     # Stage 2: Exact / Normalized Subject Name (O(1))
     if norm in SUBJECT_NAME_INDEX:
@@ -437,11 +444,16 @@ def _memoized_resolve_subject_info(norm: str, clean_code: str, _catalog_version:
     if norm in ALIAS_INDEX:
         item = ALIAS_INDEX[norm]
         return (item["name"], item["code"], item["credits"], item["semester"], item["category"], 1.0, False)
-    if clean_code in ALIAS_INDEX:
-        item = ALIAS_INDEX[clean_code]
-        return (item["name"], item["code"], item["credits"], item["semester"], item["category"], 1.0, False)
+    # If the input is a course code pattern (e.g. 24EN201A, 24TA201, 24CS211, etc.), preserve authoritative code
+    code_pattern = re.match(r"^(?:24[-_]?)?([A-Z]{2,4})[-_]?(\d{3,4})[A-Z]?$", clean_code)
+    if code_pattern:
+        dept_pfx = code_pattern.group(1)
+        num_part = code_pattern.group(2)
+        sem_digit = int(num_part[0]) if num_part and num_part[0].isdigit() else 1
+        cred_val = 1.0 if (len(num_part) >= 3 and num_part[1] == '1') else 3.0
+        return (norm, stripped_code or clean_code, cred_val, sem_digit, "Sem 1-4 Foundation", 1.0, False)
 
-    # Stage 4: Fuzzy Match Fallback (only executed if O(1) lookups fail)
+    # Stage 4: Fuzzy Match Fallback (only executed for full descriptive subject titles)
     best_item = None
     best_score = 0.0
 
@@ -538,6 +550,10 @@ class PDFExtractionReport:
     ok: bool = True
     doc_metadata: DocumentMetadata = field(default_factory=DocumentMetadata)
     records: List[StudentResultRecord] = field(default_factory=list)
+    prev_records: List[StudentResultRecord] = field(default_factory=list)
+    all_records: List[StudentResultRecord] = field(default_factory=list)
+    detected_semesters: List[Dict[str, Any]] = field(default_factory=list)
+    primary_semester: int = 1
     raw_inspector_items: List[Dict[str, Any]] = field(default_factory=list)
     quarantined_tokens: List[Dict[str, Any]] = field(default_factory=list)
     student_count: int = 0
@@ -580,11 +596,49 @@ def _resolve_id_columns(headers: List[str]) -> Tuple[int, int]:
     return regno_idx, name_idx
 
 
-def extract_coe_pdf(pdf_bytes: bytes, filename: str) -> PDFExtractionReport:
+ROMAN_TO_INT_MAP = {
+    "I": 1, "II": 2, "III": 3, "IV": 4, "V": 5, "VI": 6, "VII": 7, "VIII": 8,
+    "1": 1, "2": 2, "3": 3, "4": 4, "5": 5, "6": 6, "7": 7, "8": 8,
+    "01": 1, "02": 2, "03": 3, "04": 4, "05": 5, "06": 6, "07": 7, "08": 8,
+    "1ST": 1, "2ND": 2, "3RD": 3, "4TH": 4, "5TH": 5, "6TH": 6, "7TH": 7, "8TH": 8,
+    "FIRST": 1, "SECOND": 2, "THIRD": 3, "FOURTH": 4, "FIFTH": 5, "SIXTH": 6, "SEVENTH": 7, "EIGHTH": 8,
+}
+INT_TO_ROMAN_MAP = {
+    1: "I", 2: "II", 3: "III", 4: "IV", 5: "V", 6: "VI", 7: "VII", 8: "VIII"
+}
+
+def _parse_page_semester(text: str) -> Optional[int]:
     """
-    Direct COE PDF extraction engine using PyMuPDF (pymupdf / fitz) with pdfplumber fallback.
-    Extracts document metadata, multi-page tables, strips repeated headers/footers,
-    extracts course codes & grade cells, and maintains page provenance (source_page).
+    Parse semester number from page text, header, or table caption across any page in the document.
+    Works for any number of pages (whether arrear results span 1, 5, or 20 pages across any department).
+    """
+    if not text:
+        return None
+    upper_txt = text.upper()
+    m = re.search(r"SEMESTER\s*[:\-\s]\s*([IVX0-9]+|FIRST|SECOND|THIRD|FOURTH|FIFTH|SIXTH|SEVENTH|EIGHTH)\b", upper_txt)
+    if m:
+        raw = m.group(1).strip()
+        if raw in ROMAN_TO_INT_MAP:
+            return ROMAN_TO_INT_MAP[raw]
+    m_sem = re.search(r"\bSEM\s*[:\-\s]\s*([IVX0-9]+|FIRST|SECOND|THIRD|FOURTH|FIFTH|SIXTH|SEVENTH|EIGHTH)\b", upper_txt)
+    if m_sem:
+        raw = m_sem.group(1).strip()
+        if raw in ROMAN_TO_INT_MAP:
+            return ROMAN_TO_INT_MAP[raw]
+    m_ord = re.search(r"\b([1-8](?:ST|ND|RD|TH)?|[IVX]{1,4}|FIRST|SECOND|THIRD|FOURTH|FIFTH|SIXTH|SEVENTH|EIGHTH)\s+SEM(?:ESTER)?\b", upper_txt)
+    if m_ord:
+        raw = m_ord.group(1).strip()
+        if raw in ROMAN_TO_INT_MAP:
+            return ROMAN_TO_INT_MAP[raw]
+    return None
+
+
+def extract_coe_pdf(pdf_bytes: bytes, filename: str, analysis_context: Optional[Dict[str, Any]] = None) -> PDFExtractionReport:
+    """
+    Universal multi-page COE PDF extraction engine using PyMuPDF with pdfplumber fallback.
+    Extracts document metadata, multi-page tables, detects per-page semesters across arbitrary
+    numbers of pages (e.g. 1 to N pages of arrear exams for earlier semesters, cleanly segregated
+    from the target regular cohort), isolates headers per page, and tracks student provenance.
     """
     report = PDFExtractionReport()
     if not pdf_bytes:
@@ -593,7 +647,10 @@ def extract_coe_pdf(pdf_bytes: bytes, filename: str) -> PDFExtractionReport:
         return report
 
     try:
-        import fitz  # PyMuPDF
+        try:
+            import pymupdf as fitz
+        except ImportError:
+            import fitz
         doc = fitz.open(stream=pdf_bytes, filetype="pdf")
     except Exception as e:
         report.ok = False
@@ -623,75 +680,78 @@ def extract_coe_pdf(pdf_bytes: bytes, filename: str) -> PDFExtractionReport:
     else:
         report.doc_metadata.document_type = "DIGITAL_TEXT_PDF"
 
-    # 2. Extract Document Metadata from Header Page (Page 1)
-    p1_text = page_texts[0] if page_texts else ""
-    p1_upper = p1_text.upper()
+    # 2. Extract Document Metadata dynamically across pages
+    for p_text in page_texts[:4]:
+        p_upper = p_text.upper()
+        if "SARANATHAN" in p_upper:
+            report.doc_metadata.institution = "Saranathan College of Engineering"
+        elif "COLLEGE OF ENGINEERING" in p_upper and not report.doc_metadata.institution:
+            report.doc_metadata.institution = "College of Engineering"
 
-    if "SARANATHAN" in p1_upper:
-        report.doc_metadata.institution = "Saranathan College of Engineering"
-    elif "COLLEGE OF ENGINEERING" in p1_upper:
-        report.doc_metadata.institution = "College of Engineering"
+        if not report.doc_metadata.department:
+            for d in get_registered_departments():
+                d_name = d["name"].upper()
+                d_code = d["code"].upper()
+                if d_name in p_upper or f"({d_code})" in p_upper or f"B.TECH.- {d_name}" in p_upper or f"B.E.- {d_name}" in p_upper or f"- {d_name}" in p_upper:
+                    report.doc_metadata.department = d["name"]
+                    prefix = "B.Tech" if ("TECH" in d_name or d_code in ("AI_DS", "IT")) else "B.E."
+                    report.doc_metadata.programme = f"{prefix} {d['name']}"
+                    break
 
-    if "ARTIFICIAL INTELLIGENCE" in p1_upper or "AI & DS" in p1_upper or "AI AND DS" in p1_upper:
-        report.doc_metadata.department = "Department of AI & DS"
-        report.doc_metadata.programme = "B.Tech AI & DS"
+        if "REGULATION 2024" in p_upper or "R2024" in p_upper or "R-2024" in p_upper:
+            report.doc_metadata.regulation = "R2024"
+        elif "REGULATION 2021" in p_upper or "R2021" in p_upper:
+            report.doc_metadata.regulation = "R2021"
 
-    if "REGULATION 2024" in p1_upper or "R2024" in p1_upper or "R-2024" in p1_upper:
-        report.doc_metadata.regulation = "R2024"
+        ay_m = re.search(r"(202\d\s*-\s*202\d|NOV\s*/\s*DEC\s*202\d|APR\s*/\s*MAY\s*202\d)", p_upper)
+        if ay_m and not report.doc_metadata.exam_session:
+            report.doc_metadata.exam_session = ay_m.group(1)
 
-    sem_m = re.search(r"SEMESTER\s*([I|V|X|0-9]+)", p1_upper)
-    if sem_m:
-        report.doc_metadata.semester = f"Semester {sem_m.group(1)}"
+        dt_m = re.search(r"DATE\s*:\s*(\d{2}[-/\.]\d{2}[-/\.]\d{4})", p_upper)
+        if dt_m and not report.doc_metadata.publication_date:
+            report.doc_metadata.publication_date = dt_m.group(1)
 
-    ay_m = re.search(r"(202\d\s*-\s*202\d|NOV\s*/\s*DEC\s*202\d|APR\s*/\s*MAY\s*202\d)", p1_upper)
-    if ay_m:
-        report.doc_metadata.exam_session = ay_m.group(1)
-
-    dt_m = re.search(r"DATE\s*:\s*(\d{2}[-/\.]\d{2}[-/\.]\d{4})", p1_upper)
-    if dt_m:
-        report.doc_metadata.publication_date = dt_m.group(1)
-
-    # 3. COE Noise Headers & Footers to Filter Out
-    noise_patterns = [
-        r"OFFICE OF THE CONTROLLER OF EXAMINATIONS",
-        r"SARANATHAN COLLEGE OF ENGINEERING",
-        r"END SEMESTER EXAMINATIONS",
-        r"RESULT SHEET",
-        r"PAGE\s*\d+\s*OF\s*\d+",
-        r"CONTROLLER OF EXAMINATIONS",
-        r"SIGNATURE OF",
-        r"ACADEMIC YEAR",
-        r"DEPARTMENT OF",
-    ]
+    if analysis_context:
+        if analysis_context.get("department"):
+            report.doc_metadata.department = str(analysis_context["department"])
+        if analysis_context.get("regulation"):
+            report.doc_metadata.regulation = str(analysis_context["regulation"])
 
     extracted_records: List[StudentResultRecord] = []
     inspector_items: List[Dict[str, Any]] = []
-    quarantined_tokens: List[Dict[str, Any]] = []
-    course_headers_detected = []
     student_reg_pattern = re.compile(r"\b(8138\d{8}|\d{10,12})\b")
+    last_detected_sem = 1
 
+    # Extract all records page-by-page (handling arbitrary number of arrear & regular pages)
     for page_idx in range(len(doc)):
         page = doc[page_idx]
         src_page = page_idx + 1
-        page_lines = page_texts[page_idx].split("\n")
+        page_text = page_texts[page_idx]
+        page_lines = page_text.split("\n")
         page_records: List[StudentResultRecord] = []
 
-        # Scan for course codes in page header
+        p_sem = _parse_page_semester(page_text)
+        if p_sem is not None:
+            last_detected_sem = p_sem
+        current_page_sem = p_sem if p_sem is not None else last_detected_sem
+
+        # Scan for course codes in this page's header lines (scoped per page)
+        page_course_headers = []
         for line in page_lines[:25]:
-            codes = re.findall(r"\b((?:24[-_]?)?[A-Z]{2,4}[-_]?\d{3,5})\b", line.upper())
+            codes = re.findall(r"\b((?:24[-_]?)?[A-Z]{2,4}[-_]?\d{3,5}[A-Z]?)\b", line.upper())
             for ccode in codes:
                 can_name, code, cred, sem, cat, conf, amb = resolve_subject_info(ccode)
-                if code not in [ch["code"] for ch in course_headers_detected]:
-                    course_headers_detected.append({
+                if (code or ccode) not in [ch["code"] for ch in page_course_headers]:
+                    page_course_headers.append({
                         "code": code or ccode,
                         "canonical_name": can_name,
                         "credits": cred,
-                        "semester": sem,
+                        "semester": sem or current_page_sem,
                         "category": cat,
                         "confidence": conf
                     })
 
-        # 1. Native PyMuPDF fast table extraction (try default lines, then text strategy)
+        # 1. Native PyMuPDF fast table extraction
         try:
             tabs = page.find_tables()
             if not tabs or not tabs.tables:
@@ -732,6 +792,8 @@ def extract_coe_pdf(pdf_bytes: bytes, filename: str) -> PDFExtractionReport:
                                         credits=cred if cred > 0 else 3.0,
                                         result_status=norm_g,
                                         raw_result_status=cell_v,
+                                        result_semester=current_page_sem,
+                                        subject_semester=sem or current_page_sem,
                                         source_type="PDF",
                                         source_page=src_page,
                                         extraction_confidence=0.95
@@ -749,13 +811,11 @@ def extract_coe_pdf(pdf_bytes: bytes, filename: str) -> PDFExtractionReport:
         except Exception:
             pass
 
-        # 2. Process text blocks / word-position lines for this page if table extraction yielded 0 records
+        # 2. Word-position line alignment fallback
         if len(page_records) == 0:
-            # 2a. Word position horizontal line alignment
             try:
                 words = page.get_text("words")
                 if words:
-                    # Group words by Y coordinate (tolerance 3.5pt)
                     lines_by_y: Dict[int, List[Tuple[float, float, str]]] = defaultdict(list)
                     for w in words:
                         x0, y0, x1, y1, text, b_num, l_num, w_num = w
@@ -775,7 +835,7 @@ def extract_coe_pdf(pdf_bytes: bytes, filename: str) -> PDFExtractionReport:
 
                             name_parts: List[str] = []
                             grades_found: List[Tuple[str, str]] = []
-                            expected_n = len(course_headers_detected)
+                            expected_n = len(page_course_headers)
                             used_anchor = False
 
                             if expected_n and len(after_tokens) >= expected_n:
@@ -797,8 +857,8 @@ def extract_coe_pdf(pdf_bytes: bytes, filename: str) -> PDFExtractionReport:
 
                             raw_name = " ".join(name_parts)
                             for idx, (raw_g, norm_g) in enumerate(grades_found):
-                                if idx < len(course_headers_detected):
-                                    ch = course_headers_detected[idx]
+                                if idx < len(page_course_headers):
+                                    ch = page_course_headers[idx]
                                     subj_code = ch["code"]
                                     subj_name = ch["canonical_name"]
                                     credits_val = ch["credits"]
@@ -807,7 +867,7 @@ def extract_coe_pdf(pdf_bytes: bytes, filename: str) -> PDFExtractionReport:
                                     subj_code = f"SUBJ_{idx+1}"
                                     subj_name = f"Subject {idx+1}"
                                     credits_val = 3.0
-                                    subj_sem = 3
+                                    subj_sem = current_page_sem
 
                                 rec = StudentResultRecord(
                                     register_number=regno,
@@ -818,6 +878,8 @@ def extract_coe_pdf(pdf_bytes: bytes, filename: str) -> PDFExtractionReport:
                                     credits=credits_val,
                                     result_status=norm_g,
                                     raw_result_status=raw_g,
+                                    result_semester=current_page_sem,
+                                    subject_semester=subj_sem,
                                     source_type="PDF",
                                     source_page=src_page,
                                     extraction_confidence=0.92
@@ -835,102 +897,20 @@ def extract_coe_pdf(pdf_bytes: bytes, filename: str) -> PDFExtractionReport:
             except Exception:
                 pass
 
-            # 2b. Block text parsing fallback for this page if word alignment yielded 0 records
-            if len(page_records) == 0:
-                blocks = page.get_text("blocks")
-                for b in blocks:
-                    b_text = b[4].strip()
-                    if not b_text:
-                        continue
-                    lines_in_block = b_text.split("\n")
-                    for line_idx, line_str in enumerate(lines_in_block):
-                        line_clean = line_str.strip()
-                        if not line_clean or any(re.search(p, line_clean.upper()) for p in noise_patterns):
-                            continue
-                        m = student_reg_pattern.search(line_clean)
-                        if m:
-                            regno = m.group(1)
-                            reg_pos = line_clean.find(regno)
-                            after_reg = line_clean[reg_pos + len(regno):].strip()
-                            combined_line = after_reg
-                            if not combined_line and line_idx + 1 < len(lines_in_block):
-                                combined_line = " ".join(lines_in_block[line_idx + 1 : line_idx + 4])
-
-                            tokens = [t.strip().upper() for t in re.split(r"[\s\t,]+", combined_line) if t.strip()]
-                            name_parts: List[str] = []
-                            grades_found: List[Tuple[str, str]] = []
-                            expected_n = len(course_headers_detected)
-                            used_anchor = False
-                            if expected_n and len(tokens) >= expected_n:
-                                tail = tokens[-expected_n:]
-                                tail_norm = [_grade_normalize(t) for t in tail]
-                                if all(tail_norm):
-                                    grades_found = list(zip(tail, tail_norm))
-                                    head_tokens = tokens[:-expected_n]
-                                    name_parts = [t for t in head_tokens if re.match(r"^[A-Z\.]+$", t)]
-                                    used_anchor = True
-
-                            if not used_anchor:
-                                for tok in tokens:
-                                    g_norm = _grade_normalize(tok)
-                                    if g_norm:
-                                        grades_found.append((tok, g_norm))
-                                    elif re.match(r"^[A-Z\.]+$", tok) and len(grades_found) == 0:
-                                        name_parts.append(tok)
-
-                            raw_name = " ".join(name_parts)
-                            for idx, (raw_g, norm_g) in enumerate(grades_found):
-                                if idx < len(course_headers_detected):
-                                    ch = course_headers_detected[idx]
-                                    subj_code = ch["code"]
-                                    subj_name = ch["canonical_name"]
-                                    credits_val = ch["credits"]
-                                    subj_sem = ch["semester"]
-                                else:
-                                    subj_code = f"SUBJ_{idx+1}"
-                                    subj_name = f"Subject {idx+1}"
-                                    credits_val = 3.0
-                                    subj_sem = 3
-
-                                rec = StudentResultRecord(
-                                    register_number=regno,
-                                    student_name=raw_name,
-                                    subject_code=subj_code,
-                                    subject_name=subj_name,
-                                    original_subject_text=subj_code,
-                                    credits=credits_val,
-                                    result_status=norm_g,
-                                    raw_result_status=raw_g,
-                                    source_type="PDF",
-                                    source_page=src_page,
-                                    extraction_confidence=0.90
-                                )
-                                page_records.append(rec)
-                                inspector_items.append({
-                                    "source_page": src_page,
-                                    "raw_text": line_clean,
-                                    "parsed_regno": regno,
-                                    "parsed_name": raw_name or "—",
-                                    "parsed_subject": subj_name,
-                                    "parsed_grade": norm_g,
-                                    "confidence": "HIGH" if ch.get("confidence", 1.0) >= 0.8 else "REVIEW"
-                                })
-
-        # 3. Secondary pdfplumber table fallback for this page if PyMuPDF yielded 0 records for this page
+        # 3. Secondary pdfplumber table fallback
         if len(page_records) == 0:
             try:
                 import pdfplumber
                 with pdfplumber.open(io.BytesIO(pdf_bytes)) as plumber_pdf:
-                    if page_idx < len(plumber_pdf.pages):
-                        p = plumber_pdf.pages[page_idx]
-                        tables = p.extract_tables()
-                        for table in tables:
-                            if not table or len(table) < 2:
+                    if src_page <= len(plumber_pdf.pages):
+                        plumber_page = plumber_pdf.pages[src_page - 1]
+                        plumber_tables = plumber_page.extract_tables()
+                        for ptab in plumber_tables:
+                            if not ptab or len(ptab) < 2:
                                 continue
-                            headers = [str(c or "").strip() for c in table[0]]
+                            headers = [str(c or "").strip() for c in ptab[0]]
                             regno_col, name_col = _resolve_id_columns(headers)
-                            for row_idx in range(1, len(table)):
-                                row = table[row_idx]
+                            for row in ptab[1:]:
                                 if not row:
                                     continue
                                 row_str = " ".join(str(c or "") for c in row)
@@ -938,15 +918,12 @@ def extract_coe_pdf(pdf_bytes: bytes, filename: str) -> PDFExtractionReport:
                                 if m:
                                     regno = m.group(1)
                                     name_val = str(row[name_col]).strip() if len(row) > name_col and row[name_col] else ""
-                                    if name_val.strip() == regno.strip():
-                                        fallback_idx = name_col + 1
-                                        if len(row) > fallback_idx and row[fallback_idx]:
-                                            name_val = str(row[fallback_idx]).strip()
-                                    grade_start = max(regno_col, name_col) + 1
-                                    for c_idx in range(grade_start, len(row)):
+                                    for c_idx in range(len(row)):
+                                        if c_idx in (regno_col, name_col):
+                                            continue
                                         cell_v = str(row[c_idx] or "").strip()
                                         norm_g = _grade_normalize(cell_v)
-                                        if norm_g:
+                                        if norm_g and cell_v.upper() != regno:
                                             subj_hdr = headers[c_idx] if c_idx < len(headers) else f"Column_{c_idx}"
                                             can_name, code, cred, sem, cat, conf, amb = resolve_subject_info(subj_hdr)
                                             rec = StudentResultRecord(
@@ -958,6 +935,8 @@ def extract_coe_pdf(pdf_bytes: bytes, filename: str) -> PDFExtractionReport:
                                                 credits=cred if cred > 0 else 3.0,
                                                 result_status=norm_g,
                                                 raw_result_status=cell_v,
+                                                result_semester=current_page_sem,
+                                                subject_semester=sem or current_page_sem,
                                                 source_type="PDF",
                                                 source_page=src_page,
                                                 extraction_confidence=0.90
@@ -977,31 +956,69 @@ def extract_coe_pdf(pdf_bytes: bytes, filename: str) -> PDFExtractionReport:
 
         extracted_records.extend(page_records)
 
+    # 4. Multi-Semester Identification and Dynamic Multi-Page Segregation
+    target_sem_requested = None
+    if analysis_context and analysis_context.get("semester"):
+        try:
+            target_sem_requested = int(analysis_context["semester"])
+        except (ValueError, TypeError):
+            target_sem_requested = None
 
-    report.records = extracted_records
+    sem_counts = Counter(r.result_semester for r in extracted_records if r.result_semester)
+    
+    if target_sem_requested and target_sem_requested in sem_counts:
+        target_semester = target_sem_requested
+    elif sem_counts:
+        # Dominant cohort semester (largest student/record count across all pages)
+        target_semester = sem_counts.most_common(1)[0][0]
+    else:
+        target_semester = 1
+
+    primary_records = [r for r in extracted_records if r.result_semester == target_semester]
+    prev_records = [r for r in extracted_records if r.result_semester and r.result_semester < target_semester]
+
+    if not primary_records and extracted_records:
+        primary_records = extracted_records
+
+    detected_semesters = []
+    for s_num in sorted(set(r.result_semester for r in extracted_records if r.result_semester)):
+        s_recs = [r for r in extracted_records if r.result_semester == s_num]
+        s_students = len(set(r.register_number for r in s_recs))
+        s_subjs = sorted(set(r.subject_code for r in s_recs))
+        detected_semesters.append({
+            "semester": s_num,
+            "semester_label": f"Semester {INT_TO_ROMAN_MAP.get(s_num, str(s_num))}",
+            "student_count": s_students,
+            "record_count": len(s_recs),
+            "subject_count": len(s_subjs),
+            "subject_codes": s_subjs,
+            "is_primary": (s_num == target_semester),
+            "is_arrear": (s_num < target_semester),
+        })
+
+    report.records = primary_records
+    report.prev_records = prev_records
+    report.all_records = extracted_records
+    report.detected_semesters = detected_semesters
+    report.primary_semester = target_semester
+    report.doc_metadata.semester = f"Semester {INT_TO_ROMAN_MAP.get(target_semester, str(target_semester))}"
+
+    # Calculate overall confidence & stats for primary records
+    unique_regnos = set(r.register_number for r in primary_records)
+    unique_subjects = set(r.subject_code for r in primary_records)
+    report.student_count = len(unique_regnos)
+    report.subject_count = len(unique_subjects)
+    report.result_cell_count = len(primary_records)
     report.raw_inspector_items = inspector_items
-    report.quarantined_tokens = quarantined_tokens
-    report.student_count = len(set(r.register_number for r in extracted_records))
-    report.subject_count = len(set(r.subject_name for r in extracted_records))
-    report.result_cell_count = len(extracted_records)
-    report.unknown_token_count = len(quarantined_tokens)
 
-    if report.result_cell_count > 0:
-        base_conf = 0.96
-        if report.unknown_token_count > 0:
-            base_conf -= min(0.15, report.unknown_token_count * 0.02)
-        report.overall_confidence = round(max(0.50, base_conf), 2)
-    elif report.unknown_token_count > 0:
-        report.overall_confidence = 0.50
-        report.ok = True
-        report.warnings.append("Document contains quarantined unknown result tokens requiring faculty review.")
+    if len(primary_records) > 0:
+        report.overall_confidence = round(
+            sum(r.extraction_confidence for r in primary_records) / len(primary_records), 2
+        )
     else:
         report.overall_confidence = 0.0
-        report.ok = False
-        report.fatal_error = "Could not extract student result records from PDF. Please review file format or upload Excel sheet."
 
     return report
-
 
 def parse_ia_marks_content(raw_bytes: bytes, filename: str) -> Tuple[Dict[str, Dict[str, Any]], Dict[str, str], Dict[str, str]]:
     """
@@ -1397,6 +1414,73 @@ _DEPT_EXPANSION = {
 }
 
 
+def _is_theory_course(course_code: str, subject_name: str = "", credits: float = 3.0) -> bool:
+    """
+    Returns True if the course is a Theory subject, False if it is a Practical / Lab / Workshop course.
+    """
+    code_upper = str(course_code or "").upper().strip()
+    name_upper = str(subject_name or "").upper().strip()
+
+    # Keywords in name or code indicating practical / laboratory courses
+    lab_keywords = [
+        "LAB", "LABORATORY", "PRACTICAL", "PRACTICE", "WORKSHOP",
+        "PROJECT", "SEMINAR", "INTERNSHIP", "STUDIO", "VIVA"
+    ]
+    if any(re.search(rf"\b{kw}\b", name_upper) for kw in lab_keywords):
+        return False
+    if "LAB" in code_upper or "PRAC" in code_upper or "WORKSHOP" in code_upper:
+        return False
+
+    # Check course code digit patterns (e.g., 24CS211, 24EM211, 24PH111, CS8381, GE8261)
+    # Anna University / Autonomous regulations designate 1, 8, or 9 in tens place for practical/lab courses
+    m = re.search(r"(\d{3,4})[A-Z]?$", code_upper)
+    if m:
+        num_str = m.group(1)
+        if len(num_str) >= 3 and num_str[-2] in ('1', '8', '9'):
+            return False
+
+    # Check syllabus catalog category if available
+    clean_code = re.sub(r"[^A-Z0-9]", "", code_upper)
+    stripped = re.sub(r"[A-Z]$", "", clean_code)
+    for cat_item in (COURSE_CODE_INDEX.get(clean_code), COURSE_CODE_INDEX.get(stripped)):
+        if cat_item:
+            cat_str = str(cat_item.get("category", "")).upper()
+            if "LAB" in cat_str or "PRACTICAL" in cat_str or "PROJECT" in cat_str:
+                return False
+            break
+
+    return True
+
+def _dept_hod_label(department: str, programme: str) -> str:
+    """
+    Generate the department HOD signature label, e.g.:
+    'HOD / AIDS', 'HOD / CSE', 'HOD / EEE', 'HOD / ECE', 'HOD / AIML', 'HOD / MECH', 'HOD / CIVIL', 'HOD / IT', 'HOD / CSBS', 'HOD / ICE'
+    """
+    text = f"{department} {programme}".upper()
+    if "AIML" in text or "ARTIFICIAL INTELLIGENCE AND MACHINE LEARNING" in text:
+        return "HOD / AIML"
+    if "ARTIFICIAL INTELLIGENCE" in text or "AI & DS" in text or "AI AND DS" in text or "AIDS" in text:
+        return "HOD / AIDS"
+    if "COMPUTER SCIENCE AND BUSINESS" in text or "CSBS" in text:
+        return "HOD / CSBS"
+    if "COMPUTER SCIENCE" in text or "CSE" in text:
+        return "HOD / CSE"
+    if "ELECTRONICS AND COMMUNICATION" in text or "ECE" in text:
+        return "HOD / ECE"
+    if "ELECTRICAL AND ELECTRONICS" in text or "EEE" in text:
+        return "HOD / EEE"
+    if "INSTRUMENTATION AND CONTROL" in text or "ICE" in text:
+        return "HOD / ICE"
+    if "MECHANICAL" in text or "MECH" in text:
+        return "HOD / MECH"
+    if "CIVIL" in text:
+        return "HOD / CIVIL"
+    if re.search(r"\bIT\b", text) or "INFORMATION TECHNOLOGY" in text:
+        return "HOD / IT"
+    words = re.findall(r"[A-Z]+", department.upper())
+    initials = "".join(w[0] for w in words if w not in ("OF", "AND", "THE", "DEPARTMENT"))
+    return f"HOD / {initials[:6] or 'DEPT'}"
+
 def _dept_short_code(department: str, programme: str) -> str:
     text = f"{department} {programme}".upper()
     if "ARTIFICIAL INTELLIGENCE" in text or "AI & DS" in text or "AI AND DS" in text or "AIDS" in text:
@@ -1463,6 +1547,7 @@ def build_department_excel(
     ia_marks_dir: Optional[Dict[str, Dict[str, Dict[str, Any]]]] = None,
     prev_ca: Optional["ClassAnalysis"] = None,
     prev_pdf_report: Optional["PDFExtractionReport"] = None,
+    mentor_map: Optional[Dict[str, str]] = None,
 ) -> bytes:
     """
     Build the departmental official result-analysis workbook: Analysis 1_New, 2_New,
@@ -1479,6 +1564,7 @@ def build_department_excel(
     dept_text = meta.department.upper()
     dept_line = _DEPT_EXPANSION.get(dept_text, dept_text if dept_text.startswith("DEPARTMENT") else f"DEPARTMENT OF {dept_text}")
     programme_line = f"COURSE: {meta.programme}"
+    hod_label = _dept_hod_label(meta.department, meta.programme)
     parity = _semester_parity(meta.semester)
     ay_line = f"ACADEMIC YEAR: {meta.academic_year}" + (f" ({parity})" if parity else "")
     session_line = meta.exam_session
@@ -1524,6 +1610,13 @@ def build_department_excel(
             cell.border = BORDER
             cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
 
+    
+    def add_hod_signature(ws, ncols: int, cur_row: int) -> int:
+        sig_r = cur_row + 3
+        cell = ws.cell(row=sig_r, column=ncols, value=hod_label)
+        cell.font = Font(bold=True, size=10, color="0F1B33")
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+        return sig_r
     def page_setup(ws, ncols: int, last_row: int, landscape: bool = True, freeze: str = "A1"):
         ws.page_setup.orientation = "landscape" if landscape else "portrait"
         ws.sheet_properties.pageSetUpPr.fitToPage = True
@@ -1619,7 +1712,8 @@ def build_department_excel(
     ws1.column_dimensions["C"].width = 34
     for c in range(4, ncols1 + 1):
         ws1.column_dimensions[get_column_letter(c)].width = 14
-    page_setup(ws1, ncols1, r, landscape=True, freeze=f"A{start_row + 1}")
+    sig_r1 = add_hod_signature(ws1, ncols1, r)
+    page_setup(ws1, ncols1, sig_r1, landscape=True, freeze=f"A{start_row + 1}")
 
     # ---------------------------------------------------------------
     # Analysis 2 - Comparison of Previous Batch Results
@@ -1759,46 +1853,161 @@ def build_department_excel(
     ws2.column_dimensions["D"].width = 32
     ws2.column_dimensions["E"].width = 22
     ws2.column_dimensions["F"].width = 12
-    page_setup(ws2, ncols2, r, landscape=True, freeze=f"C{start_row + 15}")
+    sig_r2 = add_hod_signature(ws2, ncols2, r)
+    page_setup(ws2, ncols2, sig_r2, landscape=True, freeze=f"C{start_row + 15}")
 
     # ---------------------------------------------------------------
     # Analysis 3 - Result Analysis of Failed Students
     # ---------------------------------------------------------------
     ws3 = wb.create_sheet("Analysis 3_New")
-    headers3 = ["S.No.", "Reg.No", "Student Name", "Quota"] + [m["course_code"] for m in mappings]
-    ncols3 = len(headers3)
-    start_row = title_block(ws3, ncols3, [programme_line, ay_line, session_line],
-                             "ANALYSIS 3 - RESULT ANALYSIS OF FAILED STUDENTS")
-    for c, h in enumerate(headers3, start=1):
-        ws3.cell(row=start_row, column=c, value=h)
-    style_header_row(ws3, start_row, ncols3)
-    r = start_row + 1
+    k_subjs = len(mappings)
+    ncols3 = 4 + k_subjs + 1 + 2 + 1  # 4 fixed + k subjects + 1 (No. of Arrears) + 2 (Old Arrears) + 1 (Mentor)
+
+    # Title Block (Matching Departmental Format)
+    ws3.merge_cells(start_row=1, start_column=1, end_row=1, end_column=ncols3)
+    c1 = ws3.cell(row=1, column=1, value=institution)
+    c1.font = TITLE_FONT
+    c1.alignment = CENTER
+
+    ws3.merge_cells(start_row=2, start_column=1, end_row=2, end_column=ncols3)
+    c2 = ws3.cell(row=2, column=1, value=dept_line)
+    c2.font = TITLE_FONT
+    c2.alignment = CENTER
+
+    ws3.merge_cells(start_row=3, start_column=1, end_row=3, end_column=ncols3)
+    c3 = ws3.cell(row=3, column=1, value="ANALYSIS 3 - RESULT ANALYSIS OF FAILED STUDENTS")
+    c3.font = SUB_FONT
+    c3.alignment = CENTER
+
+    sem_num = 1
+    sem_m = re.search(r"([IVX]+|\d+)", meta.semester or "")
+    if sem_m:
+        tok = sem_m.group(1).upper()
+        roman = {"I": 1, "II": 2, "III": 3, "IV": 4, "V": 5, "VI": 6, "VII": 7, "VIII": 8}
+        sem_num = roman.get(tok) or (int(tok) if tok.isdigit() else 1)
+    year_num = (sem_num + 1) // 2
+    roman_year = {1: "I", 2: "II", 3: "III", 4: "IV"}.get(year_num, "I")
+    roman_sem = {1: "I", 2: "II", 3: "III", 4: "IV", 5: "V", 6: "VI", 7: "VII", 8: "VIII"}.get(sem_num, "I")
+
+    right_col = max(ncols3 - 2, 5)
+    ws3.cell(row=4, column=1, value=programme_line).font = Font(bold=True, size=9)
+    batch_str = f"BATCH: {meta.academic_year[:4]} - {int(meta.academic_year[:4])+4}" if (meta.academic_year and len(meta.academic_year)>=4 and meta.academic_year[:4].isdigit()) else "BATCH: 2024 - 2028"
+    ws3.cell(row=4, column=right_col, value=batch_str).font = Font(bold=True, size=9)
+
+    ws3.cell(row=5, column=1, value=ay_line).font = Font(bold=True, size=9)
+    ws3.cell(row=5, column=right_col, value=f"YEAR / SEM: {roman_year} / {roman_sem}").font = Font(bold=True, size=9)
+
+    ws3.cell(row=6, column=1, value=session_line).font = Font(bold=True, size=9)
+    ws3.cell(row=6, column=right_col, value=f"TOTAL STRENGTH: {ca.student_count}").font = Font(bold=True, size=9)
+
+    # 2-Row Header Layout (Row 8 and Row 9)
+    h1 = 8
+    h2 = 9
+
+    # S.No. (Col 1)
+    ws3.merge_cells(start_row=h1, start_column=1, end_row=h2, end_column=1)
+    ws3.cell(row=h1, column=1, value="S.No.")
+
+    # Reg.No (Col 2)
+    ws3.merge_cells(start_row=h1, start_column=2, end_row=h2, end_column=2)
+    ws3.cell(row=h1, column=2, value="Reg.No")
+
+    # Student Name (Col 3)
+    ws3.merge_cells(start_row=h1, start_column=3, end_row=h2, end_column=3)
+    ws3.cell(row=h1, column=3, value="Student Name")
+
+    # Quota (Col 4)
+    ws3.merge_cells(start_row=h1, start_column=4, end_row=h2, end_column=4)
+    ws3.cell(row=h1, column=4, value="Quota")
+
+    # Subjects (Cols 5 to 4+k_subjs)
+    if k_subjs > 0:
+        ws3.merge_cells(start_row=h1, start_column=5, end_row=h1, end_column=4 + k_subjs)
+        ws3.cell(row=h1, column=5, value="Subjects")
+        for j, m in enumerate(mappings, start=5):
+            ws3.cell(row=h2, column=j, value=m["course_code"])
+
+    # No. of Arrears (Col 5+k_subjs)
+    ws3.merge_cells(start_row=h1, start_column=5 + k_subjs, end_row=h2, end_column=5 + k_subjs)
+    ws3.cell(row=h1, column=5 + k_subjs, value="No. of\nArrears")
+
+    # OLD ARREARS (Cols 6+k_subjs to 7+k_subjs)
+    ws3.merge_cells(start_row=h1, start_column=6 + k_subjs, end_row=h1, end_column=7 + k_subjs)
+    ws3.cell(row=h1, column=6 + k_subjs, value="OLD ARREARS")
+    ws3.cell(row=h2, column=6 + k_subjs, value="LIST OF SUBJECT")
+    ws3.cell(row=h2, column=7 + k_subjs, value="NO.OF\nARREARS")
+
+    # NAME OF THE MENTOR (Col 8+k_subjs)
+    ws3.merge_cells(start_row=h1, start_column=8 + k_subjs, end_row=h2, end_column=8 + k_subjs)
+    ws3.cell(row=h1, column=8 + k_subjs, value="NAME OF THE\nMENTOR")
+
+    style_header_row(ws3, h1, ncols3)
+    style_header_row(ws3, h2, ncols3)
+
+    # Data Rows (For current semester failed students only)
+    r = h2 + 1
     n_failed = 0
+    mentor_lookup = mentor_map or {}
+
     for s in ca.students:
-        if s.u_count <= 0 and s.ra_count <= 0:
+        # Include ONLY students who hold active arrears in the current semester
+        if s.arrear_count <= 0:
             continue
         n_failed += 1
         gp_lookup = _grade_gp_lookup(s)
+
         ws3.cell(row=r, column=1, value=n_failed)
         ws3.cell(row=r, column=2, value=s.regno)
         ws3.cell(row=r, column=3, value=s.name)
-        ws3.cell(row=r, column=4, value="N/A")  # quota is not present in the extracted COE PDF data
+        ws3.cell(row=r, column=4, value=s.meta.get("quota", "GQ"))
+
         for j, m in enumerate(mappings, start=5):
             grade, _pts = gp_lookup.get(m["course_code"], ("", 0))
             ws3.cell(row=r, column=j, value=grade if grade in ARREAR_GRADES else "")
+
+        ws3.cell(row=r, column=5 + k_subjs, value=s.arrear_count)
+
+        # OLD ARREARS: Populate previous semester failed subjects for this current arrear student
+        prev_res = getattr(s, "previous_semester_results", [])
+        prev_arrears = [c for c in prev_res if c.grade in ARREAR_GRADES or (c.grade and c.grade not in PASSING_GRADES)]
+        if prev_arrears:
+            subj_str = ",".join(c.course_code or c.subject for c in prev_arrears)
+            count_str = len(prev_arrears)
+        else:
+            subj_str = "-"
+            count_str = "-"
+
+        ws3.cell(row=r, column=6 + k_subjs, value=subj_str)
+        ws3.cell(row=r, column=7 + k_subjs, value=count_str)
+
+        # NAME OF THE MENTOR: Prefilled or blank for manual typing
+        m_name = mentor_lookup.get(s.regno, "") or s.meta.get("mentor", "")
+        ws3.cell(row=r, column=8 + k_subjs, value=m_name)
+
         style_body_row(ws3, r, ncols3)
+        ws3.cell(row=r, column=3).alignment = LEFT_WRAP
+        ws3.cell(row=r, column=6 + k_subjs).alignment = LEFT_WRAP
+        ws3.cell(row=r, column=8 + k_subjs).alignment = LEFT_WRAP
         r += 1
+
     if n_failed == 0:
         ws3.merge_cells(start_row=r, start_column=1, end_row=r, end_column=ncols3)
-        ws3.cell(row=r, column=1, value="No students with academic arrears (U / RA) were found.")
+        ws3.cell(row=r, column=1, value="No students with academic arrears (U / RA / UA) were found.")
         r += 1
+
     ws3.column_dimensions["A"].width = 6
     ws3.column_dimensions["B"].width = 16
-    ws3.column_dimensions["C"].width = 26
-    ws3.column_dimensions["D"].width = 10
-    for c in range(5, ncols3 + 1):
-        ws3.column_dimensions[get_column_letter(c)].width = 10
-    page_setup(ws3, ncols3, r, landscape=True, freeze=f"E{start_row + 1}")
+    ws3.column_dimensions["C"].width = 28
+    ws3.column_dimensions["D"].width = 8
+    for c in range(5, 5 + k_subjs):
+        ws3.column_dimensions[get_column_letter(c)].width = 11
+    ws3.column_dimensions[get_column_letter(5 + k_subjs)].width = 11
+    ws3.column_dimensions[get_column_letter(6 + k_subjs)].width = 30
+    ws3.column_dimensions[get_column_letter(7 + k_subjs)].width = 11
+    ws3.column_dimensions[get_column_letter(8 + k_subjs)].width = 24
+
+    sig_r3 = add_hod_signature(ws3, ncols3, r)
+    page_setup(ws3, ncols3, sig_r3, landscape=True, freeze=f"E{h2 + 1}")
 
     # ---------------------------------------------------------------
     # Analysis 4 - Internal Assessment Marks of Failed Students
@@ -1898,7 +2107,8 @@ def build_department_excel(
     ws4.column_dimensions["K"].width = 10
     ws4.column_dimensions["L"].width = 10
     ws4.column_dimensions["M"].width = 10
-    page_setup(ws4, ncols4, r, landscape=True, freeze=f"F{start_row + 1}")
+    sig_r4 = add_hod_signature(ws4, ncols4, r)
+    page_setup(ws4, ncols4, sig_r4, landscape=True, freeze=f"F{start_row + 1}")
 
 
     # ---------------------------------------------------------------
@@ -1914,7 +2124,13 @@ def build_department_excel(
         ws5.cell(row=start_row, column=c, value=h)
     style_header_row(ws5, start_row, ncols5)
     r = start_row + 1
-    for i, m in enumerate(mappings, start=1):
+
+    # Filter strictly for Theory subjects (no laboratory / practical courses)
+    theory_mappings = [m for m in mappings if _is_theory_course(m["course_code"], m["official_subject_name"], m.get("credits", 3.0))]
+    if not theory_mappings:
+        theory_mappings = mappings
+
+    for i, m in enumerate(theory_mappings, start=1):
         code = m["course_code"]
         staff = code_to_staff.get(code, "")
         staff_disp = staff if staff else "(Staff name not entered)"
@@ -1951,6 +2167,7 @@ def build_department_excel(
         if len(toppers) > 1:
             for colm in (1, 2, 3, 4, 5):
                 ws5.merge_cells(start_row=top_start_row, start_column=colm, end_row=r - 1, end_column=colm)
+
     ws5.column_dimensions["A"].width = 6
     ws5.column_dimensions["B"].width = 22
     ws5.column_dimensions["C"].width = 14
@@ -1959,7 +2176,8 @@ def build_department_excel(
     ws5.column_dimensions["F"].width = 16
     ws5.column_dimensions["G"].width = 26
     ws5.column_dimensions["H"].width = 10
-    page_setup(ws5, ncols5, r, landscape=True, freeze=f"A{start_row + 1}")
+    sig_r5 = add_hod_signature(ws5, ncols5, r)
+    page_setup(ws5, ncols5, sig_r5, landscape=True, freeze=f"A{start_row + 1}")
 
     # ---------------------------------------------------------------
     # Analysis 6 - Rank List Based on GPA (reuses the existing ranking engine)
@@ -1990,7 +2208,8 @@ def build_department_excel(
     ws6.column_dimensions["C"].width = 28
     ws6.column_dimensions["D"].width = 10
     ws6.column_dimensions["E"].width = 10
-    page_setup(ws6, ncols6, r, landscape=False, freeze=f"A{start_row + 1}")
+    sig_r6 = add_hod_signature(ws6, ncols6, r)
+    page_setup(ws6, ncols6, sig_r6, landscape=False, freeze=f"A{start_row + 1}")
 
     # ---------------------------------------------------------------
     # Analysis 7 - Provisional Results (raw, per-student per-subject)
@@ -2206,7 +2425,8 @@ def build_department_excel(
     except Exception as e:
         print(f"Error reading 7.txt: {e}")
 
-    page_setup(ws7, ncols7, last_row_7, landscape=True, freeze=f"D{hdr_bot + 1}")
+    sig_r7 = add_hod_signature(ws7, ncols7, last_row_7)
+    page_setup(ws7, ncols7, sig_r7, landscape=True, freeze=f"D{hdr_bot + 1}")
 
     # ---------------------------------------------------------------
     # Hidden metadata sheet - PDF provenance (section 19)
@@ -3007,6 +3227,7 @@ class StudentAnalysis:
     has_backlog_arrears: bool = False
     backlog_subjects: List[str] = field(default_factory=list)
     risk_level: str = "Low Risk / Cleared"
+    previous_semester_results: List[StudentSubjectResult] = field(default_factory=list)
     meta: Dict[str, str] = field(default_factory=dict)
 
     @property
@@ -3767,11 +3988,43 @@ def compute_subject_analytics(records: pd.DataFrame, class_gpa_ref: Optional[flo
     return subjects
 
 
-def compute_student_analytics(records: pd.DataFrame) -> List[StudentAnalysis]:
+def compute_student_analytics(records: pd.DataFrame, prev_records: Optional[Union[pd.DataFrame, List[Any]]] = None) -> List[StudentAnalysis]:
     """Student-level metrics with credit-weighted GPA, risk scoring & Sem 1-4 backlog tracking."""
+    prev_by_student: Dict[str, List[StudentSubjectResult]] = defaultdict(list)
+    if prev_records is not None:
+        if isinstance(prev_records, pd.DataFrame):
+            for _, pr in prev_records.iterrows():
+                p_reg = str(pr.get("regno", "")).strip().upper()
+                if p_reg:
+                    prev_by_student[p_reg].append(StudentSubjectResult(
+                        subject=str(pr.get("subject", "")),
+                        course_code=str(pr.get("course_code", "") or ""),
+                        credits=float(pr.get("credits", 3.0) or 3.0),
+                        grade=str(pr.get("grade", "")),
+                        points=float(pr.get("points", 0.0) or 0.0),
+                    ))
+        elif isinstance(prev_records, list):
+            for prec in prev_records:
+                p_reg = getattr(prec, "register_number", "") or (prec.get("regno") if isinstance(prec, dict) else "")
+                p_reg = str(p_reg).strip().upper()
+                p_subj = getattr(prec, "subject_name", "") or (prec.get("subject") if isinstance(prec, dict) else "")
+                p_code = getattr(prec, "subject_code", "") or (prec.get("course_code") if isinstance(prec, dict) else "")
+                p_cred = getattr(prec, "credits", 3.0) or (prec.get("credits") if isinstance(prec, dict) else 3.0)
+                p_grade = getattr(prec, "result_status", "") or (prec.get("grade") if isinstance(prec, dict) else "")
+                p_pts = GRADE_POINTS.get(p_grade, 0.0)
+                if p_reg and p_subj:
+                    prev_by_student[p_reg].append(StudentSubjectResult(
+                        subject=str(p_subj),
+                        course_code=str(p_code),
+                        credits=float(p_cred or 3.0),
+                        grade=str(p_grade),
+                        points=float(p_pts),
+                    ))
+
     students: List[StudentAnalysis] = []
     for regno, grp in records.groupby("regno", sort=True):
         grp = grp.reset_index(drop=True)
+        regno_str = str(regno).strip()
         name = ""
         nm = grp["name"].dropna().astype(str)
         nm = nm[nm.str.strip() != ""]
@@ -3795,6 +4048,13 @@ def compute_student_analytics(records: pd.DataFrame) -> List[StudentAnalysis]:
                 can_name, code, cred, sem, cat, conf, amb = resolve_subject_info(subj_title)
                 if sem in [1, 2, 3, 4] or cat == "Sem 1-4 Foundation":
                     backlog_subjects.append(can_name)
+                    backlog_arrear_count += 1
+
+        student_prev = prev_by_student.get(regno_str.upper(), [])
+        for p_sub in student_prev:
+            if p_sub.grade in ARREAR_GRADES:
+                if p_sub.subject not in backlog_subjects:
+                    backlog_subjects.append(p_sub.subject)
                     backlog_arrear_count += 1
 
         courses.sort(key=lambda c: (c.subject.lower(), c.course_code))
@@ -3876,6 +4136,7 @@ def compute_student_analytics(records: pd.DataFrame) -> List[StudentAnalysis]:
             has_backlog_arrears=has_backlog,
             backlog_subjects=backlog_subjects,
             risk_level=risk_level,
+            previous_semester_results=student_prev,
             meta=meta,
         ))
     return students
@@ -3975,7 +4236,7 @@ def generate_deterministic_insights(ca: ClassAnalysis) -> Dict[str, Any]:
     }
 
 
-def compute_class_analysis(records: pd.DataFrame, file_name: str) -> ClassAnalysis:
+def compute_class_analysis(records: pd.DataFrame, file_name: str, prev_records: Optional[Union[pd.DataFrame, List[Any]]] = None) -> ClassAnalysis:
     """Compute the full deterministic class analysis."""
     ca = ClassAnalysis(file_name=file_name,
                        generated_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
@@ -3984,7 +4245,7 @@ def compute_class_analysis(records: pd.DataFrame, file_name: str) -> ClassAnalys
     ca.record_count = int(len(records))
     ca.metadata["semester_records"] = ca.record_count
 
-    ca.students = compute_student_analytics(records)
+    ca.students = compute_student_analytics(records, prev_records=prev_records)
     _rank_students(ca.students)
 
     gpas = [s.gpa for s in ca.students if s.gpa is not None]
@@ -6576,6 +6837,28 @@ def page_student_detail(ca: ClassAnalysis, regno: str) -> Tuple:
             cls="card p-5 mb-6"
         ),
 
+        # Optional Previous Semester / Reappearance History Section (if student has past attempts across any number of pages)
+        *( [Div(
+            Div(
+                Span("📚", cls="text-base mr-2"),
+                Div(
+                    H3("Previous Semester Reappearance & Arrear Clearance History (Optional Reference)", cls="text-sm font-bold text-purple-900"),
+                    P("Records from earlier semester reappearance exams written during this COE examination session (segregated from current semester GPA calculation):", cls="text-xs text-purple-700 mt-0.5"),
+                ),
+                cls="flex items-start mb-3"
+            ),
+            data_table(
+                ["Subject", "Course Code", "Credits", "Reappearance Grade", "Grade Points", "Clearance Status"],
+                [[
+                    c.subject, c.course_code or "—", c.credits,
+                    grade_badge(c.grade), f"{c.points}",
+                    Span("✓ Arrear Cleared", cls="text-xs font-bold text-green-700 bg-green-50 px-2 py-0.5 rounded border border-green-200") if c.grade in PASSING_GRADES else Span("⚠ Reappearance Required", cls="text-xs font-bold text-red-700 bg-red-50 px-2 py-0.5 rounded border border-red-200")
+                ] for c in s.previous_semester_results],
+                table_id="student-prev-result"
+            ),
+            cls="card p-5 mb-6 border-l-4 border-l-purple-500 bg-purple-50/20"
+        )] if getattr(s, "previous_semester_results", None) else [] ),
+
         # GPA Calculation Breakdown
         Div(
             H3("GPA Calculation Breakdown", cls="text-sm font-semibold text-slate-700 mb-3"),
@@ -8152,7 +8435,46 @@ def page_pdf_preview() -> Tuple:
         cls="card p-5 mb-6"
     )
 
-    # 2. Data Quality & Confidence Stats
+    # 2. Multi-Semester Cohort & Reappearance Summary Card
+    multi_sem_card = None
+    if getattr(pdf_report, "detected_semesters", None) and len(pdf_report.detected_semesters) > 1:
+        sem_badges = []
+        for s_info in pdf_report.detected_semesters:
+            if s_info["is_primary"]:
+                sem_badges.append(Div(
+                    Div(
+                        Span("🎯 TARGET REGULAR COHORT", cls="text-[10px] font-extrabold text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full inline-block mb-1.5"),
+                        H4(f"{s_info['semester_label']} (Active Analysis)", cls="text-sm font-bold text-slate-900"),
+                        P(f"{s_info['student_count']} Students · {s_info['subject_count']} Subjects · {s_info['record_count']} Grade Records", cls="text-xs text-slate-600 mt-0.5"),
+                        P(f"Authoritative Courses: {', '.join(s_info['subject_codes'][:8])}", cls="text-[11px] font-mono text-blue-800 mt-1"),
+                    ),
+                    cls="p-3.5 bg-blue-50/90 border border-blue-200 rounded-xl flex-1 shadow-xs"
+                ))
+            else:
+                sem_badges.append(Div(
+                    Div(
+                        Span("📚 OPTIONAL PREVIOUS SEMESTER REFERENCE", cls="text-[10px] font-extrabold text-purple-700 bg-purple-100 px-2 py-0.5 rounded-full inline-block mb-1.5"),
+                        H4(f"{s_info['semester_label']} (Arrear / Reappearance)", cls="text-sm font-bold text-slate-900"),
+                        P(f"{s_info['student_count']} Students · {s_info['subject_count']} Subjects · {s_info['record_count']} Grade Records", cls="text-xs text-slate-600 mt-0.5"),
+                        P(f"Reappearance Courses: {', '.join(s_info['subject_codes'][:8])}", cls="text-[11px] font-mono text-purple-800 mt-1"),
+                    ),
+                    cls="p-3.5 bg-purple-50/90 border border-purple-200 rounded-xl flex-1 shadow-xs"
+                ))
+        
+        multi_sem_card = Div(
+            Div(
+                Span("📑", cls="text-xl mr-2.5"),
+                Div(
+                    H3("Multi-Semester COE Result Document Detected & Segregated", cls="text-sm font-bold text-slate-900"),
+                    P("This PDF contains both regular semester results and earlier semester arrear reappearance exams across multiple pages. The engine has cleanly segregated the primary regular semester for 100% conflict-free analytics, while attaching all previous semester records as an optional backlog reference.", cls="text-xs text-slate-600 mt-0.5"),
+                ),
+                cls="flex items-start mb-3.5"
+            ),
+            Div(*sem_badges, cls="flex flex-col sm:flex-row gap-3"),
+            cls="card p-5 mb-6 border-l-4 border-l-purple-600 bg-gradient-to-r from-purple-50/40 via-slate-50 to-blue-50/40"
+        )
+
+    # 3. Data Quality & Confidence Stats
     conf_pct = int(pdf_report.overall_confidence * 100)
     conf_color = "#16a34a" if conf_pct >= 85 else "#d97706"
 
@@ -8303,7 +8625,8 @@ def _get_pdf_to_excel_context() -> Tuple[Optional["PDFExtractionReport"], Option
     if cached and cached[0] == cache_key:
         return pdf_report, cached[1]
     df = pdf_records_to_dataframe(pdf_report.records)
-    ca = compute_class_analysis(df, filename)
+    prev_recs = getattr(pdf_report, "prev_records", None)
+    ca = compute_class_analysis(df, filename, prev_records=prev_recs)
     ca.subject_mappings = build_subject_mapping_log(pdf_report.records)
     ca.quarantined_tokens = pdf_report.quarantined_tokens
     ca.format_detected = "pdf"
@@ -8515,7 +8838,7 @@ async def route_upload_pdf(request):
         SESSION["preview_pdf_report"] = pdf_report
         SESSION["reconciliation_report"] = None
 
-        # Extract previous batch PDF if provided
+        # Extract previous batch PDF if provided or use segregated prev_records from multi-semester PDF
         file_prev = form.get("file_prev_pdf")
         prev_pdf_report = None
         prev_ca = None
@@ -8593,7 +8916,8 @@ async def route_confirm_pdf(request):
             return RedirectResponse("/upload", status_code=303)
 
         df = pdf_records_to_dataframe(pdf_report.records)
-        ca = compute_class_analysis(df, filename)
+        prev_recs = getattr(pdf_report, "prev_records", None)
+        ca = compute_class_analysis(df, filename, prev_records=prev_recs)
 
         ca.subject_mappings = build_subject_mapping_log(pdf_report.records)
         ca.quarantined_tokens = pdf_report.quarantined_tokens
@@ -8732,7 +9056,8 @@ def route_pdf_to_excel_download():
     filename = SESSION.get("preview_pdf_filename", "coe_result.pdf")
     prev_ca = SESSION.get("prev_ca")
     prev_pdf_report = SESSION.get("prev_pdf_report")
-    xlsx_bytes = build_department_excel(ca, pdf_report, staff_map, filename, ia_store, prev_ca=prev_ca, prev_pdf_report=prev_pdf_report)
+    mentor_map = SESSION.get("mentor_directory", {})
+    xlsx_bytes = build_department_excel(ca, pdf_report, staff_map, filename, ia_store, prev_ca=prev_ca, prev_pdf_report=prev_pdf_report, mentor_map=mentor_map)
     fname = department_excel_filename(pdf_report)
     return Response(
         content=xlsx_bytes,

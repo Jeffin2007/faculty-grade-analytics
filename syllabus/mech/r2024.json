@@ -1,0 +1,3200 @@
+{
+  "catalog_version": "1.0",
+  "status": "ACTIVE",
+  "department": "Mechanical Engineering",
+  "department_code": "MECH",
+  "programme": "B.E. - Mechanical Engineering",
+  "regulation": "R2024",
+  "source": "B.E. - Mechanical Engineering R2024 Curriculum & Syllabi (Saranathan College of Engineering)",
+  "approved_by": "Academic Council",
+  "created_date": "2026-08-15",
+  "academic_structure": {
+    "semesters": 8,
+    "total_credits": 167
+  },
+  "courses": [
+    {
+      "id": "MECH_R2024_24IP101",
+      "code": "24IP101",
+      "name": "Induction Programme",
+      "short_name": "",
+      "semester": 1,
+      "credits": 0.0,
+      "type": "MANDATORY",
+      "category": "Induction Programme",
+      "aliases": [
+        "24IP101",
+        "IP24101",
+        "IP101",
+        "IP",
+        "INDUCTION PROGRAMME",
+        "INDUCTION",
+        "24IP101A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24EN101",
+      "code": "24EN101",
+      "name": "Professional English I",
+      "short_name": "",
+      "semester": 1,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Sem 1-4 Foundation",
+      "aliases": [
+        "24EN101",
+        "EN24101",
+        "EN101",
+        "PEI",
+        "PROFESSIONAL ENGLISH I",
+        "PROFESSIONAL ENGLISH",
+        "ENGLISH I",
+        "PROF ENG I",
+        "ENG 1",
+        "ENGLISH",
+        "24EN101A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24MA101",
+      "code": "24MA101",
+      "name": "Engineering Mathematics I",
+      "short_name": "",
+      "semester": 1,
+      "credits": 4.0,
+      "type": "THEORY",
+      "category": "Sem 1-4 Foundation",
+      "aliases": [
+        "24MA101",
+        "MA24101",
+        "MA101",
+        "EMI",
+        "ENGINEERING MATHEMATICS I",
+        "ENGINEERING MATHEMATICS",
+        "MATHS I",
+        "MATH I",
+        "MATHEMATICS I",
+        "M1",
+        "MATHS",
+        "MATHEMATICS",
+        "24MA101A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24PH101",
+      "code": "24PH101",
+      "name": "Engineering Physics",
+      "short_name": "",
+      "semester": 1,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Sem 1-4 Foundation",
+      "aliases": [
+        "24PH101",
+        "PH24101",
+        "PH101",
+        "EP",
+        "ENGINEERING PHYSICS",
+        "PHYSICS",
+        "PHY",
+        "ENGG PHYSICS",
+        "24PH101A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24CH101",
+      "code": "24CH101",
+      "name": "Engineering Chemistry",
+      "short_name": "",
+      "semester": 1,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Sem 1-4 Foundation",
+      "aliases": [
+        "24CH101",
+        "CH24101",
+        "CH101",
+        "EC",
+        "ENGINEERING CHEMISTRY",
+        "CHEMISTRY",
+        "CHEM",
+        "ENGG CHEMISTRY",
+        "24CH101A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ES101",
+      "code": "24ES101",
+      "name": "Problem Solving & Python Programming",
+      "short_name": "",
+      "semester": 1,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Sem 1-4 Foundation",
+      "aliases": [
+        "24ES101",
+        "ES24101",
+        "ES101",
+        "PSPP",
+        "PROBLEM SOLVING & PYTHON PROGRAMMING",
+        "PYTHON",
+        "PROBLEM SOLVING AND PYTHON PROGRAMMING",
+        "24ES101A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24TA101",
+      "code": "24TA101",
+      "name": "தமிழர் மரபு / Heritage of Tamils",
+      "short_name": "",
+      "semester": 1,
+      "credits": 1.0,
+      "type": "THEORY",
+      "category": "Sem 1-4 Foundation",
+      "aliases": [
+        "24TA101",
+        "TA24101",
+        "TA101",
+        "தமHOT",
+        "தமிழர் மரபு / HERITAGE OF TAMILS",
+        "HERITAGE OF TAMILS",
+        "TAMIL 1",
+        "TAMILAR MARABU",
+        "24TA101A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24PH111",
+      "code": "24PH111",
+      "name": "Physics and Chemistry Laboratory",
+      "short_name": "",
+      "semester": 1,
+      "credits": 2.0,
+      "type": "LAB",
+      "category": "Sem 1-4 Foundation",
+      "aliases": [
+        "24PH111",
+        "PH24111",
+        "PH111",
+        "PACL",
+        "PHYSICS AND CHEMISTRY LABORATORY",
+        "PHYSICS AND CHEMISTRY LAB",
+        "PHY CHEM LAB",
+        "24PH111A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ES111",
+      "code": "24ES111",
+      "name": "Python Programming Laboratory",
+      "short_name": "",
+      "semester": 1,
+      "credits": 2.0,
+      "type": "LAB",
+      "category": "Sem 1-4 Foundation",
+      "aliases": [
+        "24ES111",
+        "ES24111",
+        "ES111",
+        "PPL",
+        "PYTHON PROGRAMMING LABORATORY",
+        "PYTHON LAB",
+        "PSPP LAB",
+        "24ES111A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24EM111",
+      "code": "24EM111",
+      "name": "Communication Laboratory I",
+      "short_name": "",
+      "semester": 1,
+      "credits": 1.0,
+      "type": "LAB",
+      "category": "Sem 1-4 Foundation",
+      "aliases": [
+        "24EM111",
+        "EM24111",
+        "EM111",
+        "CLI",
+        "COMMUNICATION LABORATORY I",
+        "COMMUNICATION LABORATORY",
+        "COMM LAB 1",
+        "ENGLISH LAB I",
+        "24EM111A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24EN201",
+      "code": "24EN201",
+      "name": "Professional English II",
+      "short_name": "",
+      "semester": 2,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Sem 1-4 Foundation",
+      "aliases": [
+        "24EN201",
+        "EN24201",
+        "EN201",
+        "PEI",
+        "PROFESSIONAL ENGLISH II",
+        "PROFESSIONAL ENGLISH",
+        "ENGLISH II",
+        "PROF ENG II",
+        "ENG 2",
+        "ENGLISH",
+        "24EN201A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24MA201",
+      "code": "24MA201",
+      "name": "Engineering Mathematics II",
+      "short_name": "",
+      "semester": 2,
+      "credits": 4.0,
+      "type": "THEORY",
+      "category": "Sem 1-4 Foundation",
+      "aliases": [
+        "24MA201",
+        "MA24201",
+        "MA201",
+        "EMI",
+        "ENGINEERING MATHEMATICS II",
+        "ENGINEERING MATHEMATICS",
+        "MATHS II",
+        "MATH II",
+        "MATHEMATICS II",
+        "M2",
+        "MATHS",
+        "MATHEMATICS",
+        "24MA201A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME201",
+      "code": "24ME201",
+      "name": "Engineering Materials and Metallurgy",
+      "short_name": "",
+      "semester": 2,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Sem 1-4 Foundation",
+      "aliases": [
+        "24ME201",
+        "ME24201",
+        "ME201",
+        "EMAM",
+        "ENGINEERING MATERIALS AND METALLURGY",
+        "EMM",
+        "METALLURGY",
+        "MATERIALS AND METALLURGY",
+        "24ME201A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ES102",
+      "code": "24ES102",
+      "name": "Engineering Graphics",
+      "short_name": "",
+      "semester": 2,
+      "credits": 4.0,
+      "type": "THEORY",
+      "category": "Sem 1-4 Foundation",
+      "aliases": [
+        "24ES102",
+        "ES24102",
+        "ES102",
+        "EG",
+        "ENGINEERING GRAPHICS",
+        "GRAPHICS",
+        "ENGINEERING DRAWING",
+        "24ES102A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ES204",
+      "code": "24ES204",
+      "name": "Engineering Mechanics",
+      "short_name": "",
+      "semester": 2,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Sem 1-4 Foundation",
+      "aliases": [
+        "24ES204",
+        "ES24204",
+        "ES204",
+        "EM",
+        "ENGINEERING MECHANICS",
+        "MECHANICS",
+        "24ES204A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24TA201",
+      "code": "24TA201",
+      "name": "தமிழரும் தொழில்நுட்பமும் / Tamils and Technology",
+      "short_name": "",
+      "semester": 2,
+      "credits": 1.0,
+      "type": "THEORY",
+      "category": "Sem 1-4 Foundation",
+      "aliases": [
+        "24TA201",
+        "TA24201",
+        "TA201",
+        "ததTAT",
+        "தமிழரும் தொழில்நுட்பமும் / TAMILS AND TECHNOLOGY",
+        "TAMILS AND TECHNOLOGY",
+        "TAMIL 2",
+        "TAMILARUM THOZHILNUTPAMUM",
+        "24TA201A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ES201",
+      "code": "24ES201",
+      "name": "Basic Electrical and Electronics Engineering",
+      "short_name": "",
+      "semester": 2,
+      "credits": 4.0,
+      "type": "THEORY_CUM_PRACTICAL",
+      "category": "Sem 1-4 Foundation",
+      "aliases": [
+        "24ES201",
+        "ES24201",
+        "ES201",
+        "BEAEE",
+        "BASIC ELECTRICAL AND ELECTRONICS ENGINEERING",
+        "BEEE",
+        "BASIC ELECTRICAL AND ELECTRONICS",
+        "24ES201A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ES211",
+      "code": "24ES211",
+      "name": "Engineering Practices Laboratory",
+      "short_name": "",
+      "semester": 2,
+      "credits": 2.0,
+      "type": "LAB",
+      "category": "Sem 1-4 Foundation",
+      "aliases": [
+        "24ES211",
+        "ES24211",
+        "ES211",
+        "EPL",
+        "ENGINEERING PRACTICES LABORATORY",
+        "EP LAB",
+        "WORKSHOP",
+        "ENGINEERING PRACTICES LAB",
+        "24ES211A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24EM211",
+      "code": "24EM211",
+      "name": "Communication Laboratory II",
+      "short_name": "",
+      "semester": 2,
+      "credits": 1.0,
+      "type": "LAB",
+      "category": "Sem 1-4 Foundation",
+      "aliases": [
+        "24EM211",
+        "EM24211",
+        "EM211",
+        "CLI",
+        "COMMUNICATION LABORATORY II",
+        "COMMUNICATION LABORATORY",
+        "COMM LAB 2",
+        "ENGLISH LAB II",
+        "24EM211A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24MA303",
+      "code": "24MA303",
+      "name": "Statistics and Partial Differential Equations",
+      "short_name": "",
+      "semester": 3,
+      "credits": 4.0,
+      "type": "THEORY",
+      "category": "Sem 1-4 Foundation",
+      "aliases": [
+        "24MA303",
+        "MA24303",
+        "MA303",
+        "SAPDE",
+        "STATISTICS AND PARTIAL DIFFERENTIAL EQUATIONS",
+        "SPDE",
+        "M3",
+        "STATISTICS & PDE",
+        "24MA303A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME301",
+      "code": "24ME301",
+      "name": "Engineering Thermodynamics",
+      "short_name": "",
+      "semester": 3,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Sem 1-4 Foundation",
+      "aliases": [
+        "24ME301",
+        "ME24301",
+        "ME301",
+        "ET",
+        "ENGINEERING THERMODYNAMICS",
+        "THERMODYNAMICS",
+        "THERMO",
+        "24ME301A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME302",
+      "code": "24ME302",
+      "name": "Manufacturing Processes",
+      "short_name": "",
+      "semester": 3,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Sem 1-4 Foundation",
+      "aliases": [
+        "24ME302",
+        "ME24302",
+        "ME302",
+        "MP",
+        "MANUFACTURING PROCESSES",
+        "24ME302A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME303",
+      "code": "24ME303",
+      "name": "Strength of Materials",
+      "short_name": "",
+      "semester": 3,
+      "credits": 4.0,
+      "type": "THEORY_CUM_PRACTICAL",
+      "category": "Sem 1-4 Foundation",
+      "aliases": [
+        "24ME303",
+        "ME24303",
+        "ME303",
+        "SOM",
+        "STRENGTH OF MATERIALS",
+        "24ME303A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME304",
+      "code": "24ME304",
+      "name": "Fluid Mechanics and Machinery",
+      "short_name": "",
+      "semester": 3,
+      "credits": 4.0,
+      "type": "THEORY_CUM_PRACTICAL",
+      "category": "Sem 1-4 Foundation",
+      "aliases": [
+        "24ME304",
+        "ME24304",
+        "ME304",
+        "FMAM",
+        "FLUID MECHANICS AND MACHINERY",
+        "FMM",
+        "FLUID MECHANICS",
+        "FM",
+        "24ME304A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME311",
+      "code": "24ME311",
+      "name": "Manufacturing Technology Laboratory",
+      "short_name": "",
+      "semester": 3,
+      "credits": 2.0,
+      "type": "LAB",
+      "category": "Sem 1-4 Foundation",
+      "aliases": [
+        "24ME311",
+        "ME24311",
+        "ME311",
+        "MTL",
+        "MANUFACTURING TECHNOLOGY LABORATORY",
+        "MT LAB",
+        "MANUFACTURING LAB",
+        "24ME311A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME312",
+      "code": "24ME312",
+      "name": "Computer Aided Machine Drawing Laboratory",
+      "short_name": "",
+      "semester": 3,
+      "credits": 2.0,
+      "type": "LAB",
+      "category": "Sem 1-4 Foundation",
+      "aliases": [
+        "24ME312",
+        "ME24312",
+        "ME312",
+        "CAMDL",
+        "COMPUTER AIDED MACHINE DRAWING LABORATORY",
+        "CAMD LAB",
+        "MACHINE DRAWING LAB",
+        "24ME312A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24EM301",
+      "code": "24EM301",
+      "name": "Employability Skills I",
+      "short_name": "",
+      "semester": 3,
+      "credits": 1.0,
+      "type": "LAB",
+      "category": "Sem 1-4 Foundation",
+      "aliases": [
+        "24EM301",
+        "EM24301",
+        "EM301",
+        "ESI",
+        "EMPLOYABILITY SKILLS I",
+        "ES 1",
+        "ES I",
+        "EMPLOYABILITY SKILLS 1",
+        "24EM301A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME401",
+      "code": "24ME401",
+      "name": "Theory of Machines",
+      "short_name": "",
+      "semester": 4,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Sem 1-4 Foundation",
+      "aliases": [
+        "24ME401",
+        "ME24401",
+        "ME401",
+        "TOM",
+        "THEORY OF MACHINES",
+        "KINEMATICS OF MACHINERY",
+        "24ME401A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME402",
+      "code": "24ME402",
+      "name": "Thermal Engineering",
+      "short_name": "",
+      "semester": 4,
+      "credits": 4.0,
+      "type": "THEORY",
+      "category": "Sem 1-4 Foundation",
+      "aliases": [
+        "24ME402",
+        "ME24402",
+        "ME402",
+        "TE",
+        "THERMAL ENGINEERING",
+        "24ME402A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME403",
+      "code": "24ME403",
+      "name": "Hydraulics and Pneumatics",
+      "short_name": "",
+      "semester": 4,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Sem 1-4 Foundation",
+      "aliases": [
+        "24ME403",
+        "ME24403",
+        "ME403",
+        "HAP",
+        "HYDRAULICS AND PNEUMATICS",
+        "HP",
+        "HYDRAULICS & PNEUMATICS",
+        "24ME403A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24CH401",
+      "code": "24CH401",
+      "name": "Environmental Science and Engineering",
+      "short_name": "",
+      "semester": 4,
+      "credits": 2.0,
+      "type": "THEORY",
+      "category": "Sem 1-4 Foundation",
+      "aliases": [
+        "24CH401",
+        "CH24401",
+        "CH401",
+        "ESAE",
+        "ENVIRONMENTAL SCIENCE AND ENGINEERING",
+        "EVS",
+        "ESE",
+        "ENVIRONMENTAL SCIENCE",
+        "24CH401A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME404",
+      "code": "24ME404",
+      "name": "Manufacturing Technology",
+      "short_name": "",
+      "semester": 4,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Sem 1-4 Foundation",
+      "aliases": [
+        "24ME404",
+        "ME24404",
+        "ME404",
+        "MT",
+        "MANUFACTURING TECHNOLOGY",
+        "24ME404A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ES203",
+      "code": "24ES203",
+      "name": "Fundamentals of C Programming",
+      "short_name": "",
+      "semester": 4,
+      "credits": 4.0,
+      "type": "THEORY_CUM_PRACTICAL",
+      "category": "Sem 1-4 Foundation",
+      "aliases": [
+        "24ES203",
+        "ES24203",
+        "ES203",
+        "FOCP",
+        "FUNDAMENTALS OF C PROGRAMMING",
+        "C PROG",
+        "C PROGRAMMING",
+        "FUNDAMENTALS OF C",
+        "24ES203A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME411",
+      "code": "24ME411",
+      "name": "Thermal Engineering Laboratory",
+      "short_name": "",
+      "semester": 4,
+      "credits": 2.0,
+      "type": "LAB",
+      "category": "Sem 1-4 Foundation",
+      "aliases": [
+        "24ME411",
+        "ME24411",
+        "ME411",
+        "TEL",
+        "THERMAL ENGINEERING LABORATORY",
+        "TE LAB",
+        "THERMAL LAB",
+        "24ME411A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24EM401",
+      "code": "24EM401",
+      "name": "Employability Skills II",
+      "short_name": "",
+      "semester": 4,
+      "credits": 1.0,
+      "type": "LAB",
+      "category": "Sem 1-4 Foundation",
+      "aliases": [
+        "24EM401",
+        "EM24401",
+        "EM401",
+        "ESI",
+        "EMPLOYABILITY SKILLS II",
+        "ES 2",
+        "ES II",
+        "EMPLOYABILITY SKILLS 2",
+        "24EM401A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME501",
+      "code": "24ME501",
+      "name": "Design of Machine Elements",
+      "short_name": "",
+      "semester": 5,
+      "credits": 4.0,
+      "type": "THEORY",
+      "category": "Sem 5-8 Advanced",
+      "aliases": [
+        "24ME501",
+        "ME24501",
+        "ME501",
+        "DOME",
+        "DESIGN OF MACHINE ELEMENTS",
+        "DME",
+        "24ME501A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME502",
+      "code": "24ME502",
+      "name": "Metrology and Measurements",
+      "short_name": "",
+      "semester": 5,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Sem 5-8 Advanced",
+      "aliases": [
+        "24ME502",
+        "ME24502",
+        "ME502",
+        "MAM",
+        "METROLOGY AND MEASUREMENTS",
+        "MM",
+        "METROLOGY & MEASUREMENTS",
+        "METROLOGY",
+        "24ME502A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME511",
+      "code": "24ME511",
+      "name": "CAD/CAM Laboratory",
+      "short_name": "",
+      "semester": 5,
+      "credits": 2.0,
+      "type": "LAB",
+      "category": "Sem 5-8 Advanced",
+      "aliases": [
+        "24ME511",
+        "ME24511",
+        "ME511",
+        "CCL",
+        "CAD/CAM LABORATORY",
+        "CAD/CAM LAB",
+        "CAD LAB",
+        "24ME511A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME512",
+      "code": "24ME512",
+      "name": "Metrology and Dynamics Laboratory",
+      "short_name": "",
+      "semester": 5,
+      "credits": 2.0,
+      "type": "LAB",
+      "category": "Sem 5-8 Advanced",
+      "aliases": [
+        "24ME512",
+        "ME24512",
+        "ME512",
+        "MADL",
+        "METROLOGY AND DYNAMICS LABORATORY",
+        "MD LAB",
+        "METROLOGY & DYNAMICS LAB",
+        "24ME512A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24EM502",
+      "code": "24EM502",
+      "name": "Employability skills III",
+      "short_name": "",
+      "semester": 5,
+      "credits": 1.0,
+      "type": "LAB",
+      "category": "Sem 5-8 Advanced",
+      "aliases": [
+        "24EM502",
+        "EM24502",
+        "EM502",
+        "ESI",
+        "EMPLOYABILITY SKILLS III",
+        "ES 3",
+        "ES III",
+        "EMPLOYABILITY SKILLS 3",
+        "24EM502A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME513",
+      "code": "24ME513",
+      "name": "Summer Internship I",
+      "short_name": "",
+      "semester": 5,
+      "credits": 1.0,
+      "type": "THEORY",
+      "category": "Internship & Project",
+      "aliases": [
+        "24ME513",
+        "ME24513",
+        "ME513",
+        "SII",
+        "SUMMER INTERNSHIP I",
+        "INTERNSHIP 1",
+        "24ME513A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME601",
+      "code": "24ME601",
+      "name": "Design of Transmission Systems",
+      "short_name": "",
+      "semester": 6,
+      "credits": 4.0,
+      "type": "THEORY",
+      "category": "Sem 5-8 Advanced",
+      "aliases": [
+        "24ME601",
+        "ME24601",
+        "ME601",
+        "DOTS",
+        "DESIGN OF TRANSMISSION SYSTEMS",
+        "DTS",
+        "24ME601A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME602",
+      "code": "24ME602",
+      "name": "Heat Transfer",
+      "short_name": "",
+      "semester": 6,
+      "credits": 4.0,
+      "type": "THEORY_CUM_PRACTICAL",
+      "category": "Sem 5-8 Advanced",
+      "aliases": [
+        "24ME602",
+        "ME24602",
+        "ME602",
+        "HT",
+        "HEAT TRANSFER",
+        "HEAT & MASS TRANSFER",
+        "24ME602A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME603",
+      "code": "24ME603",
+      "name": "Finite Element Analysis",
+      "short_name": "",
+      "semester": 6,
+      "credits": 4.0,
+      "type": "THEORY_CUM_PRACTICAL",
+      "category": "Sem 5-8 Advanced",
+      "aliases": [
+        "24ME603",
+        "ME24603",
+        "ME603",
+        "FEA",
+        "FINITE ELEMENT ANALYSIS",
+        "FEM",
+        "24ME603A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME611",
+      "code": "24ME611",
+      "name": "Design and Fabrication Project",
+      "short_name": "",
+      "semester": 6,
+      "credits": 2.0,
+      "type": "LAB",
+      "category": "Internship & Project",
+      "aliases": [
+        "24ME611",
+        "ME24611",
+        "ME611",
+        "DAFP",
+        "DESIGN AND FABRICATION PROJECT",
+        "FABRICATION PROJECT",
+        "DFP",
+        "24ME611A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24EM601",
+      "code": "24EM601",
+      "name": "Employability skills IV",
+      "short_name": "",
+      "semester": 6,
+      "credits": 1.0,
+      "type": "LAB",
+      "category": "Sem 5-8 Advanced",
+      "aliases": [
+        "24EM601",
+        "EM24601",
+        "EM601",
+        "ESI",
+        "EMPLOYABILITY SKILLS IV",
+        "ES 4",
+        "ES IV",
+        "EMPLOYABILITY SKILLS 4",
+        "24EM601A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME701",
+      "code": "24ME701",
+      "name": "Mechatronics and IoT",
+      "short_name": "",
+      "semester": 7,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Sem 5-8 Advanced",
+      "aliases": [
+        "24ME701",
+        "ME24701",
+        "ME701",
+        "MAI",
+        "MECHATRONICS AND IOT",
+        "MECHATRONICS",
+        "MECHATRONICS & IOT",
+        "24ME701A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME702",
+      "code": "24ME702",
+      "name": "Computer Integrated Manufacturing",
+      "short_name": "",
+      "semester": 7,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Sem 5-8 Advanced",
+      "aliases": [
+        "24ME702",
+        "ME24702",
+        "ME702",
+        "CIM",
+        "COMPUTER INTEGRATED MANUFACTURING",
+        "24ME702A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME703",
+      "code": "24ME703",
+      "name": "Industrial Management",
+      "short_name": "",
+      "semester": 7,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Sem 5-8 Advanced",
+      "aliases": [
+        "24ME703",
+        "ME24703",
+        "ME703",
+        "IM",
+        "INDUSTRIAL MANAGEMENT",
+        "24ME703A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME711",
+      "code": "24ME711",
+      "name": "Mechatronics and IoT Laboratory",
+      "short_name": "",
+      "semester": 7,
+      "credits": 2.0,
+      "type": "LAB",
+      "category": "Sem 5-8 Advanced",
+      "aliases": [
+        "24ME711",
+        "ME24711",
+        "ME711",
+        "MAIL",
+        "MECHATRONICS AND IOT LABORATORY",
+        "MECHATRONICS LAB",
+        "24ME711A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME712",
+      "code": "24ME712",
+      "name": "Mini project",
+      "short_name": "",
+      "semester": 7,
+      "credits": 1.0,
+      "type": "THEORY",
+      "category": "Internship & Project",
+      "aliases": [
+        "24ME712",
+        "ME24712",
+        "ME712",
+        "MP",
+        "MINI PROJECT",
+        "MINIPROJECT",
+        "24ME712A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME713",
+      "code": "24ME713",
+      "name": "Summer Internship II",
+      "short_name": "",
+      "semester": 7,
+      "credits": 1.0,
+      "type": "THEORY",
+      "category": "Internship & Project",
+      "aliases": [
+        "24ME713",
+        "ME24713",
+        "ME713",
+        "SII",
+        "SUMMER INTERNSHIP II",
+        "INTERNSHIP 2",
+        "24ME713A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME811",
+      "code": "24ME811",
+      "name": "Project Work",
+      "short_name": "",
+      "semester": 8,
+      "credits": 10.0,
+      "type": "THEORY",
+      "category": "Internship & Project",
+      "aliases": [
+        "24ME811",
+        "ME24811",
+        "ME811",
+        "PW",
+        "PROJECT WORK",
+        "PROJECT",
+        "FINAL PROJECT",
+        "CAPSTONE PROJECT",
+        "24ME811A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME901",
+      "code": "24ME901",
+      "name": "Automotive Materials, Components, Design & Testing",
+      "short_name": "",
+      "semester": 5,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24ME901",
+        "ME24901",
+        "ME901",
+        "AMCDT",
+        "AUTOMOTIVE MATERIALS, COMPONENTS, DESIGN & TESTING",
+        "AUTOMOTIVE MATERIALS",
+        "24ME901A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME902",
+      "code": "24ME902",
+      "name": "Conventional and Futuristic Vehicle Technology",
+      "short_name": "",
+      "semester": 5,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24ME902",
+        "ME24902",
+        "ME902",
+        "CAFVT",
+        "CONVENTIONAL AND FUTURISTIC VEHICLE TECHNOLOGY",
+        "CFVT",
+        "FUTURISTIC VEHICLE TECH",
+        "24ME902A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME903",
+      "code": "24ME903",
+      "name": "Renewable Powered Off Highway Vehicles and Emission Control Technology",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24ME903",
+        "ME24903",
+        "ME903",
+        "RENEWABLE POWERED OFF HIGHWAY VEHICLES AND EMISSION CONTROL TECHNOLOGY",
+        "RPOHV",
+        "EMISSION CONTROL",
+        "24ME903A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME904",
+      "code": "24ME904",
+      "name": "Vehicle Health Monitoring, Maintenance and Safety",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24ME904",
+        "ME24904",
+        "ME904",
+        "VHMMAS",
+        "VEHICLE HEALTH MONITORING, MAINTENANCE AND SAFETY",
+        "VHMS",
+        "VEHICLE HEALTH MONITORING",
+        "24ME904A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME905",
+      "code": "24ME905",
+      "name": "CAE and CFD Approach in Future Mobility",
+      "short_name": "",
+      "semester": 7,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24ME905",
+        "ME24905",
+        "ME905",
+        "CACAIFM",
+        "CAE AND CFD APPROACH IN FUTURE MOBILITY",
+        "CAE CFD MOBILITY",
+        "CFD MOBILITY",
+        "24ME905A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME906",
+      "code": "24ME906",
+      "name": "Hybrid and Electric Vehicle Technology",
+      "short_name": "",
+      "semester": 7,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24ME906",
+        "ME24906",
+        "ME906",
+        "HAEVT",
+        "HYBRID AND ELECTRIC VEHICLE TECHNOLOGY",
+        "HEVT",
+        "HYBRID & ELECTRIC VEHICLES",
+        "24ME906A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME907",
+      "code": "24ME907",
+      "name": "Thermal Management of Batteries and Fuel Cells",
+      "short_name": "",
+      "semester": 7,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24ME907",
+        "ME24907",
+        "ME907",
+        "TMOBAFC",
+        "THERMAL MANAGEMENT OF BATTERIES AND FUEL CELLS",
+        "TMBFC",
+        "BATTERY THERMAL MANAGEMENT",
+        "24ME907A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME908",
+      "code": "24ME908",
+      "name": "Value Engineering",
+      "short_name": "",
+      "semester": 5,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24ME908",
+        "ME24908",
+        "ME908",
+        "VE",
+        "VALUE ENGINEERING",
+        "24ME908A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME909",
+      "code": "24ME909",
+      "name": "Additive Manufacturing",
+      "short_name": "",
+      "semester": 5,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24ME909",
+        "ME24909",
+        "ME909",
+        "AM",
+        "ADDITIVE MANUFACTURING",
+        "3D PRINTING",
+        "24ME909A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME910",
+      "code": "24ME910",
+      "name": "CAD/CAM",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24ME910",
+        "ME24910",
+        "ME910",
+        "CC",
+        "CAD/CAM",
+        "CAD CAM",
+        "24ME910A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME911",
+      "code": "24ME911",
+      "name": "Design For X",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24ME911",
+        "ME24911",
+        "ME911",
+        "DFX",
+        "DESIGN FOR X",
+        "24ME911A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME912",
+      "code": "24ME912",
+      "name": "Ergonomics in Design",
+      "short_name": "",
+      "semester": 7,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24ME912",
+        "ME24912",
+        "ME912",
+        "EID",
+        "ERGONOMICS IN DESIGN",
+        "ERGONOMICS",
+        "24ME912A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME913",
+      "code": "24ME913",
+      "name": "New Product Development",
+      "short_name": "",
+      "semester": 7,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24ME913",
+        "ME24913",
+        "ME913",
+        "NPD",
+        "NEW PRODUCT DEVELOPMENT",
+        "24ME913A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME914",
+      "code": "24ME914",
+      "name": "Product Life Cycle Management",
+      "short_name": "",
+      "semester": 7,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24ME914",
+        "ME24914",
+        "ME914",
+        "PLCM",
+        "PRODUCT LIFE CYCLE MANAGEMENT",
+        "PLM",
+        "PRODUCT LIFECYCLE MANAGEMENT",
+        "24ME914A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME915",
+      "code": "24ME915",
+      "name": "Sensors and Instrumentation",
+      "short_name": "",
+      "semester": 5,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24ME915",
+        "ME24915",
+        "ME915",
+        "SAI",
+        "SENSORS AND INSTRUMENTATION",
+        "SI",
+        "SENSORS & INSTRUMENTATION",
+        "24ME915A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME916",
+      "code": "24ME916",
+      "name": "Electrical Drives and Actuators",
+      "short_name": "",
+      "semester": 5,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24ME916",
+        "ME24916",
+        "ME916",
+        "EDAA",
+        "ELECTRICAL DRIVES AND ACTUATORS",
+        "EDA",
+        "ELECTRICAL DRIVES & ACTUATORS",
+        "24ME916A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME917",
+      "code": "24ME917",
+      "name": "Embedded Systems and Programming",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY_CUM_PRACTICAL",
+      "category": "Professional Elective",
+      "aliases": [
+        "24ME917",
+        "ME24917",
+        "ME917",
+        "ESAP",
+        "EMBEDDED SYSTEMS AND PROGRAMMING",
+        "ESP",
+        "EMBEDDED PROGRAMMING",
+        "24ME917A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME918",
+      "code": "24ME918",
+      "name": "Robotics",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24ME918",
+        "ME24918",
+        "ME918",
+        "ROBOTICS",
+        "INDUSTRIAL ROBOTICS",
+        "24ME918A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME919",
+      "code": "24ME919",
+      "name": "Smart Mobility and Intelligent Vehicles",
+      "short_name": "",
+      "semester": 7,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24ME919",
+        "ME24919",
+        "ME919",
+        "SMAIV",
+        "SMART MOBILITY AND INTELLIGENT VEHICLES",
+        "SMIV",
+        "SMART MOBILITY",
+        "24ME919A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME920",
+      "code": "24ME920",
+      "name": "Haptics and Immersive Technologies",
+      "short_name": "",
+      "semester": 7,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24ME920",
+        "ME24920",
+        "ME920",
+        "HAIT",
+        "HAPTICS AND IMMERSIVE TECHNOLOGIES",
+        "HAPTICS",
+        "IMMERSIVE TECH",
+        "24ME920A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME921",
+      "code": "24ME921",
+      "name": "Drone Technologies",
+      "short_name": "",
+      "semester": 7,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24ME921",
+        "ME24921",
+        "ME921",
+        "DT",
+        "DRONE TECHNOLOGIES",
+        "DRONES",
+        "24ME921A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME922",
+      "code": "24ME922",
+      "name": "Digital Manufacturing and IoT",
+      "short_name": "",
+      "semester": 5,
+      "credits": 3.0,
+      "type": "THEORY_CUM_PRACTICAL",
+      "category": "Professional Elective",
+      "aliases": [
+        "24ME922",
+        "ME24922",
+        "ME922",
+        "DMAI",
+        "DIGITAL MANUFACTURING AND IOT",
+        "DM IOT",
+        "DIGITAL MANUFACTURING",
+        "24ME922A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME923",
+      "code": "24ME923",
+      "name": "Lean Manufacturing",
+      "short_name": "",
+      "semester": 5,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24ME923",
+        "ME24923",
+        "ME923",
+        "LM",
+        "LEAN MANUFACTURING",
+        "24ME923A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME924",
+      "code": "24ME924",
+      "name": "Modern Robotics",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY_CUM_PRACTICAL",
+      "category": "Professional Elective",
+      "aliases": [
+        "24ME924",
+        "ME24924",
+        "ME924",
+        "MR",
+        "MODERN ROBOTICS",
+        "24ME924A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME925",
+      "code": "24ME925",
+      "name": "Green Manufacturing Design and Practices",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24ME925",
+        "ME24925",
+        "ME925",
+        "GMDAP",
+        "GREEN MANUFACTURING DESIGN AND PRACTICES",
+        "GMDP",
+        "GREEN MANUFACTURING",
+        "24ME925A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME926",
+      "code": "24ME926",
+      "name": "Environment Sustainability and Impact Assessment",
+      "short_name": "",
+      "semester": 7,
+      "credits": 3.0,
+      "type": "THEORY_CUM_PRACTICAL",
+      "category": "Professional Elective",
+      "aliases": [
+        "24ME926",
+        "ME24926",
+        "ME926",
+        "ESAIA",
+        "ENVIRONMENT SUSTAINABILITY AND IMPACT ASSESSMENT",
+        "ESIA",
+        "ENVIRONMENT SUSTAINABILITY",
+        "24ME926A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME927",
+      "code": "24ME927",
+      "name": "Energy Saving Machinery and Components",
+      "short_name": "",
+      "semester": 7,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24ME927",
+        "ME24927",
+        "ME927",
+        "ESMAC",
+        "ENERGY SAVING MACHINERY AND COMPONENTS",
+        "ESMC",
+        "ENERGY SAVING MACHINERY",
+        "24ME927A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME928",
+      "code": "24ME928",
+      "name": "Green Supply Chain Management",
+      "short_name": "",
+      "semester": 7,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24ME928",
+        "ME24928",
+        "ME928",
+        "GSCM",
+        "GREEN SUPPLY CHAIN MANAGEMENT",
+        "GREEN SUPPLY CHAIN",
+        "24ME928A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME929",
+      "code": "24ME929",
+      "name": "Design of Pressure Vessels",
+      "short_name": "",
+      "semester": 5,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24ME929",
+        "ME24929",
+        "ME929",
+        "DOPV",
+        "DESIGN OF PRESSURE VESSELS",
+        "DPV",
+        "PRESSURE VESSELS",
+        "24ME929A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME930",
+      "code": "24ME930",
+      "name": "Failure Analysis and NDT Techniques",
+      "short_name": "",
+      "semester": 5,
+      "credits": 3.0,
+      "type": "THEORY_CUM_PRACTICAL",
+      "category": "Professional Elective",
+      "aliases": [
+        "24ME930",
+        "ME24930",
+        "ME930",
+        "FAANT",
+        "FAILURE ANALYSIS AND NDT TECHNIQUES",
+        "FANDT",
+        "NDT",
+        "FAILURE ANALYSIS",
+        "24ME930A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME931",
+      "code": "24ME931",
+      "name": "Material Handling and Solid Processing Equipment",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24ME931",
+        "ME24931",
+        "ME931",
+        "MHASPE",
+        "MATERIAL HANDLING AND SOLID PROCESSING EQUIPMENT",
+        "MHSE",
+        "MATERIAL HANDLING",
+        "24ME931A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME932",
+      "code": "24ME932",
+      "name": "Rotating Machinery Design",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24ME932",
+        "ME24932",
+        "ME932",
+        "RMD",
+        "ROTATING MACHINERY DESIGN",
+        "ROTATING MACHINERY",
+        "24ME932A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME933",
+      "code": "24ME933",
+      "name": "Thermal and Fired Equipment Design",
+      "short_name": "",
+      "semester": 7,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24ME933",
+        "ME24933",
+        "ME933",
+        "TAFED",
+        "THERMAL AND FIRED EQUIPMENT DESIGN",
+        "TFED",
+        "THERMAL EQUIPMENT DESIGN",
+        "24ME933A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME934",
+      "code": "24ME934",
+      "name": "Industrial Layout Design and Safety",
+      "short_name": "",
+      "semester": 7,
+      "credits": 3.0,
+      "type": "THEORY_CUM_PRACTICAL",
+      "category": "Professional Elective",
+      "aliases": [
+        "24ME934",
+        "ME24934",
+        "ME934",
+        "ILDAS",
+        "INDUSTRIAL LAYOUT DESIGN AND SAFETY",
+        "ILDS",
+        "INDUSTRIAL LAYOUT",
+        "24ME934A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME935",
+      "code": "24ME935",
+      "name": "Design Codes and Standards",
+      "short_name": "",
+      "semester": 7,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24ME935",
+        "ME24935",
+        "ME935",
+        "DCAS",
+        "DESIGN CODES AND STANDARDS",
+        "DCS",
+        "DESIGN CODES",
+        "24ME935A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME936",
+      "code": "24ME936",
+      "name": "Bioenergy Conversion Technologies",
+      "short_name": "",
+      "semester": 5,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24ME936",
+        "ME24936",
+        "ME936",
+        "BCT",
+        "BIOENERGY CONVERSION TECHNOLOGIES",
+        "BIOENERGY",
+        "24ME936A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME937",
+      "code": "24ME937",
+      "name": "Carbon Footprint Estimation and Reduction Techniques",
+      "short_name": "",
+      "semester": 5,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24ME937",
+        "ME24937",
+        "ME937",
+        "CFEART",
+        "CARBON FOOTPRINT ESTIMATION AND REDUCTION TECHNIQUES",
+        "CFERT",
+        "CARBON FOOTPRINT",
+        "24ME937A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME938",
+      "code": "24ME938",
+      "name": "Energy Conservation in Industries",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24ME938",
+        "ME24938",
+        "ME938",
+        "ECII",
+        "ENERGY CONSERVATION IN INDUSTRIES",
+        "ECI",
+        "ENERGY CONSERVATION",
+        "24ME938A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME939",
+      "code": "24ME939",
+      "name": "Energy Efficient Buildings",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24ME939",
+        "ME24939",
+        "ME939",
+        "EEB",
+        "ENERGY EFFICIENT BUILDINGS",
+        "24ME939A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME940",
+      "code": "24ME940",
+      "name": "Energy Storage Devices",
+      "short_name": "",
+      "semester": 7,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24ME940",
+        "ME24940",
+        "ME940",
+        "ESD",
+        "ENERGY STORAGE DEVICES",
+        "ENERGY STORAGE",
+        "24ME940A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME941",
+      "code": "24ME941",
+      "name": "Renewable Energy Technologies",
+      "short_name": "",
+      "semester": 7,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24ME941",
+        "ME24941",
+        "ME941",
+        "RET",
+        "RENEWABLE ENERGY TECHNOLOGIES",
+        "RENEWABLE ENERGY TECH",
+        "24ME941A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME942",
+      "code": "24ME942",
+      "name": "Equipment for Pollution Control",
+      "short_name": "",
+      "semester": 7,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24ME942",
+        "ME24942",
+        "ME942",
+        "EFPC",
+        "EQUIPMENT FOR POLLUTION CONTROL",
+        "EPC",
+        "POLLUTION CONTROL EQUIPMENT",
+        "24ME942A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME943",
+      "code": "24ME943",
+      "name": "Computational Solid Mechanics",
+      "short_name": "",
+      "semester": 5,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24ME943",
+        "ME24943",
+        "ME943",
+        "CSM",
+        "COMPUTATIONAL SOLID MECHANICS",
+        "24ME943A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME944",
+      "code": "24ME944",
+      "name": "Computational Fluid Dynamics and Heat transfer",
+      "short_name": "",
+      "semester": 5,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24ME944",
+        "ME24944",
+        "ME944",
+        "CFDAHT",
+        "COMPUTATIONAL FLUID DYNAMICS AND HEAT TRANSFER",
+        "CFD",
+        "CFD & HEAT TRANSFER",
+        "24ME944A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME945",
+      "code": "24ME945",
+      "name": "Theory on Computation and Visualization",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24ME945",
+        "ME24945",
+        "ME945",
+        "TOCAV",
+        "THEORY ON COMPUTATION AND VISUALIZATION",
+        "TCV",
+        "VISUALIZATION",
+        "24ME945A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME946",
+      "code": "24ME946",
+      "name": "Computational Bio-Mechanics",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24ME946",
+        "ME24946",
+        "ME946",
+        "CBM",
+        "COMPUTATIONAL BIO-MECHANICS",
+        "BIO MECHANICS",
+        "24ME946A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME947",
+      "code": "24ME947",
+      "name": "Advanced Statistics and Data Analytics",
+      "short_name": "",
+      "semester": 7,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24ME947",
+        "ME24947",
+        "ME947",
+        "ASADA",
+        "ADVANCED STATISTICS AND DATA ANALYTICS",
+        "ASDA",
+        "DATA ANALYTICS",
+        "24ME947A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME948",
+      "code": "24ME948",
+      "name": "CAD and CAE",
+      "short_name": "",
+      "semester": 7,
+      "credits": 3.0,
+      "type": "THEORY_CUM_PRACTICAL",
+      "category": "Professional Elective",
+      "aliases": [
+        "24ME948",
+        "ME24948",
+        "ME948",
+        "CAC",
+        "CAD AND CAE",
+        "CAD CAE",
+        "24ME948A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME949",
+      "code": "24ME949",
+      "name": "Machine Learning for Intelligent Systems",
+      "short_name": "",
+      "semester": 7,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24ME949",
+        "ME24949",
+        "ME949",
+        "MLFIS",
+        "MACHINE LEARNING FOR INTELLIGENT SYSTEMS",
+        "MLIS",
+        "MACHINE LEARNING",
+        "24ME949A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME950",
+      "code": "24ME950",
+      "name": "Automobile Engineering",
+      "short_name": "",
+      "semester": 5,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24ME950",
+        "ME24950",
+        "ME950",
+        "AE",
+        "AUTOMOBILE ENGINEERING",
+        "AUTOMOBILE ENGG",
+        "24ME950A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME951",
+      "code": "24ME951",
+      "name": "Measurements and Controls",
+      "short_name": "",
+      "semester": 5,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24ME951",
+        "ME24951",
+        "ME951",
+        "MAC",
+        "MEASUREMENTS AND CONTROLS",
+        "MC",
+        "MEASUREMENTS & CONTROLS",
+        "24ME951A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME952",
+      "code": "24ME952",
+      "name": "Design Concepts in Engineering",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24ME952",
+        "ME24952",
+        "ME952",
+        "DCIE",
+        "DESIGN CONCEPTS IN ENGINEERING",
+        "DCE",
+        "DESIGN CONCEPTS",
+        "24ME952A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME953",
+      "code": "24ME953",
+      "name": "Composite Materials and Mechanics",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24ME953",
+        "ME24953",
+        "ME953",
+        "CMAM",
+        "COMPOSITE MATERIALS AND MECHANICS",
+        "CMM",
+        "COMPOSITE MATERIALS",
+        "24ME953A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME954",
+      "code": "24ME954",
+      "name": "Electrical Drives and Control",
+      "short_name": "",
+      "semester": 7,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24ME954",
+        "ME24954",
+        "ME954",
+        "EDAC",
+        "ELECTRICAL DRIVES AND CONTROL",
+        "EDC",
+        "ELECTRICAL DRIVES",
+        "24ME954A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME955",
+      "code": "24ME955",
+      "name": "Power Plant Engineering",
+      "short_name": "",
+      "semester": 7,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24ME955",
+        "ME24955",
+        "ME955",
+        "PPE",
+        "POWER PLANT ENGINEERING",
+        "POWER PLANT",
+        "24ME955A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME956",
+      "code": "24ME956",
+      "name": "Refrigeration and Air Conditioning",
+      "short_name": "",
+      "semester": 7,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24ME956",
+        "ME24956",
+        "ME956",
+        "RAAC",
+        "REFRIGERATION AND AIR CONDITIONING",
+        "RAC",
+        "REFRIGERATION & AC",
+        "24ME956A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME957",
+      "code": "24ME957",
+      "name": "Dynamics of Ground Vehicles",
+      "short_name": "",
+      "semester": 7,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24ME957",
+        "ME24957",
+        "ME957",
+        "DOGV",
+        "DYNAMICS OF GROUND VEHICLES",
+        "DGV",
+        "VEHICLE DYNAMICS",
+        "24ME957A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME958",
+      "code": "24ME958",
+      "name": "Turbo Machines",
+      "short_name": "",
+      "semester": 5,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24ME958",
+        "ME24958",
+        "ME958",
+        "TM",
+        "TURBO MACHINES",
+        "24ME958A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME959",
+      "code": "24ME959",
+      "name": "Non-traditional Machining Processes",
+      "short_name": "",
+      "semester": 5,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24ME959",
+        "ME24959",
+        "ME959",
+        "NTMP",
+        "NON-TRADITIONAL MACHINING PROCESSES",
+        "UNCONVENTIONAL MACHINING",
+        "24ME959A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME960",
+      "code": "24ME960",
+      "name": "Industrial safety",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24ME960",
+        "ME24960",
+        "ME960",
+        "IS",
+        "INDUSTRIAL SAFETY",
+        "24ME960A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME961",
+      "code": "24ME961",
+      "name": "Thermal Power Engineering",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24ME961",
+        "ME24961",
+        "ME961",
+        "TPE",
+        "THERMAL POWER ENGINEERING",
+        "THERMAL POWER",
+        "24ME961A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME962",
+      "code": "24ME962",
+      "name": "Design for Manufacturing",
+      "short_name": "",
+      "semester": 7,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24ME962",
+        "ME24962",
+        "ME962",
+        "DFM",
+        "DESIGN FOR MANUFACTURING",
+        "24ME962A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME963",
+      "code": "24ME963",
+      "name": "Power Generation Equipment Design",
+      "short_name": "",
+      "semester": 7,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24ME963",
+        "ME24963",
+        "ME963",
+        "PGED",
+        "POWER GENERATION EQUIPMENT DESIGN",
+        "POWER GENERATION DESIGN",
+        "24ME963A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME964",
+      "code": "24ME964",
+      "name": "Advanced Vehicle Engineering",
+      "short_name": "",
+      "semester": 5,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24ME964",
+        "ME24964",
+        "ME964",
+        "AVE",
+        "ADVANCED VEHICLE ENGINEERING",
+        "ADVANCED VEHICLE",
+        "24ME964A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME965",
+      "code": "24ME965",
+      "name": "Advanced Internal Combustion Engineering",
+      "short_name": "",
+      "semester": 5,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24ME965",
+        "ME24965",
+        "ME965",
+        "AICE",
+        "ADVANCED INTERNAL COMBUSTION ENGINEERING",
+        "ADVANCED IC ENGINES",
+        "24ME965A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME966",
+      "code": "24ME966",
+      "name": "Casting and Welding Processes",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24ME966",
+        "ME24966",
+        "ME966",
+        "CAWP",
+        "CASTING AND WELDING PROCESSES",
+        "CWP",
+        "CASTING & WELDING",
+        "24ME966A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME967",
+      "code": "24ME967",
+      "name": "Process Planning and Cost Estimation",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24ME967",
+        "ME24967",
+        "ME967",
+        "PPACE",
+        "PROCESS PLANNING AND COST ESTIMATION",
+        "PPCE",
+        "PROCESS PLANNING",
+        "24ME967A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME968",
+      "code": "24ME968",
+      "name": "Surface Engineering",
+      "short_name": "",
+      "semester": 7,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24ME968",
+        "ME24968",
+        "ME968",
+        "SE",
+        "SURFACE ENGINEERING",
+        "24ME968A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME969",
+      "code": "24ME969",
+      "name": "Precision Engineering",
+      "short_name": "",
+      "semester": 7,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24ME969",
+        "ME24969",
+        "ME969",
+        "PE",
+        "PRECISION ENGINEERING",
+        "24ME969A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME970",
+      "code": "24ME970",
+      "name": "Gas Dynamics and Jet Propulsion",
+      "short_name": "",
+      "semester": 7,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24ME970",
+        "ME24970",
+        "ME970",
+        "GDAJP",
+        "GAS DYNAMICS AND JET PROPULSION",
+        "GDJP",
+        "JET PROPULSION",
+        "24ME970A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24ME971",
+      "code": "24ME971",
+      "name": "Operational Research",
+      "short_name": "",
+      "semester": 7,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Professional Elective",
+      "aliases": [
+        "24ME971",
+        "ME24971",
+        "ME971",
+        "OR",
+        "OPERATIONAL RESEARCH",
+        "24ME971A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24OE089",
+      "code": "24OE089",
+      "name": "Human Values and Ethics in Engineering",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Open Elective",
+      "aliases": [
+        "24OE089",
+        "OE24089",
+        "OE089",
+        "HVAEIE",
+        "HUMAN VALUES AND ETHICS IN ENGINEERING",
+        "HUMAN VALUES",
+        "ETHICS",
+        "HVEE",
+        "24OE089A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24OE051",
+      "code": "24OE051",
+      "name": "Principles of Management",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Open Elective",
+      "aliases": [
+        "24OE051",
+        "OE24051",
+        "OE051",
+        "POM",
+        "PRINCIPLES OF MANAGEMENT",
+        "24OE051A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24OE052",
+      "code": "24OE052",
+      "name": "Total Quality Management",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Open Elective",
+      "aliases": [
+        "24OE052",
+        "OE24052",
+        "OE052",
+        "TQM",
+        "TOTAL QUALITY MANAGEMENT",
+        "24OE052A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24OE053",
+      "code": "24OE053",
+      "name": "Knowledge Management",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Open Elective",
+      "aliases": [
+        "24OE053",
+        "OE24053",
+        "OE053",
+        "KM",
+        "KNOWLEDGE MANAGEMENT",
+        "24OE053A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24OE054",
+      "code": "24OE054",
+      "name": "Artificial Intelligence and Machine Learning Fundamentals",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY_CUM_PRACTICAL",
+      "category": "Open Elective",
+      "aliases": [
+        "24OE054",
+        "OE24054",
+        "OE054",
+        "AIAMLF",
+        "ARTIFICIAL INTELLIGENCE AND MACHINE LEARNING FUNDAMENTALS",
+        "AIML FUNDAMENTALS",
+        "AI & ML FUNDAMENTALS",
+        "24OE054A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24OE055",
+      "code": "24OE055",
+      "name": "Geographical Information Systems",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY_CUM_PRACTICAL",
+      "category": "Open Elective",
+      "aliases": [
+        "24OE055",
+        "OE24055",
+        "OE055",
+        "GIS",
+        "GEOGRAPHICAL INFORMATION SYSTEMS",
+        "24OE055A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24OE056",
+      "code": "24OE056",
+      "name": "Data Science Fundamentals",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY_CUM_PRACTICAL",
+      "category": "Open Elective",
+      "aliases": [
+        "24OE056",
+        "OE24056",
+        "OE056",
+        "DSF",
+        "DATA SCIENCE FUNDAMENTALS",
+        "24OE056A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24OE057",
+      "code": "24OE057",
+      "name": "Foundations of UI and UX Design",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY_CUM_PRACTICAL",
+      "category": "Open Elective",
+      "aliases": [
+        "24OE057",
+        "OE24057",
+        "OE057",
+        "FOUAUD",
+        "FOUNDATIONS OF UI AND UX DESIGN",
+        "UIUX",
+        "UI/UX DESIGN",
+        "24OE057A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24OE058",
+      "code": "24OE058",
+      "name": "Fundamental of Information Security",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Open Elective",
+      "aliases": [
+        "24OE058",
+        "OE24058",
+        "OE058",
+        "FOIS",
+        "FUNDAMENTAL OF INFORMATION SECURITY",
+        "IS",
+        "INFORMATION SECURITY",
+        "24OE058A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24OE059",
+      "code": "24OE059",
+      "name": "Digital Marketing",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Open Elective",
+      "aliases": [
+        "24OE059",
+        "OE24059",
+        "OE059",
+        "DM",
+        "DIGITAL MARKETING",
+        "24OE059A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24OE060",
+      "code": "24OE060",
+      "name": "Design Thinking and Innovation",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Open Elective",
+      "aliases": [
+        "24OE060",
+        "OE24060",
+        "OE060",
+        "DTAI",
+        "DESIGN THINKING AND INNOVATION",
+        "DTI",
+        "DESIGN THINKING",
+        "24OE060A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24OE085",
+      "code": "24OE085",
+      "name": "Human Resource Management",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Open Elective",
+      "aliases": [
+        "24OE085",
+        "OE24085",
+        "OE085",
+        "HRM",
+        "HUMAN RESOURCE MANAGEMENT",
+        "24OE085A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24OE061",
+      "code": "24OE061",
+      "name": "Urban Agriculture",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Open Elective",
+      "aliases": [
+        "24OE061",
+        "OE24061",
+        "OE061",
+        "UA",
+        "URBAN AGRICULTURE",
+        "24OE061A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24OE062",
+      "code": "24OE062",
+      "name": "Drinking Water Supply and Treatment",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Open Elective",
+      "aliases": [
+        "24OE062",
+        "OE24062",
+        "OE062",
+        "DWSAT",
+        "DRINKING WATER SUPPLY AND TREATMENT",
+        "DWST",
+        "24OE062A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24OE063",
+      "code": "24OE063",
+      "name": "Lean Concepts, Tools and Practices",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Open Elective",
+      "aliases": [
+        "24OE063",
+        "OE24063",
+        "OE063",
+        "LCTAP",
+        "LEAN CONCEPTS, TOOLS AND PRACTICES",
+        "LEAN CONCEPTS",
+        "LCTP",
+        "24OE063A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24OE064",
+      "code": "24OE064",
+      "name": "Basics of Integrated Water Resources Management",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Open Elective",
+      "aliases": [
+        "24OE064",
+        "OE24064",
+        "OE064",
+        "BOIWRM",
+        "BASICS OF INTEGRATED WATER RESOURCES MANAGEMENT",
+        "IWRM",
+        "INTEGRATED WATER RESOURCES MANAGEMENT",
+        "24OE064A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24OE086",
+      "code": "24OE086",
+      "name": "IT in Agricultural System",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Open Elective",
+      "aliases": [
+        "24OE086",
+        "OE24086",
+        "OE086",
+        "IIAS",
+        "IT IN AGRICULTURAL SYSTEM",
+        "AGRI IT",
+        "24OE086A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24OE065",
+      "code": "24OE065",
+      "name": "Industrial Safety and Environmental Health Systems",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Open Elective",
+      "aliases": [
+        "24OE065",
+        "OE24065",
+        "OE065",
+        "ISAEHS",
+        "INDUSTRIAL SAFETY AND ENVIRONMENTAL HEALTH SYSTEMS",
+        "INDUSTRIAL SAFETY",
+        "ISEHS",
+        "24OE065A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24OE066",
+      "code": "24OE066",
+      "name": "3D Printing and Design",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY_CUM_PRACTICAL",
+      "category": "Open Elective",
+      "aliases": [
+        "24OE066",
+        "OE24066",
+        "OE066",
+        "3PAD",
+        "3D PRINTING AND DESIGN",
+        "3D PRINTING",
+        "24OE066A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24OE067",
+      "code": "24OE067",
+      "name": "Foundation Skills in Integrated Product Development",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Open Elective",
+      "aliases": [
+        "24OE067",
+        "OE24067",
+        "OE067",
+        "FSIIPD",
+        "FOUNDATION SKILLS IN INTEGRATED PRODUCT DEVELOPMENT",
+        "FSIPD",
+        "INTEGRATED PRODUCT DEVELOPMENT",
+        "24OE067A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24OE068",
+      "code": "24OE068",
+      "name": "Production Planning and Control",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Open Elective",
+      "aliases": [
+        "24OE068",
+        "OE24068",
+        "OE068",
+        "PPAC",
+        "PRODUCTION PLANNING AND CONTROL",
+        "PPC",
+        "24OE068A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24OE069",
+      "code": "24OE069",
+      "name": "Foundations of Robotics",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Open Elective",
+      "aliases": [
+        "24OE069",
+        "OE24069",
+        "OE069",
+        "FOR",
+        "FOUNDATIONS OF ROBOTICS",
+        "24OE069A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24OE070",
+      "code": "24OE070",
+      "name": "Industrial Management",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Open Elective",
+      "aliases": [
+        "24OE070",
+        "OE24070",
+        "OE070",
+        "IM",
+        "INDUSTRIAL MANAGEMENT",
+        "24OE070A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24OE081",
+      "code": "24OE081",
+      "name": "Introduction to PLC programming",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Open Elective",
+      "aliases": [
+        "24OE081",
+        "OE24081",
+        "OE081",
+        "ITPP",
+        "INTRODUCTION TO PLC PROGRAMMING",
+        "PLC",
+        "PLC PROGRAMMING",
+        "INTRO TO PLC PROGRAMMING",
+        "24OE081A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24OE082",
+      "code": "24OE082",
+      "name": "Introduction to Industrial Automation Systems",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Open Elective",
+      "aliases": [
+        "24OE082",
+        "OE24082",
+        "OE082",
+        "ITIAS",
+        "INTRODUCTION TO INDUSTRIAL AUTOMATION SYSTEMS",
+        "AUTOMATION",
+        "INDUSTRIAL AUTOMATION SYSTEMS",
+        "24OE082A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24OE083",
+      "code": "24OE083",
+      "name": "Sensors and Actuators",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Open Elective",
+      "aliases": [
+        "24OE083",
+        "OE24083",
+        "OE083",
+        "SAA",
+        "SENSORS AND ACTUATORS",
+        "SNA",
+        "24OE083A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24OE087",
+      "code": "24OE087",
+      "name": "Renewable Energy System",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Open Elective",
+      "aliases": [
+        "24OE087",
+        "OE24087",
+        "OE087",
+        "RES",
+        "RENEWABLE ENERGY SYSTEM",
+        "24OE087A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24OE088",
+      "code": "24OE088",
+      "name": "Electric Vehicle Technology",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Open Elective",
+      "aliases": [
+        "24OE088",
+        "OE24088",
+        "OE088",
+        "EVT",
+        "ELECTRIC VEHICLE TECHNOLOGY",
+        "EV",
+        "24OE088A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24OE084",
+      "code": "24OE084",
+      "name": "Energy Conservation and Management",
+      "short_name": "",
+      "semester": 6,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Open Elective",
+      "aliases": [
+        "24OE084",
+        "OE24084",
+        "OE084",
+        "ECAM",
+        "ENERGY CONSERVATION AND MANAGEMENT",
+        "ECM",
+        "24OE084A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24OE078",
+      "code": "24OE078",
+      "name": "Advanced Numerical Methods",
+      "short_name": "",
+      "semester": 7,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Open Elective",
+      "aliases": [
+        "24OE078",
+        "OE24078",
+        "OE078",
+        "ANM",
+        "ADVANCED NUMERICAL METHODS",
+        "24OE078A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24OE077",
+      "code": "24OE077",
+      "name": "Graph Theory",
+      "short_name": "",
+      "semester": 7,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Open Elective",
+      "aliases": [
+        "24OE077",
+        "OE24077",
+        "OE077",
+        "GT",
+        "GRAPH THEORY",
+        "24OE077A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24OE076",
+      "code": "24OE076",
+      "name": "Operations Research",
+      "short_name": "",
+      "semester": 7,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Open Elective",
+      "aliases": [
+        "24OE076",
+        "OE24076",
+        "OE076",
+        "OR",
+        "OPERATIONS RESEARCH",
+        "24OE076A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24OE079",
+      "code": "24OE079",
+      "name": "English for Competitive Examinations",
+      "short_name": "",
+      "semester": 7,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Open Elective",
+      "aliases": [
+        "24OE079",
+        "OE24079",
+        "OE079",
+        "EFCE",
+        "ENGLISH FOR COMPETITIVE EXAMINATIONS",
+        "ECE",
+        "ENGLISH FOR COMPETITIVE EXAMS",
+        "24OE079A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24OE080",
+      "code": "24OE080",
+      "name": "Project Report Writing",
+      "short_name": "",
+      "semester": 7,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Open Elective",
+      "aliases": [
+        "24OE080",
+        "OE24080",
+        "OE080",
+        "PRW",
+        "PROJECT REPORT WRITING",
+        "24OE080A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24OE073",
+      "code": "24OE073",
+      "name": "Wearable Technology",
+      "short_name": "",
+      "semester": 7,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Open Elective",
+      "aliases": [
+        "24OE073",
+        "OE24073",
+        "OE073",
+        "WT",
+        "WEARABLE TECHNOLOGY",
+        "24OE073A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24OE074",
+      "code": "24OE074",
+      "name": "IoT Systems Design",
+      "short_name": "",
+      "semester": 7,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Open Elective",
+      "aliases": [
+        "24OE074",
+        "OE24074",
+        "OE074",
+        "ISD",
+        "IOT SYSTEMS DESIGN",
+        "24OE074A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24OE075",
+      "code": "24OE075",
+      "name": "VLSI Design",
+      "short_name": "",
+      "semester": 7,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Open Elective",
+      "aliases": [
+        "24OE075",
+        "OE24075",
+        "OE075",
+        "VD",
+        "VLSI DESIGN",
+        "VLSI",
+        "24OE075A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24OE071",
+      "code": "24OE071",
+      "name": "Microprocessors and Interfacing",
+      "short_name": "",
+      "semester": 7,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Open Elective",
+      "aliases": [
+        "24OE071",
+        "OE24071",
+        "OE071",
+        "MAI",
+        "MICROPROCESSORS AND INTERFACING",
+        "MPI",
+        "MICROPROCESSORS",
+        "24OE071A"
+      ]
+    },
+    {
+      "id": "MECH_R2024_24OE072",
+      "code": "24OE072",
+      "name": "Wireless Sensor Networks",
+      "short_name": "",
+      "semester": 7,
+      "credits": 3.0,
+      "type": "THEORY",
+      "category": "Open Elective",
+      "aliases": [
+        "24OE072",
+        "OE24072",
+        "OE072",
+        "WSN",
+        "WIRELESS SENSOR NETWORKS",
+        "24OE072A"
+      ]
+    }
+  ],
+  "catalog_hash": "1ece8aa43b20dcbe076f38b4fbb27b053a48fb0a616ee221282d91f8902495e1"
+}
