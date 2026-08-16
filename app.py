@@ -1461,14 +1461,17 @@ def build_class_analysis_excel(ca: "ClassAnalysis") -> bytes:
                 [[s.regno, s.name, s.gpa, s.risk_level, s.attention, "YES" if s.is_high_performer else "NO",
                   ", ".join(s.attention_subjects)] for s in ca.students])
 
-    # Sheet 5: Arrear & Backlog Tracker (reads StudentAnalysis.backlog_* / u_count / ra_count
-    # exactly as already computed — no re-derivation here)
+    # Sheet 5: Arrear & Backlog Tracker (reads StudentAnalysis fields directly)
     ws_arrear = wb.create_sheet("Arrear & Backlog Tracker")
-    write_sheet(ws_arrear, ["Register Number", "Student Name", "U Count", "RA Count", "Total Arrears",
-                             "Has Backlog Arrears", "Backlog Arrear Count", "Backlog Subjects"],
-                [[s.regno, s.name, s.u_count, s.ra_count, s.arrear_count,
-                  "YES" if s.has_backlog_arrears else "NO", s.backlog_arrear_count,
-                  ", ".join(s.backlog_subjects)] for s in ca.students if s.arrear_count > 0 or s.has_backlog_arrears])
+    write_sheet(ws_arrear, ["Register Number", "Student Name", "Current Arrear Count", "Current Arrear Subjects",
+                             "Carried Previous Arrear Count", "Carried Previous Arrears",
+                             "Cleared in Reappearance", "Total Active Arrear Load"],
+                [[s.regno, s.name, s.arrear_count, ", ".join(s.attention_subjects) if s.arrear_count else "None",
+                  s.carried_previous_arrear_count if s.arrear_count > 0 else 0,
+                  ", ".join(s.carried_previous_arrears) if (s.arrear_count > 0 and s.carried_previous_arrears) else "None",
+                  ", ".join(s.cleared_previous_subjects) if s.cleared_previous_subjects else "None",
+                  s.total_active_arrear_count if s.arrear_count > 0 else (s.carried_previous_arrear_count if s.has_backlog_arrears else 0)]
+                 for s in ca.students if s.arrear_count > 0 or s.has_backlog_arrears])
 
     # Sheet 9: Source Provenance (reads StudentResultRecord.source_page /
     # extraction_confidence via subject_mappings — no re-derivation here)
@@ -3318,6 +3321,10 @@ class StudentAnalysis:
     backlog_arrear_count: int = 0
     has_backlog_arrears: bool = False
     backlog_subjects: List[str] = field(default_factory=list)
+    carried_previous_arrears: List[str] = field(default_factory=list)
+    carried_previous_arrear_count: int = 0
+    cleared_previous_subjects: List[str] = field(default_factory=list)
+    total_active_arrear_count: int = 0
     risk_level: str = "Low Risk / Cleared"
     previous_semester_results: List[StudentSubjectResult] = field(default_factory=list)
     meta: Dict[str, str] = field(default_factory=dict)
@@ -3329,6 +3336,10 @@ class StudentAnalysis:
     @property
     def malpractice_count(self) -> int:
         return self.mm_count + self.wh2_count
+
+    @property
+    def total_active_arrears(self) -> int:
+        return self.arrear_count + self.carried_previous_arrear_count
 
     def to_dict(self) -> Dict[str, Any]:
         d = {"regno": self.regno, "name": self.name, "total_courses": self.total_courses,
@@ -3347,6 +3358,10 @@ class StudentAnalysis:
              "backlog_arrear_count": self.backlog_arrear_count,
              "has_backlog_arrears": self.has_backlog_arrears,
              "backlog_subjects": self.backlog_subjects,
+             "carried_previous_arrears": self.carried_previous_arrears,
+             "carried_previous_arrear_count": self.carried_previous_arrear_count,
+             "cleared_previous_subjects": self.cleared_previous_subjects,
+             "total_active_arrear_count": self.total_active_arrear_count,
              "risk_level": self.risk_level,
              "courses": [{"subject": c.subject, "course_code": c.course_code,
                           "credits": c.credits, "grade": c.grade, "points": c.points}
@@ -4125,7 +4140,8 @@ def compute_student_analytics(records: pd.DataFrame, prev_records: Optional[Unio
 
         courses = []
         backlog_subjects = []
-        backlog_arrear_count = 0
+        carried_previous_arrears = []
+        cleared_previous_subjects = []
 
         for _, r in grp.iterrows():
             subj_title = str(r["subject"])
@@ -4136,18 +4152,27 @@ def compute_student_analytics(records: pd.DataFrame, prev_records: Optional[Unio
                 points=float(r["points"] or 0.0),
             ))
 
-            if grade_val in ARREAR_GRADES:
-                can_name, code, cred, sem, cat, conf, amb = resolve_subject_info(subj_title)
-                if sem in [1, 2, 3, 4] or cat == "Sem 1-4 Foundation":
-                    backlog_subjects.append(can_name)
-                    backlog_arrear_count += 1
-
+        # 1. Evaluate Previous Semester Results (from multi-semester pages or uploaded previous batch PDF)
         student_prev = prev_by_student.get(regno_str.upper(), [])
         for p_sub in student_prev:
+            subj_tag = p_sub.course_code or p_sub.subject
             if p_sub.grade in ARREAR_GRADES:
-                if p_sub.subject not in backlog_subjects:
-                    backlog_subjects.append(p_sub.subject)
-                    backlog_arrear_count += 1
+                if subj_tag not in carried_previous_arrears:
+                    carried_previous_arrears.append(subj_tag)
+                if subj_tag not in backlog_subjects:
+                    backlog_subjects.append(subj_tag)
+            elif p_sub.grade in PASSING_GRADES:
+                if subj_tag not in cleared_previous_subjects:
+                    cleared_previous_subjects.append(subj_tag)
+
+        # 2. Evaluate Current Semester Foundation Backlogs
+        for c in courses:
+            if c.grade in ARREAR_GRADES:
+                can_name, code, cred, sem, cat, conf, amb = resolve_subject_info(c.subject)
+                subj_tag = code or can_name
+                if sem in [1, 2, 3, 4] or cat == "Sem 1-4 Foundation":
+                    if subj_tag not in backlog_subjects:
+                        backlog_subjects.append(subj_tag)
 
         courses.sort(key=lambda c: (c.subject.lower(), c.course_code))
 
@@ -4158,7 +4183,6 @@ def compute_student_analytics(records: pd.DataFrame, prev_records: Optional[Unio
         gpa_attempted_credits = sum(c.credits for c in gpa_courses)
         quality_points = sum(c.credits * c.points for c in courses)
         gpa = (quality_points / gpa_attempted_credits) if gpa_attempted_credits > 0 else None
-
 
         counts = {g: sum(1 for c in courses if c.grade == g) for g in GRADE_ORDER}
         u_count = counts.get("U", 0)
@@ -4171,9 +4195,16 @@ def compute_student_analytics(records: pd.DataFrame, prev_records: Optional[Unio
 
         arrear_total = u_count + ra_count + ua_count
         malpractice_total = mm_count + wh2_count
-        has_backlog = (backlog_arrear_count > 0)
+        is_current_arrear = (arrear_total > 0)
+        carried_previous_arrear_count = len(carried_previous_arrears)
+        backlog_arrear_count = len(backlog_subjects)
+        has_backlog = (backlog_arrear_count > 0 or carried_previous_arrear_count > 0)
 
-        if arrear_total >= 2:
+        # Total Active Arrear Load:
+        # For current arrear students, this is the sum of current semester arrears plus carried previous arrears.
+        total_active_arrear_count = arrear_total + (carried_previous_arrear_count if is_current_arrear else 0)
+
+        if arrear_total >= 2 or (is_current_arrear and carried_previous_arrear_count > 0):
             attention = STATUS_MULTI_U
         elif has_backlog:
             attention = STATUS_BACKLOG
@@ -4189,11 +4220,11 @@ def compute_student_analytics(records: pd.DataFrame, prev_records: Optional[Unio
             attention = STATUS_CLEARED
 
         # Determine Student Risk Level
-        if arrear_total >= 3 or malpractice_total > 0:
+        if arrear_total >= 3 or total_active_arrear_count >= 3 or malpractice_total > 0:
             risk_level = "Critical Risk"
-        elif arrear_total == 2 or has_backlog:
+        elif arrear_total == 2 or total_active_arrear_count >= 2 or has_backlog:
             risk_level = "High Risk"
-        elif arrear_total == 1 or sa_count > 0 or wd_count > 0:
+        elif arrear_total == 1 or total_active_arrear_count == 1 or sa_count > 0 or wd_count > 0:
             risk_level = "Moderate Risk"
         else:
             risk_level = "Low Risk / Cleared"
@@ -4227,6 +4258,10 @@ def compute_student_analytics(records: pd.DataFrame, prev_records: Optional[Unio
             backlog_arrear_count=backlog_arrear_count,
             has_backlog_arrears=has_backlog,
             backlog_subjects=backlog_subjects,
+            carried_previous_arrears=carried_previous_arrears,
+            carried_previous_arrear_count=carried_previous_arrear_count,
+            cleared_previous_subjects=cleared_previous_subjects,
+            total_active_arrear_count=total_active_arrear_count,
             risk_level=risk_level,
             previous_semester_results=student_prev,
             meta=meta,
@@ -4790,28 +4825,55 @@ def generate_subject_ai_insight(subj: SubjectAnalysis, ca: ClassAnalysis) -> Dic
 
 
 def generate_student_brief(student: StudentAnalysis, ca: ClassAnalysis) -> Dict[str, str]:
-    """Concise per-student AI academic brief."""
-    key = "student:" + _ai_hash(student.regno, student.gpa, sorted(student.grade_counts.items()))
+    """Concise per-student AI academic brief with current & carried previous arrear intelligence."""
+    is_curr_arrear = (student.arrear_count > 0)
+    key = "student:" + _ai_hash(
+        student.regno, student.gpa, sorted(student.grade_counts.items()),
+        student.carried_previous_arrear_count, is_curr_arrear
+    )
     cached = _cache_get(key)
     if cached is not None:
         return {"text": cached, "live": _AI_CACHE[key]["live"]}
 
+    current_arrears = [
+        {"subject": c.subject, "code": c.course_code, "grade": c.grade, "credits": c.credits}
+        for c in student.courses if c.grade in ARREAR_GRADES
+    ]
+
     payload = {
+        "regno": student.regno,
+        "name": student.name,
         "gpa": student.gpa,
         "rank": student.rank,
         "percentile": student.percentile,
-        "arrears": {"u": student.u_count, "ra": student.ra_count},
+        "is_current_arrear_student": is_curr_arrear,
+        "current_semester_arrears": {
+            "count": student.arrear_count,
+            "subjects": current_arrears,
+        },
+        "carried_previous_semester_arrears": (
+            {
+                "count": student.carried_previous_arrear_count,
+                "subjects": student.carried_previous_arrears,
+            }
+            if is_curr_arrear else None
+        ),
+        "cleared_previous_arrears": student.cleared_previous_subjects,
+        "total_active_arrear_load": student.total_active_arrear_count if is_curr_arrear else 0,
         "attendance_shortage": student.sa_count,
         "withdrawal": student.wd_count,
         "malpractice": {"mm": student.mm_count, "wh2": student.wh2_count},
         "courses": [
-            {"subject": c.subject, "grade": c.grade, "points": c.points}
+            {"subject": c.subject, "code": c.course_code, "grade": c.grade, "points": c.points}
             for c in student.courses
         ],
     }
     system = (
-        "You are an expert AI Academic Advisor for teachers. Write a concise "
-        "academic briefing using bold keywords and crisp bullet points.\n"
+        "You are an expert AI Academic Advisor for engineering faculty. Write a concise, "
+        "evidence-based student academic briefing using bold keywords and crisp bullet points.\n"
+        "SPECIAL INSTRUCTION: For current arrear students (students holding active arrears in the current semester), "
+        "explicitly evaluate both their current semester arrears AND any previous semester arrears still carried over. "
+        "Detail their total active arrear burden and recommend a prioritized remedial plan to clear both foundation and current subjects.\n"
         "Use only the provided metrics. " + PROHIBITIONS + AI_GUARDRAILS
     )
     user = "Provide the student academic brief.\n\n" + _metrics_json(payload)
@@ -4823,19 +4885,43 @@ def generate_student_brief(student: StudentAnalysis, ca: ClassAnalysis) -> Dict[
 
 
 def generate_ptm_brief(student: StudentAnalysis, ca: ClassAnalysis) -> Dict[str, str]:
-    """Parent–Teacher Meeting brief for one student."""
-    key = "ptm:" + _ai_hash(student.regno, student.gpa, tuple(sorted(student.grade_counts.items())))
+    """Parent–Teacher Meeting brief for one student with carried backlog intelligence."""
+    is_curr_arrear = (student.arrear_count > 0)
+    key = "ptm:" + _ai_hash(
+        student.regno, student.gpa, tuple(sorted(student.grade_counts.items())),
+        student.carried_previous_arrear_count, is_curr_arrear
+    )
     cached = _cache_get(key)
     if cached is not None:
         return {"text": cached, "live": _AI_CACHE[key]["live"]}
 
+    current_arrears = [
+        {"subject": c.subject, "code": c.course_code, "grade": c.grade, "credits": c.credits}
+        for c in student.courses if c.grade in ARREAR_GRADES
+    ]
+
     payload = {
+        "regno": student.regno,
+        "name": student.name,
         "gpa": student.gpa,
         "rank": student.rank,
         "percentile": student.percentile,
         "total_courses": student.total_courses,
         "passed": student.passed_courses,
-        "arrears": {"u": student.u_count, "ra": student.ra_count},
+        "is_current_arrear_student": is_curr_arrear,
+        "current_semester_arrears": {
+            "count": student.arrear_count,
+            "subjects": current_arrears,
+        },
+        "carried_previous_semester_arrears": (
+            {
+                "count": student.carried_previous_arrear_count,
+                "subjects": student.carried_previous_arrears,
+            }
+            if is_curr_arrear else None
+        ),
+        "cleared_previous_arrears": student.cleared_previous_subjects,
+        "total_active_arrear_load": student.total_active_arrear_count if is_curr_arrear else 0,
         "sa": student.sa_count,
         "wd": student.wd_count,
         "malpractice": {"mm": student.mm_count, "wh2": student.wh2_count},
@@ -4847,9 +4933,11 @@ def generate_ptm_brief(student: StudentAnalysis, ca: ClassAnalysis) -> Dict[str,
     }
     system = (
         "You are an expert AI Academic Advisor helping a teacher prepare a "
-        "Parent-Teacher Meeting brief. Write structured discussion points using bold keywords.\n"
-        "Use only provided metrics. Do not invent causes, attendance, internal marks, "
-        "or medical information. " + AI_GUARDRAILS
+        "Parent-Teacher Meeting (PTM) discussion brief. Write structured discussion points using bold keywords.\n"
+        "SPECIAL INSTRUCTION: For current arrear students, discuss both their current semester arrears AND any "
+        "previous semester arrears still carried over by the student. Present their total active arrear load and "
+        "suggest concrete mentoring and study schedules for parents to support at home.\n"
+        "Use only provided metrics. Do not invent causes or medical details. " + AI_GUARDRAILS
     )
     user = "Prepare the PTM brief for this student.\n\n" + _metrics_json(payload)
     text = _ai_invoke(system, user)
@@ -4894,6 +4982,8 @@ def fallback_class_insight(ca: ClassAnalysis) -> str:
         lines.append("- No subjects show arrear grades in this semester evaluation.")
     if ca.multiple_u_count:
         lines.append(f"- **{ca.multiple_u_count} student(s)** hold multiple arrears requiring immediate intervention.")
+    if ca.backlog_student_count:
+        lines.append(f"- ⚠️ **{ca.backlog_student_count} student(s)** carry foundation backlog arrears from Semesters I-IV.")
     if ca.malpractice_student_count:
         lines.append(f"- 🚨 **{ca.malpractice_student_count} student(s)** carry malpractice status entries (MM/WH2).")
 
@@ -4971,17 +5061,30 @@ def fallback_student_brief(student: StudentAnalysis, ca: ClassAnalysis) -> str:
         lines.append("- Maintained passing grade standards across courses.")
 
     lines.append("\n## Areas Requiring Attention")
-    if student.attention_subjects:
+    if student.arrear_count > 0:
+        lines.append(f"- **Current Semester Arrears ({student.arrear_count})**: **{', '.join(student.attention_subjects)}**.")
+        if student.carried_previous_arrears:
+            lines.append(f"- ⚠️ **Carried Previous Semester Arrears ({student.carried_previous_arrear_count})**: **{', '.join(student.carried_previous_arrears)}** (still carried over by this student).")
+            lines.append(f"- **Total Active Arrear Load**: **{student.total_active_arrear_count} subjects** ({student.arrear_count} current + {student.carried_previous_arrear_count} carried from earlier terms).")
+        if student.cleared_previous_subjects:
+            lines.append(f"- ✓ **Cleared in This Exam Session**: **{', '.join(student.cleared_previous_subjects)}** (reappearance passed).")
+    elif student.attention_subjects:
         lines.append("- Courses requiring immediate attention: **" + ", ".join(student.attention_subjects) + "**.")
     else:
-        lines.append("- Cleared all registered semester subjects.")
+        lines.append("- Cleared all registered semester subjects with zero active arrears.")
 
     lines.append("\n## Recommended Faculty Actions")
-    lines.append("- Monitor academic progress in re-assessment cycles.")
-    lines.append("- Provide structured study guidance for arrear courses.")
+    if student.arrear_count > 0:
+        lines.append(f"- Formulate structured remedial study schedule covering current ({', '.join(student.attention_subjects[:2])})" +
+                     (f" and carried backlog ({', '.join(student.carried_previous_arrears[:2])})" if student.carried_previous_arrears else "") + ".")
+        lines.append("- Monitor weekly cycle test benchmarks and conduct peer mentoring reviews.")
+    else:
+        lines.append("- Monitor academic progress and encourage advanced elective options.")
 
     lines.append("\n## PTM Discussion Points")
     lines.append("- Present academic summary and credit completion status to parent.")
+    if student.arrear_count > 0 and student.carried_previous_arrears:
+        lines.append(f"- Detail both current arrears and carried previous subjects ({', '.join(student.carried_previous_arrears)}) with recovery roadmap.")
     lines.append("- Align on targeted home study schedule.")
     return "\n".join(lines)
 
@@ -4997,7 +5100,17 @@ def fallback_ptm_brief(student: StudentAnalysis, ca: ClassAnalysis) -> str:
                          else "Cleared declared result papers."))
 
     lines.append("\n## Areas Requiring Attention")
-    if student.attention_subjects:
+    if student.arrear_count > 0:
+        lines.append(f"- **Current Semester Arrears ({student.arrear_count})**:")
+        for c in student.courses:
+            if c.grade in FAILING_GRADES:
+                lines.append(f"  - **{c.subject}** (Grade: {c.grade}, Credits: {c.credits})")
+        if student.carried_previous_arrears:
+            lines.append(f"- ⚠️ **Carried Previous Semester Arrears ({student.carried_previous_arrear_count})**: **{', '.join(student.carried_previous_arrears)}** (still uncleared).")
+            lines.append(f"- **Total Active Arrear Burden**: **{student.total_active_arrear_count} subjects**.")
+        if student.cleared_previous_subjects:
+            lines.append(f"- ✓ **Previous Arrears Successfully Cleared**: **{', '.join(student.cleared_previous_subjects)}**.")
+    elif student.attention_subjects:
         for c in student.courses:
             if c.grade in FAILING_GRADES:
                 lines.append(f"- **{c.subject}** (Grade: {c.grade})")
@@ -5005,12 +5118,16 @@ def fallback_ptm_brief(student: StudentAnalysis, ca: ClassAnalysis) -> str:
         lines.append("- No active arrears or failure statuses.")
 
     lines.append("\n## Recommended Faculty Actions")
-    lines.append("- Provide remedial material for subjects needing attention.")
-    lines.append("- Schedule follow-up assessment before next term.")
+    if student.arrear_count > 0:
+        lines.append("- Provide specialized remedial material for both current and carried backlog subjects.")
+        lines.append("- Schedule bi-weekly mentor checks to ensure consistent preparation.")
+    else:
+        lines.append("- Maintain regular academic guidance and praise consistent effort.")
 
     lines.append("\n## PTM Discussion Points")
     lines.append("- Review student effort alignment with declared course credits.")
-    lines.append("- Discuss academic support plan and progress tracking.")
+    if student.arrear_count > 0:
+        lines.append("- Review specific arrear subjects and parental support strategies at home.")
     return "\n".join(lines)
 
 
@@ -7247,6 +7364,24 @@ def page_student_detail(ca: ClassAnalysis, regno: str) -> Tuple:
             cls="card p-5 border-l-4 border-l-indigo-600 mb-6 bg-indigo-50/30"
         ),
 
+        # Dedicated Active Arrear Burden & Carried Previous Arrears Banner (for current arrear students)
+        *( [Div(
+            Div(
+                Span("⚠️", cls="text-xl mr-3 flex-shrink-0"),
+                Div(
+                    H3(f"Active Arrear Burden: {s.total_active_arrear_count} Total Subjects ({s.arrear_count} Current Sem + {s.carried_previous_arrear_count} Carried Previous)", cls="text-sm font-bold text-amber-900"),
+                    P("This student currently holds active arrears and continues to carry uncleared previous semester subjects. Both current and foundation backlogs require immediate faculty counseling and remedial scheduling:", cls="text-xs text-amber-800 mt-0.5 mb-2"),
+                    Div(
+                        Span("Carried Previous Arrears:", cls="text-xs font-bold text-amber-950 mr-2"),
+                        Span(", ".join(s.carried_previous_arrears), cls="text-xs font-mono font-semibold text-amber-900 bg-amber-100/90 px-2 py-0.5 rounded border border-amber-300"),
+                        cls="flex items-center flex-wrap gap-1"
+                    ),
+                ),
+                cls="flex items-start"
+            ),
+            cls="card p-4 mb-6 border-l-4 border-l-amber-500 bg-amber-50/60 shadow-2xs"
+        )] if (s.arrear_count > 0 and s.carried_previous_arrears) else [] ),
+
         # Academic Snapshot Grid
         Div(
             H3("Academic Snapshot", cls="text-sm font-bold text-slate-800 mb-3"),
@@ -7255,10 +7390,10 @@ def page_student_detail(ca: ClassAnalysis, regno: str) -> Tuple:
                 stat_card("Class Rank", rank_text(s, ca.student_count), "#3b82f6"),
                 stat_card("Percentile", f"{s.percentile:.1f}%" if s.percentile else "—", "#16a34a"),
                 stat_card("Cleared Courses", f"{s.passed_courses}/{s.total_courses}", "#16a34a"),
-                stat_card("Arrear Count", str(s.arrear_count), "#dc2626" if s.arrear_count else "#16a34a"),
-                stat_card("SA Count", str(s.sa_count), "#d97706"),
-                stat_card("WD Count", str(s.wd_count), "#9333ea"),
-                stat_card("Malpractice", str(s.malpractice_count), "#7c3aed" if s.malpractice_count else "#64748b"),
+                stat_card("Current Arrears", str(s.arrear_count), "#dc2626" if s.arrear_count else "#16a34a"),
+                stat_card("Carried Backlogs", str(s.carried_previous_arrear_count) if s.arrear_count > 0 else "0", "#d97706" if (s.arrear_count > 0 and s.carried_previous_arrear_count > 0) else "#64748b"),
+                stat_card("Total Arrear Load", str(s.total_active_arrear_count) if s.arrear_count > 0 else "0", "#dc2626" if (s.arrear_count > 0 and s.total_active_arrear_count > 0) else "#16a34a"),
+                stat_card("SA / WD / Malpractice", f"{s.sa_count} / {s.wd_count} / {s.malpractice_count}", "#7c3aed" if (s.sa_count or s.wd_count or s.malpractice_count) else "#64748b"),
                 cls="grid grid-cols-2 md:grid-cols-4 gap-4"
             ),
             cls="mb-6"
@@ -7796,12 +7931,17 @@ def page_attention(ca: ClassAnalysis) -> Tuple:
                 Div(
                     A(s.name or "—", href=f"/students/{quote(s.regno, safe='')}",
                       cls="text-sm font-medium text-slate-800 hover:text-blue-600"),
-                    P(f"{s.regno} {'· Backlogs: ' + ', '.join(s.backlog_subjects) if s.backlog_subjects else ''}", cls="text-xs text-slate-400 font-mono mt-0.5"),
+                    P(
+                        f"{s.regno}" +
+                        (f" · Carried Prev Arrears: {', '.join(s.carried_previous_arrears)}" if (s.arrear_count > 0 and s.carried_previous_arrears) else (f" · Backlogs: {', '.join(s.backlog_subjects)}" if s.backlog_subjects else "")),
+                        cls="text-xs text-slate-400 font-mono mt-0.5"
+                    ),
                     cls="flex-1 min-w-0"
                 ),
                 Div(
                     gpa_cell(s.gpa),
-                    Span(f"{s.arrear_count} Arrear", cls="text-xs text-red-600 font-semibold") if s.arrear_count else None,
+                    (Span(f"{s.arrear_count} Current + {s.carried_previous_arrear_count} Carried", cls="text-xs text-red-700 font-semibold bg-red-50 px-2 py-0.5 rounded border border-red-200") if (s.arrear_count > 0 and s.carried_previous_arrears)
+                     else (Span(f"{s.arrear_count} Arrear", cls="text-xs text-red-600 font-semibold") if s.arrear_count else None)),
                     A("Profile & PTM →", href=f"/students/{quote(s.regno, safe='')}", cls="text-xs text-blue-600 hover:underline font-medium ml-2"),
                     cls="flex items-center gap-3"
                 ),
