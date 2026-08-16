@@ -1955,7 +1955,12 @@ def build_department_excel(
     # Analysis 3 - Result Analysis of Failed Students
     # ---------------------------------------------------------------
     ws3 = wb.create_sheet("Analysis 3_New")
-    k_subjs = len(mappings)
+    # In official format, Analysis 3 columns display Theory subjects
+    analysis3_mappings = [m for m in mappings if _is_theory_course(m["course_code"], m["official_subject_name"], m.get("credits", 3.0))]
+    if not analysis3_mappings:
+        analysis3_mappings = mappings
+
+    k_subjs = len(analysis3_mappings)
     ncols3 = 4 + k_subjs + 1 + 2 + 1  # 4 fixed + k subjects + 1 (No. of Arrears) + 2 (Old Arrears) + 1 (Mentor)
 
     # Title Block (Matching Departmental Format)
@@ -2019,7 +2024,7 @@ def build_department_excel(
     if k_subjs > 0:
         ws3.merge_cells(start_row=h1, start_column=5, end_row=h1, end_column=4 + k_subjs)
         ws3.cell(row=h1, column=5, value="Subjects")
-        for j, m in enumerate(mappings, start=5):
+        for j, m in enumerate(analysis3_mappings, start=5):
             ws3.cell(row=h2, column=j, value=m["course_code"])
 
     # No. of Arrears (Col 5+k_subjs)
@@ -2056,17 +2061,16 @@ def build_department_excel(
         ws3.cell(row=r, column=3, value=s.name)
         ws3.cell(row=r, column=4, value=s.meta.get("quota", "GQ"))
 
-        for j, m in enumerate(mappings, start=5):
+        for j, m in enumerate(analysis3_mappings, start=5):
             grade, _pts = gp_lookup.get(m["course_code"], ("", 0))
             ws3.cell(row=r, column=j, value=grade if grade in ARREAR_GRADES else "")
 
         ws3.cell(row=r, column=5 + k_subjs, value=s.arrear_count)
 
-        # OLD ARREARS: Populate previous semester failed subjects for this current arrear student
-        prev_res = getattr(s, "previous_semester_results", [])
-        prev_arrears = [c for c in prev_res if c.grade in ARREAR_GRADES or (c.grade and c.grade not in PASSING_GRADES)]
+        # OLD ARREARS: Populate carried previous semester failed subjects for this current arrear student
+        prev_arrears = getattr(s, "carried_previous_arrears", [])
         if prev_arrears:
-            subj_str = ",".join(c.course_code or c.subject for c in prev_arrears)
+            subj_str = ",".join(prev_arrears)
             count_str = len(prev_arrears)
         else:
             subj_str = "-"
