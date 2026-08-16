@@ -1112,22 +1112,184 @@ def extract_coe_pdf(pdf_bytes: bytes, filename: str, analysis_context: Optional[
 
     return report
 
-def parse_ia_marks_content(raw_bytes: bytes, filename: str) -> Tuple[Dict[str, Dict[str, Any]], Dict[str, str], Dict[str, str]]:
+def clean_staff_name(staff_raw: str) -> str:
+    """Cleans and standardizes staff names extracted from HTML mark sheets."""
+    if not staff_raw:
+        return ""
+    # Strip trailing digits (e.g. employee IDs like 7130, 7126)
+    s = re.sub(r"\d+$", "", staff_raw).strip()
+    # Strip department suffix tags (e.g. -eee, -mat, -phy, -eng, -tamil, -cse, -aids)
+    s = re.sub(r"[-_](?:eee|mat|math|maths|phy|physics|tamil|eng|english|cse|it|aids|ai_ds|mech|ece|civil|chem|chemistry)$", "", s, flags=re.IGNORECASE).strip()
+    # Replace dots or underscores with spaces
+    s = re.sub(r"[._]", " ", s)
+    s = re.sub(r"\s+", " ", s).strip()
+    return " ".join(w.capitalize() for w in s.split())
+
+
+def parse_combined_ia_marks_content(
+    raw_bytes: bytes, filename: str
+) -> Tuple[Dict[str, Dict[str, Dict[str, Any]]], Dict[str, str], Dict[str, str], Dict[str, Dict[str, str]]]:
     """
-    Parses Internal Assessment / Cycle Test mark sheets uploaded as .mhtml, .html, .xlsx, or .csv.
-    Returns (student_marks, course_titles, course_staff).
-    student_marks schema:
+    Parses multi-test / section-wise Cycle Test mark summary reports (e.g. II A IA.html, II B.html).
+    Returns (multi_test_marks, course_titles, course_staff, student_metadata).
+    multi_test_marks schema:
       {
-        "813824243001": {
-          "batch_no": "278001",
-          "name": "AATHITYAN. M S G",
-          "marks": {
-            "24AD401": "52",
-            "24AD402": "32", ...
-          }
-        }
+        "ia1": { "813825243001": { "name": ..., "batch_no": ..., "quota": ..., "marks": { "24CS201A": "96" } } },
+        "mut1": { ... },
+        "ia2": { ... },
+        "mut2": { ... },
+        "ia3": { ... }
       }
     """
+    import quopri
+    from bs4 import BeautifulSoup
+
+    test_marks: Dict[str, Dict[str, Dict[str, Any]]] = {
+        "ia1": {}, "mut1": {}, "ia2": {}, "mut2": {}, "ia3": {}
+    }
+    course_titles: Dict[str, str] = {}
+    course_staff: Dict[str, str] = {}
+    student_meta: Dict[str, Dict[str, str]] = {}
+
+    if not raw_bytes:
+        return test_marks, course_titles, course_staff, student_meta
+
+    if filename.lower().endswith(('.mhtml', '.mht')):
+        try:
+            decoded = quopri.decodestring(raw_bytes).decode('utf-8', errors='ignore')
+        except Exception:
+            decoded = raw_bytes.decode('utf-8', errors='ignore')
+    else:
+        decoded = raw_bytes.decode('utf-8', errors='ignore')
+
+    if "<table" not in decoded.lower():
+        return test_marks, course_titles, course_staff, student_meta
+
+    try:
+        soup = BeautifulSoup(decoded, 'html.parser')
+        tables = soup.find_all('table')
+        regno_pattern = re.compile(r"\b(\d{10,12})\b")
+
+        for table in tables:
+            rows = table.find_all('tr')
+            if len(rows) < 3:
+                continue
+
+            r0 = rows[0]
+            r1 = rows[1]
+
+            r0_cells = r0.find_all(['th', 'td'])
+            r1_cells = r1.find_all(['th', 'td'])
+            r1_texts = [c.get_text().strip().upper() for c in r1_cells]
+
+            # Check if this table has multi-test subheaders (A1, A2, A3, A5 or IAT1, MUT1, etc.)
+            has_multi_tests = any(t in ("A1", "A2", "A3", "A5", "IAT1", "IAT2", "IAT3", "MUT1", "MUT2", "MODEL") for t in r1_texts)
+            if not has_multi_tests:
+                continue
+
+            col_mappings = []
+            fixed_col_count = 0
+            cur_data_col = 0
+            r1_idx = 0
+
+            for c in r0_cells:
+                txt = c.get_text().strip()
+                rowspan = int(c.get('rowspan', 1) or 1)
+                colspan = int(c.get('colspan', 1) or 1)
+
+                if rowspan >= 2 or (colspan == 1 and not re.search(r"[A-Z]{2,4}\d{3}", txt.upper())):
+                    fixed_col_count += 1
+                    cur_data_col += 1
+                else:
+                    clean_txt = re.sub(r"\s+", " ", txt)
+                    parts = clean_txt.split("-", 1)
+                    code_raw = parts[0].strip().upper()
+                    staff_raw = parts[1].strip() if len(parts) > 1 else ""
+
+                    staff_clean = clean_staff_name(staff_raw)
+                    m_code = re.search(r"((?:24)?[A-Z]{2,4}\d{3}[A-Z]?)", code_raw)
+                    ccode = m_code.group(1) if m_code else code_raw
+
+                    if ccode and staff_clean:
+                        course_staff[ccode] = staff_clean
+
+                    for _ in range(colspan):
+                        sub_test = r1_texts[r1_idx] if r1_idx < len(r1_texts) else ""
+                        r1_idx += 1
+                        col_mappings.append((cur_data_col, ccode, sub_test, staff_clean))
+                        cur_data_col += 1
+
+            for r in rows[2:]:
+                cells = [c.get_text().strip() for c in r.find_all(['th', 'td'])]
+                if len(cells) < fixed_col_count:
+                    continue
+                row_str = " ".join(cells[:max(7, fixed_col_count)])
+                m_reg = regno_pattern.search(row_str)
+                if not m_reg:
+                    continue
+
+                regno = m_reg.group(1)
+                batchno = cells[2] if len(cells) > 2 else ""
+                name = cells[3] if len(cells) > 3 else ""
+                quota = cells[4].strip().upper() if len(cells) > 4 and cells[4].strip() else "GQ"
+                cgpa = cells[6].strip() if len(cells) > 6 else ""
+
+                student_meta[regno] = {
+                    "quota": quota,
+                    "cgpa": cgpa,
+                    "batch_no": batchno,
+                    "name": name,
+                }
+
+                for (col_idx, ccode, sub_test, staff_name) in col_mappings:
+                    if col_idx < len(cells):
+                        mark_val = cells[col_idx].strip()
+                        if mark_val and mark_val not in ("&nbsp;", "-", "—"):
+                            test_key = "ia1"
+                            if sub_test in ("A1", "IAT1", "IA1", "CT1"):
+                                test_key = "ia1"
+                            elif sub_test in ("A2", "MUT1", "MT1"):
+                                test_key = "mut1"
+                            elif sub_test in ("A3", "IAT2", "IA2", "CT2"):
+                                test_key = "ia2"
+                            elif sub_test in ("A5", "MUT2", "MT2", "MODEL"):
+                                test_key = "mut2"
+                            elif sub_test in ("A4", "IAT3", "IA3", "CT3"):
+                                test_key = "ia3"
+
+                            st_rec = test_marks[test_key].setdefault(regno, {
+                                "name": name,
+                                "batch_no": batchno,
+                                "quota": quota,
+                                "marks": {}
+                            })
+                            st_rec["marks"][ccode] = mark_val
+
+    except Exception:
+        pass
+
+    return test_marks, course_titles, course_staff, student_meta
+
+
+def parse_ia_marks_content(
+    raw_bytes: bytes, filename: str, target_test_key: str = "ia1"
+) -> Tuple[Dict[str, Dict[str, Any]], Dict[str, str], Dict[str, str]]:
+    """
+    Parses Internal Assessment / Cycle Test mark sheets uploaded as .mhtml, .html, .xlsx, or .csv.
+    Handles both single-assessment mark sheets and combined all-cycle-test reports.
+    Returns (student_marks, course_titles, course_staff).
+    """
+    # 1. Try multi-test combined parsing first
+    multi_marks, c_titles, c_staff, _ = parse_combined_ia_marks_content(raw_bytes, filename)
+    if any(multi_marks.values()):
+        # If target test exists in multi_marks, return that; otherwise return first non-empty
+        if multi_marks.get(target_test_key):
+            return multi_marks[target_test_key], c_titles, c_staff
+        for t_k in ("ia1", "ia2", "ia3", "mut1", "mut2"):
+            if multi_marks.get(t_k):
+                return multi_marks[t_k], c_titles, c_staff
+
+    # 2. Standard single-table parser for single-test sheets
     import quopri
     from bs4 import BeautifulSoup
 
@@ -1138,7 +1300,6 @@ def parse_ia_marks_content(raw_bytes: bytes, filename: str) -> Tuple[Dict[str, D
     if not raw_bytes:
         return student_marks, course_titles, course_staff
 
-    # Decode HTML / MHTML bytes
     if filename.lower().endswith(('.mhtml', '.mht')):
         try:
             decoded = quopri.decodestring(raw_bytes).decode('utf-8', errors='ignore')
@@ -1173,7 +1334,7 @@ def parse_ia_marks_content(raw_bytes: bytes, filename: str) -> Tuple[Dict[str, D
                             if code_tok:
                                 course_titles[code_tok] = cells[title_col]
                                 if faculty_col >= 0 and len(cells) > faculty_col:
-                                    course_staff[code_tok] = cells[faculty_col]
+                                    course_staff[code_tok] = clean_staff_name(cells[faculty_col])
                     continue
 
                 # Main Marks Table
@@ -2161,7 +2322,14 @@ def build_department_excel(
             staff_name = code_to_staff.get(c.course_code, "") or "(Staff name not entered)"
             subj_obj = code_to_subj.get(c.course_code)
             num_failures = subj_obj.arrear_count if subj_obj else 0
-            quota = s.meta.get("quota", "N/A")
+            quota = s.meta.get("quota") or (
+                ia1_dict.get(s.regno, {}).get("quota") or
+                mut1_dict.get(s.regno, {}).get("quota") or
+                ia2_dict.get(s.regno, {}).get("quota") or
+                mut2_dict.get(s.regno, {}).get("quota") or
+                ia3_dict.get(s.regno, {}).get("quota") or
+                "N/A"
+            )
 
             ws4.cell(row=r, column=1, value=s_no)
             ws4.cell(row=r, column=2, value=staff_name)
@@ -9307,48 +9475,103 @@ def page_pdf_to_excel(pdf_report: "PDFExtractionReport", ca: "ClassAnalysis", fi
 
     # Internal Assessment Marks Upload Panel for Analysis 4
     ia1_count = len(ia_marks_store.get("ia1", {}))
+    mut1_count = len(ia_marks_store.get("mut1", {}))
     ia2_count = len(ia_marks_store.get("ia2", {}))
+    mut2_count = len(ia_marks_store.get("mut2", {}))
     ia3_count = len(ia_marks_store.get("ia3", {}))
+    total_ia_students = len(set().union(
+        ia_marks_store.get("ia1", {}).keys(),
+        ia_marks_store.get("mut1", {}).keys(),
+        ia_marks_store.get("ia2", {}).keys(),
+        ia_marks_store.get("mut2", {}).keys(),
+        ia_marks_store.get("ia3", {}).keys()
+    ))
 
     ia_upload_form = Form(
         Div(
-            H3("Analysis 4 — Internal Assessment (Cycle Test) Mark Sheets", cls="text-sm font-bold text-slate-800 mb-1"),
-            P("Upload Cycle Test mark sheet files (.mhtml, .html, .xlsx, .csv — select multiple files if department has multiple classes) to populate IA-1, IA-2, and IA-3 marks of failed students in Analysis 4:", cls="text-xs text-slate-500 mb-4"),
-            
             Div(
                 Div(
-                    Label("IA 1 / Cycle Test 1 Mark Sheet", cls="block text-xs font-semibold text-slate-700 mb-1"),
-                    Input(type="file", name="ia1_file", accept=".mhtml,.mht,.html,.htm,.xlsx,.xls,.csv", multiple=True,
-                          cls="w-full text-xs text-slate-500 file:mr-2 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"),
-                    Span(f"✓ {ia1_count} students loaded" if ia1_count else "Not uploaded yet",
-                         cls=f"text-[10px] font-bold mt-1.5 inline-block px-2 py-0.5 rounded {('bg-green-100 text-green-800' if ia1_count else 'bg-slate-100 text-slate-500')}"),
-                    cls="card p-3 bg-slate-50 border border-slate-200"
+                    H3("Analysis 4 — Internal Assessment (Cycle Test) Mark Sheets", cls="text-sm font-bold text-slate-800 mb-1"),
+                    P("Upload Internal Assessment mark sheets to populate IAT 1, MUT 1, IAT 2, MUT 2, and IAT 3 marks, Quota, and faculty names of failed students in Analysis 4:", cls="text-xs text-slate-500"),
+                    cls="flex-1"
                 ),
                 Div(
-                    Label("IA 2 / Cycle Test 2 Mark Sheet", cls="block text-xs font-semibold text-slate-700 mb-1"),
-                    Input(type="file", name="ia2_file", accept=".mhtml,.mht,.html,.htm,.xlsx,.xls,.csv", multiple=True,
-                          cls="w-full text-xs text-slate-500 file:mr-2 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"),
-                    Span(f"✓ {ia2_count} students loaded" if ia2_count else "Not uploaded yet",
-                         cls=f"text-[10px] font-bold mt-1.5 inline-block px-2 py-0.5 rounded {('bg-green-100 text-green-800' if ia2_count else 'bg-slate-100 text-slate-500')}"),
-                    cls="card p-3 bg-slate-50 border border-slate-200"
+                    Span(f"✓ {total_ia_students} Total Students Loaded" if total_ia_students else "No IA Data Loaded",
+                         cls=f"text-xs font-bold px-3 py-1 rounded-full {('bg-green-100 text-green-800 border border-green-300' if total_ia_students else 'bg-slate-100 text-slate-500 border border-slate-200')}"),
+                    cls="flex-shrink-0"
                 ),
+                cls="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4"
+            ),
+
+            # Status Summary Badges
+            Div(
+                Span(f"IAT 1: {ia1_count} loaded", cls=f"text-[11px] font-semibold px-2.5 py-1 rounded {('bg-green-50 text-green-700 border border-green-200' if ia1_count else 'bg-slate-50 text-slate-400 border border-slate-200')}"),
+                Span(f"MUT 1: {mut1_count} loaded", cls=f"text-[11px] font-semibold px-2.5 py-1 rounded {('bg-green-50 text-green-700 border border-green-200' if mut1_count else 'bg-slate-50 text-slate-400 border border-slate-200')}"),
+                Span(f"IAT 2: {ia2_count} loaded", cls=f"text-[11px] font-semibold px-2.5 py-1 rounded {('bg-green-50 text-green-700 border border-green-200' if ia2_count else 'bg-slate-50 text-slate-400 border border-slate-200')}"),
+                Span(f"MUT 2: {mut2_count} loaded", cls=f"text-[11px] font-semibold px-2.5 py-1 rounded {('bg-green-50 text-green-700 border border-green-200' if mut2_count else 'bg-slate-50 text-slate-400 border border-slate-200')}"),
+                Span(f"IAT 3: {ia3_count} loaded", cls=f"text-[11px] font-semibold px-2.5 py-1 rounded {('bg-green-50 text-green-700 border border-green-200' if ia3_count else 'bg-slate-50 text-slate-400 border border-slate-200')}"),
+                cls="flex flex-wrap gap-2 mb-5"
+            ),
+
+            # Upload Type Tab Controller
+            Div(
+                # Option 1: Combined Section-wise Files (Recommended)
                 Div(
-                    Label("IA 3 / Cycle Test 3 Mark Sheet", cls="block text-xs font-semibold text-slate-700 mb-1"),
-                    Input(type="file", name="ia3_file", accept=".mhtml,.mht,.html,.htm,.xlsx,.xls,.csv", multiple=True,
-                          cls="w-full text-xs text-slate-500 file:mr-2 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"),
-                    Span(f"✓ {ia3_count} students loaded" if ia3_count else "Not uploaded yet",
-                         cls=f"text-[10px] font-bold mt-1.5 inline-block px-2 py-0.5 rounded {('bg-green-100 text-green-800' if ia3_count else 'bg-slate-100 text-slate-500')}"),
-                    cls="card p-3 bg-slate-50 border border-slate-200"
+                    Div(
+                        Span("⚡ Option 1: Combined Section-Wise Reports (Recommended)", cls="text-xs font-bold text-indigo-900 block mb-1"),
+                        P("Upload all-cycle-test section mark sheets (e.g. II A IA.html, II B.html). Select all section files together — extracts all tests (IAT 1, MUT 1, IAT 2, MUT 2, IAT 3), Quota, and faculty names at once:", cls="text-xs text-slate-600 mb-2"),
+                        Input(type="file", name="combined_files", accept=".html,.htm,.mhtml,.mht,.xlsx,.xls,.csv", multiple=True,
+                              cls="w-full text-xs text-slate-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-indigo-100 file:text-indigo-800 hover:file:bg-indigo-200"),
+                        cls="card p-4 bg-indigo-50/40 border border-indigo-200 rounded-lg mb-4"
+                    ),
                 ),
-                cls="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4"
+
+                # Option 2: Individual Cycle Test Files (Collapsible / Alternative)
+                Div(
+                    Span("📁 Option 2: Individual Assessment Files (Alternative)", cls="text-xs font-bold text-slate-700 block mb-2"),
+                    Div(
+                        Div(
+                            Label("IAT 1 / Cycle Test 1", cls="block text-xs font-semibold text-slate-700 mb-1"),
+                            Input(type="file", name="ia1_file", accept=".mhtml,.mht,.html,.htm,.xlsx,.xls,.csv", multiple=True,
+                                  cls="w-full text-xs text-slate-500 file:mr-1 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-slate-100"),
+                            cls="p-2.5 bg-slate-50 border border-slate-200 rounded"
+                        ),
+                        Div(
+                            Label("MUT 1 / Mid Term 1", cls="block text-xs font-semibold text-slate-700 mb-1"),
+                            Input(type="file", name="mut1_file", accept=".mhtml,.mht,.html,.htm,.xlsx,.xls,.csv", multiple=True,
+                                  cls="w-full text-xs text-slate-500 file:mr-1 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-slate-100"),
+                            cls="p-2.5 bg-slate-50 border border-slate-200 rounded"
+                        ),
+                        Div(
+                            Label("IAT 2 / Cycle Test 2", cls="block text-xs font-semibold text-slate-700 mb-1"),
+                            Input(type="file", name="ia2_file", accept=".mhtml,.mht,.html,.htm,.xlsx,.xls,.csv", multiple=True,
+                                  cls="w-full text-xs text-slate-500 file:mr-1 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-slate-100"),
+                            cls="p-2.5 bg-slate-50 border border-slate-200 rounded"
+                        ),
+                        Div(
+                            Label("MUT 2 / Model Exam", cls="block text-xs font-semibold text-slate-700 mb-1"),
+                            Input(type="file", name="mut2_file", accept=".mhtml,.mht,.html,.htm,.xlsx,.xls,.csv", multiple=True,
+                                  cls="w-full text-xs text-slate-500 file:mr-1 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-slate-100"),
+                            cls="p-2.5 bg-slate-50 border border-slate-200 rounded"
+                        ),
+                        Div(
+                            Label("IAT 3 / Cycle Test 3", cls="block text-xs font-semibold text-slate-700 mb-1"),
+                            Input(type="file", name="ia3_file", accept=".mhtml,.mht,.html,.htm,.xlsx,.xls,.csv", multiple=True,
+                                  cls="w-full text-xs text-slate-500 file:mr-1 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-slate-100"),
+                            cls="p-2.5 bg-slate-50 border border-slate-200 rounded"
+                        ),
+                        cls="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5"
+                    ),
+                    cls="card p-4 bg-slate-50/70 border border-slate-200 rounded-lg mb-4"
+                ),
             ),
             
             Div(
                 (Form(Button("Clear saved IA marks", type="submit", cls="text-xs text-red-600 hover:text-red-700 underline mr-auto"),
-                      action="/pdf-to-excel/clear-ia", method="POST") if (ia1_count or ia2_count or ia3_count) else None),
-                Button("📤 Upload & Process IA Mark Sheets", type="submit",
-                       cls="px-4 py-2 text-sm font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors"),
-                cls="flex items-center justify-between"
+                      action="/pdf-to-excel/clear-ia", method="POST") if total_ia_students else None),
+                Button("📤 Upload & Process Mark Sheets", type="submit",
+                       cls="px-5 py-2.5 text-sm font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors shadow-xs"),
+                cls="flex items-center justify-between mt-2"
             ),
             cls="p-5"
         ),
@@ -9684,26 +9907,38 @@ async def route_pdf_to_excel_upload_ia(request):
         return RedirectResponse("/upload", status_code=303)
 
     form = await request.form()
-    ia_store = SESSION.setdefault("ia_marks_directory", {"ia1": {}, "ia2": {}, "ia3": {}})
+    ia_store = SESSION.setdefault("ia_marks_directory", {"ia1": {}, "mut1": {}, "ia2": {}, "mut2": {}, "ia3": {}})
+    staff_directory = SESSION.setdefault("staff_directory", {})
+    student_meta_dir = SESSION.setdefault("student_meta_directory", {})
     uploaded_counts = []
     has_new_staff = False
 
-    for test_key, field_name in [("ia1", "ia1_file"), ("ia2", "ia2_file"), ("ia3", "ia3_file")]:
-        file_objs = form.getlist(field_name)
-        merged_marks = dict(ia_store.get(test_key, {}))
-        processed_files_count = 0
+    # 1. Process Combined Section Mark Sheets (e.g. II A IA.html, II B.html)
+    combined_files = form.getlist("combined_files")
+    comb_files_processed = 0
+    comb_students_loaded = set()
 
-        for file_obj in file_objs:
-            if file_obj and getattr(file_obj, "filename", ""):
-                raw_bytes = await file_obj.read()
-                if raw_bytes:
-                    fname = getattr(file_obj, "filename", "marks.mhtml")
-                    parsed_marks, _titles, parsed_staff = parse_ia_marks_content(raw_bytes, fname)
-                    if parsed_marks:
-                        merged_marks.update(parsed_marks)
-                        processed_files_count += 1
+    for file_obj in combined_files:
+        if file_obj and getattr(file_obj, "filename", ""):
+            raw_bytes = await file_obj.read()
+            if raw_bytes:
+                fname = getattr(file_obj, "filename", "combined_marks.html")
+                multi_marks, _titles, parsed_staff, stu_meta = parse_combined_ia_marks_content(raw_bytes, fname)
+                if any(multi_marks.values()):
+                    comb_files_processed += 1
+                    for t_key, t_map in multi_marks.items():
+                        if t_map:
+                            ia_store.setdefault(t_key, {}).update(t_map)
+                            comb_students_loaded.update(t_map.keys())
+
+                    for regno, smeta in stu_meta.items():
+                        student_meta_dir.setdefault(regno, {}).update(smeta)
+                        # Also update ca.students meta
+                        for s in ca.students:
+                            if s.regno == regno:
+                                s.meta.update(smeta)
+
                     if parsed_staff:
-                        staff_directory = SESSION.setdefault("staff_directory", {})
                         for code, staff_name in parsed_staff.items():
                             staff_name = staff_name.strip()
                             if not staff_name:
@@ -9713,21 +9948,72 @@ async def route_pdf_to_excel_upload_ia(request):
                                 staff_directory[code] = staff_name
                                 has_new_staff = True
                             else:
-                                existing_names = [s.strip() for s in existing_staff.split(" & ")]
+                                existing_names = [s.strip() for s in existing_staff.split("&")]
                                 if staff_name not in existing_names:
                                     staff_directory[code] = f"{existing_staff} & {staff_name}"
                                     has_new_staff = True
 
-        if merged_marks:
-            ia_store[test_key] = merged_marks
-            if processed_files_count > 0:
-                uploaded_counts.append(f"{test_key.upper()} ({len(merged_marks)} students from {processed_files_count} file(s))")
+    if comb_files_processed > 0:
+        uploaded_counts.append(f"Combined Section Reports ({len(comb_students_loaded)} students across {comb_files_processed} section file(s))")
+
+    # 2. Process Individual IA Files (ia1_file, mut1_file, ia2_file, mut2_file, ia3_file)
+    for test_key, field_name in [
+        ("ia1", "ia1_file"), ("mut1", "mut1_file"),
+        ("ia2", "ia2_file"), ("mut2", "mut2_file"),
+        ("ia3", "ia3_file")
+    ]:
+        file_objs = form.getlist(field_name)
+        merged_marks = dict(ia_store.get(test_key, {}))
+        processed_files_count = 0
+
+        for file_obj in file_objs:
+            if file_obj and getattr(file_obj, "filename", ""):
+                raw_bytes = await file_obj.read()
+                if raw_bytes:
+                    fname = getattr(file_obj, "filename", "marks.mhtml")
+                    # Check if uploaded file in individual box is actually a combined report
+                    multi_marks, _titles, parsed_staff, stu_meta = parse_combined_ia_marks_content(raw_bytes, fname)
+                    if any(multi_marks.values()):
+                        for t_k, t_map in multi_marks.items():
+                            if t_map:
+                                ia_store.setdefault(t_k, {}).update(t_map)
+                        if stu_meta:
+                            for regno, smeta in stu_meta.items():
+                                student_meta_dir.setdefault(regno, {}).update(smeta)
+                                for s in ca.students:
+                                    if s.regno == regno:
+                                        s.meta.update(smeta)
+                        processed_files_count += 1
+                    else:
+                        parsed_marks, _titles, parsed_staff = parse_ia_marks_content(raw_bytes, fname, target_test_key=test_key)
+                        if parsed_marks:
+                            merged_marks.update(parsed_marks)
+                            processed_files_count += 1
+                            ia_store[test_key] = merged_marks
+
+                    if parsed_staff:
+                        for code, staff_name in parsed_staff.items():
+                            staff_name = staff_name.strip()
+                            if not staff_name:
+                                continue
+                            existing_staff = staff_directory.get(code, "").strip()
+                            if not existing_staff:
+                                staff_directory[code] = staff_name
+                                has_new_staff = True
+                            else:
+                                existing_names = [s.strip() for s in existing_staff.split("&")]
+                                if staff_name not in existing_names:
+                                    staff_directory[code] = f"{existing_staff} & {staff_name}"
+                                    has_new_staff = True
+
+        if processed_files_count > 0:
+            uploaded_counts.append(f"{test_key.upper()} ({len(ia_store.get(test_key, {}))} students from {processed_files_count} file(s))")
 
     if uploaded_counts:
         push_alert(f"Successfully processed IA mark sheets: {', '.join(uploaded_counts)}.", "green")
         if has_new_staff:
             SESSION["staff_verified"] = False
-            push_alert("Staff names extracted from cycle test mark sheet(s). Please manually verify them below and click 'Save Staff Names' to confirm.", "amber")
+            push_alert("Staff names extracted from mark sheet(s). Please review them below and click 'Save Staff Names' to confirm.", "amber")
     else:
         push_alert("No valid IA mark sheet files were uploaded.", "amber")
 
@@ -9736,7 +10022,7 @@ async def route_pdf_to_excel_upload_ia(request):
 
 @app.post("/pdf-to-excel/clear-ia")
 def route_pdf_to_excel_clear_ia():
-    SESSION["ia_marks_directory"] = {"ia1": {}, "ia2": {}, "ia3": {}}
+    SESSION["ia_marks_directory"] = {"ia1": {}, "mut1": {}, "ia2": {}, "mut2": {}, "ia3": {}}
     push_alert("Saved Internal Assessment marks cleared.", "blue")
     return RedirectResponse("/pdf-to-excel", status_code=303)
 
