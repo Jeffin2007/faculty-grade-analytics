@@ -2328,7 +2328,7 @@ def build_department_excel(
                 ia2_dict.get(s.regno, {}).get("quota") or
                 mut2_dict.get(s.regno, {}).get("quota") or
                 ia3_dict.get(s.regno, {}).get("quota") or
-                "N/A"
+                "Unknown"
             )
 
             ws4.cell(row=r, column=1, value=s_no)
