@@ -4997,7 +4997,7 @@ def generate_subject_ai_insight(subj: SubjectAnalysis, ca: ClassAnalysis) -> Dic
 
 
 def generate_student_brief(student: StudentAnalysis, ca: ClassAnalysis) -> Dict[str, str]:
-    """Concise per-student AI academic brief with current & carried previous arrear intelligence."""
+    """Concise per-student AI academic brief with current & carried previous arrears."""
     is_curr_arrear = (student.arrear_count > 0)
     key = "student:" + _ai_hash(
         student.regno, student.gpa, sorted(student.grade_counts.items()),
@@ -6119,7 +6119,6 @@ def page_upload() -> Tuple:
         Div(
             Div(
                 Span("FACULTY GRADE ANALYTICS PORTAL", cls="text-[11px] font-extrabold uppercase tracking-wider text-blue-700 bg-blue-50 px-3.5 py-1 rounded-full border border-blue-200/80 inline-block shadow-2xs"),
-                Span("R2024 • AI & Data Science", cls="ml-3 text-xs font-medium text-slate-500"),
                 cls="flex items-center"
             ),
             Div(
@@ -6192,11 +6191,8 @@ def page_upload() -> Tuple:
                 Div(
                     Div(Span("R2024", cls="text-lg font-extrabold text-blue-700 block"), Span("Regulation", cls="text-xs text-slate-500"), cls="text-center px-4"),
                     Div(cls="w-px bg-slate-200 self-stretch"),
-                    Div(Span("AI", cls="text-lg font-extrabold text-blue-700 block"), Span("Powered", cls="text-xs text-slate-500"), cls="text-center px-4"),
-                    Div(cls="w-px bg-slate-200 self-stretch"),
                     Div(Span("PDF", cls="text-lg font-extrabold text-blue-700 block"), Span("Extraction", cls="text-xs text-slate-500"), cls="text-center px-4"),
                     Div(cls="w-px bg-slate-200 self-stretch"),
-                    Div(Span("Arrear", cls="text-lg font-extrabold text-blue-700 block"), Span("Intelligence", cls="text-xs text-slate-500"), cls="text-center px-4"),
                     cls="flex items-center justify-center gap-1 p-3 bg-white border border-slate-200 rounded-2xl shadow-sm w-fit mx-auto"
                 ),
                 cls="text-center flex-1"
@@ -6242,77 +6238,136 @@ def page_upload() -> Tuple:
         Div(
             # Mode A: PDF Direct Upload (Primary)
             Form(
-                # Step 1: Academic Department, Semester & Regulation Selection
+                # Step 1: Academic Department, Semester & Regulation Selection (MODERNIZED)
                 Div(
+                    # Step header with gradient accent bar
                     Div(
-                        Div(
-                            Span("STEP 1", cls="text-[10px] font-extrabold uppercase tracking-wider text-blue-700 bg-blue-100 px-2.5 py-0.5 rounded-full inline-block mr-2"),
-                            Span("Select Target Academic Department & Cohort", cls="text-sm font-extrabold text-slate-900"),
-                        ),
-                        P("Configure the target academic parameters below for precision syllabus mapping and cohort analytics.", cls="text-xs text-slate-500 mt-1"),
-                        cls="mb-4"
-                    ),
-                    Div(
-                        # 1. Department Dropdown (No default!)
-                        Div(
-                            Label("Department *", cls="block text-xs font-bold text-slate-800 mb-1.5"),
-                            Select(
-                                Option("-- Select Department (Required) --", value="", disabled=True, selected=True),
-                                *[
-                                    Option(
-                                        f"{d.get('name', d.get('code'))} ({d.get('code')})",
-                                        value=d.get('code')
-                                    )
-                                    for d in get_registered_departments()
-                                ],
-                                id="select_department", name="department", required=True,
-                                cls="w-full text-xs font-semibold text-slate-800 bg-white border border-slate-300 rounded-xl p-2.5 shadow-2xs focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all",
-                            ),
-                            Span("Select official department", cls="text-[11px] text-slate-400 block mt-1"),
-                            cls="flex-1"
-                        ),
-                        # 2. Semester Dropdown (No default!)
-                        Div(
-                            Label("Semester *", cls="block text-xs font-bold text-slate-800 mb-1.5"),
-                            Select(
-                                Option("-- Select Semester (Required) --", value="", disabled=True, selected=True),
-                                Option("Semester I (1st Sem)", value="1"),
-                                Option("Semester II (2nd Sem)", value="2"),
-                                Option("Semester III (3rd Sem)", value="3"),
-                                Option("Semester IV (4th Sem)", value="4"),
-                                Option("Semester V (5th Sem)", value="5"),
-                                Option("Semester VI (6th Sem)", value="6"),
-                                Option("Semester VII (7th Sem)", value="7"),
-                                Option("Semester VIII (8th Sem)", value="8"),
-                                id="select_semester", name="semester", required=True,
-                                cls="w-full text-xs font-semibold text-slate-800 bg-white border border-slate-300 rounded-xl p-2.5 shadow-2xs focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all",
-                            ),
-                            Span("Select examination semester", cls="text-[11px] text-slate-400 block mt-1"),
-                            cls="flex-1"
-                        ),
-                        # 3. Regulation Dropdown (Default R2024 & R2026, + NEW)
                         Div(
                             Div(
-                                Label("Regulation *", cls="text-xs font-bold text-slate-800"),
-                                Button(
-                                    "+ New Syllabus", type="button", onclick="openNewSyllabusModal()",
-                                    cls="text-[10px] font-bold text-blue-600 hover:text-blue-800 underline bg-transparent border-0 cursor-pointer p-0"
+                                NotStr('<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="width:16px;height:16px"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12a7.5 7.5 0 0 0 15 0m-15 0a7.5 7.5 0 1 1 15 0m-15 0H3m16.5 0H21m-1.5 0H12m-8.457 3.077 1.41-.513m14.095-5.13 1.41-.513M5.106 17.785l1.15-.964m11.49-9.642 1.149-.964M7.501 19.795l.75-1.3m7.5-12.99.75-1.3m-6.063 16.658.26-1.477m2.605-14.772.26-1.477m0 17.726-.26-1.477M10.698 4.614l-.26-1.477M16.5 19.794l-.75-1.299M7.5 4.205 6.75 2.906m-.63 17.668L5.7 19.3M4.5 12H3"/></svg>'),
+                                cls="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 text-blue-600",
+                                style="background:linear-gradient(135deg,#eff6ff,#dbeafe)"
+                            ),
+                            Div(
+                                Div(
+                                    Span("01", cls="text-[9px] font-black text-blue-500 tracking-widest mr-1.5 font-mono"),
+                                    Span("ACADEMIC CONTEXT", cls="text-[9px] font-black uppercase tracking-widest text-blue-600"),
+                                    cls="flex items-center mb-0.5"
                                 ),
-                                cls="flex items-center justify-between mb-1.5"
+                                Span("Configure Target Department & Cohort", cls="text-sm font-extrabold text-slate-900 leading-tight block"),
                             ),
-                            Select(
-                                Option("R2024 & R2026 (Autonomous Unified)", value="R2024", selected=True),
-                                Option("➕ Add NEW Regulation / Upload Syllabus...", value="NEW", cls="text-blue-700 font-bold bg-blue-50"),
-                                id="select_regulation", name="regulation", required=True,
-                                cls="w-full text-xs font-semibold text-slate-800 bg-white border border-slate-300 rounded-xl p-2.5 shadow-2xs focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all",
-                                onchange="handleRegulationChange(this)"
+                            cls="flex items-center gap-3"
+                        ),
+                        P("Set your department, semester and regulation before uploading — enables precision syllabus mapping and cohort analytics.", cls="text-xs text-slate-500 mt-3 leading-relaxed pl-11"),
+                        cls="mb-5"
+                    ),
+                    # Fields grid — modernized
+                    Div(
+                        # 1. Department field
+                        Div(
+                            Div(
+                                NotStr('<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="width:13px;height:13px"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21"/></svg>'),
+                                Label("Department", cls="text-[11px] font-bold text-slate-600 uppercase tracking-wide"),
+                                cls="flex items-center gap-1.5 mb-2"
                             ),
-                            Span("R24 & R26 unified course codes", cls="text-[11px] text-slate-400 block mt-1"),
+                            Div(
+                                Select(
+                                    Option("— Select Department —", value="", disabled=True, selected=True),
+                                    *[
+                                        Option(
+                                            f"{d.get('name', d.get('code'))} ({d.get('code')})",
+                                            value=d.get('code')
+                                        )
+                                        for d in get_registered_departments()
+                                    ],
+                                    id="select_department", name="department", required=True,
+                                    cls="w-full text-sm font-semibold text-slate-800 bg-white rounded-xl px-3.5 py-2.5 appearance-none focus:outline-none transition-all cursor-pointer",
+                                    style="border:1.5px solid #cbd5e1; padding-right:2.5rem"
+                                ),
+                                NotStr('<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="#94a3b8" style="width:14px;height:14px;position:absolute;right:12px;top:50%;transform:translateY(-50%);pointer-events:none"><path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5"/></svg>'),
+                                style="position:relative"
+                            ),
+                            Span("Official department code", cls="text-[10px] text-slate-400 mt-1.5 block"),
                             cls="flex-1"
                         ),
-                        cls="grid grid-cols-1 sm:grid-cols-3 gap-4"
+                        # 2. Semester field
+                        Div(
+                            Div(
+                                NotStr('<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="width:13px;height:13px"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5"/></svg>'),
+                                Label("Semester", cls="text-[11px] font-bold text-slate-600 uppercase tracking-wide"),
+                                cls="flex items-center gap-1.5 mb-2"
+                            ),
+                            Div(
+                                Select(
+                                    Option("— Select Semester —", value="", disabled=True, selected=True),
+                                    Option("Semester I", value="1"),
+                                    Option("Semester II", value="2"),
+                                    Option("Semester III", value="3"),
+                                    Option("Semester IV", value="4"),
+                                    Option("Semester V", value="5"),
+                                    Option("Semester VI", value="6"),
+                                    Option("Semester VII", value="7"),
+                                    Option("Semester VIII", value="8"),
+                                    id="select_semester", name="semester", required=True,
+                                    cls="w-full text-sm font-semibold text-slate-800 bg-white rounded-xl px-3.5 py-2.5 appearance-none focus:outline-none transition-all cursor-pointer",
+                                    style="border:1.5px solid #cbd5e1; padding-right:2.5rem"
+                                ),
+                                NotStr('<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="#94a3b8" style="width:14px;height:14px;position:absolute;right:12px;top:50%;transform:translateY(-50%);pointer-events:none"><path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5"/></svg>'),
+                                style="position:relative"
+                            ),
+                            Span("Current examination cycle", cls="text-[10px] text-slate-400 mt-1.5 block"),
+                            cls="flex-1"
+                        ),
+                        # 3. Regulation field
+                        Div(
+                            Div(
+                                Div(
+                                    NotStr('<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="width:13px;height:13px"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 0 0 2.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 0 0-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-.1-.664m-5.8 0A2.251 2.251 0 0 1 13.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25Z"/></svg>'),
+                                    Label("Regulation", cls="text-[11px] font-bold text-slate-600 uppercase tracking-wide"),
+                                    cls="flex items-center gap-1.5"
+                                ),
+                                Button(
+                                    NotStr('<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" style="width:10px;height:10px"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>'),
+                                    " New", type="button", onclick="openNewSyllabusModal()",
+                                    cls="ml-auto text-[10px] font-bold text-blue-600 hover:text-white hover:bg-blue-600 border border-blue-300 bg-blue-50 px-2 py-0.5 rounded-full flex items-center gap-1 transition-all cursor-pointer"
+                                ),
+                                cls="flex items-center mb-2 gap-2"
+                            ),
+                            Div(
+                                Select(
+                                    Option("R2024 & R2026 (Autonomous Unified)", value="R2024", selected=True),
+                                    Option("➕ Add NEW Regulation / Upload Syllabus...", value="NEW", cls="text-blue-700 font-bold bg-blue-50"),
+                                    id="select_regulation", name="regulation", required=True,
+                                    cls="w-full text-sm font-semibold text-slate-800 bg-white rounded-xl px-3.5 py-2.5 appearance-none focus:outline-none transition-all cursor-pointer",
+                                    style="border:1.5px solid #cbd5e1; padding-right:2.5rem",
+                                    onchange="handleRegulationChange(this)"
+                                ),
+                                NotStr('<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="#94a3b8" style="width:14px;height:14px;position:absolute;right:12px;top:50%;transform:translateY(-50%);pointer-events:none"><path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5"/></svg>'),
+                                style="position:relative"
+                            ),
+                            Span("R24 & R26 unified course codes", cls="text-[10px] text-slate-400 mt-1.5 block"),
+                            cls="flex-1"
+                        ),
+                        cls="grid grid-cols-1 sm:grid-cols-3 gap-5",
+                        style="align-items:start"
                     ),
-                    cls="card p-5 mb-6 border border-blue-100 bg-gradient-to-br from-white to-blue-50/40 shadow-xs"
+                    # Inline style for focus ring on selects
+                    NotStr("""<style>
+                    #select_department, #select_semester, #select_regulation {
+                        transition: border-color 0.15s, box-shadow 0.15s;
+                    }
+                    #select_department:focus, #select_semester:focus, #select_regulation:focus {
+                        border-color: #3b82f6 !important;
+                        box-shadow: 0 0 0 3px rgba(59,130,246,0.15);
+                        outline: none;
+                    }
+                    #select_department:valid:not([value=""]), #select_semester:valid:not([value=""]) {
+                        border-color: #22c55e !important;
+                        background-color: #f0fdf4;
+                    }
+                    </style>"""),
+                    cls="mb-6",
+                    style="background:linear-gradient(135deg,#ffffff 0%,#f0f7ff 60%,#e8f1ff 100%); border:1.5px solid #bfdbfe; border-radius:1.25rem; padding:1.5rem; box-shadow:0 2px 12px 0 rgba(59,130,246,0.07), 0 1px 3px 0 rgba(0,0,0,0.04)"
                 ),
 
                 # Step 2: PDF Document Upload Section
@@ -6539,13 +6594,6 @@ def page_upload() -> Tuple:
                     H4("Autonomous Syllabus Mapping", cls="text-sm font-bold text-slate-800 mb-1"),
                     P("Automatically identifies course codes, titles, credits, and semester categories against authoritative catalogs.", cls="text-xs text-slate-500 leading-relaxed"),
                     cls="card p-5 border border-slate-100 hover:border-blue-200 hover:shadow-md transition-all flex flex-col"
-                ),
-                # Card 3 — Arrear Intelligence
-                Div(
-                    NotStr('<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="#dc2626" stroke-width="2" style="width:28px;height:28px;margin-bottom:10px"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>'),
-                    H4("Arrear Intelligence", cls="text-sm font-bold text-slate-800 mb-1"),
-                    P("Identifies U/RA arrears, multiple-arrear students, and active Sem 1-4 foundation backlogs.", cls="text-xs text-slate-500 leading-relaxed"),
-                    cls="card p-5 border border-slate-100 hover:border-red-200 hover:shadow-md transition-all flex flex-col"
                 ),
                 # Card 4 — Academic Dashboards
                 Div(
