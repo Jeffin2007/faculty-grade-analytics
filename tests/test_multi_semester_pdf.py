@@ -82,6 +82,71 @@ class TestMultiSemesterPDFExtraction(unittest.TestCase):
         self.assertTrue(len(ajay.previous_semester_results) > 0)
         self.assertIsNotNone(ajay.gpa)
 
+    def test_empty_or_corrupt_pdf_handling(self):
+        # Empty bytes
+        report_empty = app.extract_coe_pdf(b"", "empty.pdf")
+        self.assertFalse(report_empty.ok)
+        self.assertIn("empty", report_empty.fatal_error.lower())
+
+        # Invalid corrupt bytes
+        report_corrupt = app.extract_coe_pdf(b"Not a valid PDF header content", "corrupt.pdf")
+        self.assertFalse(report_corrupt.ok)
+        self.assertEqual(report_corrupt.doc_metadata.document_type, "EMPTY_OR_CORRUPT_PDF")
+        self.assertTrue(len(report_corrupt.fatal_error) > 0)
+
+    def test_semester_parsing_variations(self):
+        # Test various semester textual patterns
+        test_cases = [
+            ("SEMESTER : II", 2),
+            ("SEMESTER: 03", 3),
+            ("SEM : IV", 4),
+            ("1ST SEMESTER", 1),
+            ("2ND SEM", 2),
+            ("3RD SEMESTER", 3),
+            ("4TH SEM", 4),
+            ("FIFTH SEMESTER", 5),
+            ("SIXTH SEM", 6),
+            ("SEVENTH SEMESTER", 7),
+            ("EIGHTH SEM", 8),
+            ("RESULTS FOR SEMESTER - 1", 1),
+        ]
+        for text, expected_sem in test_cases:
+            parsed = app._parse_page_semester(text)
+            self.assertEqual(parsed, expected_sem, f"Failed for text: '{text}'")
+
+    def test_grade_normalization_edge_cases(self):
+        # Test all passing and special failing grades
+        cases = {
+            "O": "O", "S": "S", "A+": "A+", "A PLUS": "A+", "A": "A",
+            "B+": "B+", "B PLUS": "B+", "B": "B", "C+": "C+", "C PLUS": "C+", "C": "C",
+            "U": "U", "RA": "RA", "R.A": "RA", "UA": "UA", "ABS": "UA", "ABSENT": "UA",
+            "SA": "SA", "S.A": "SA", "WD": "WD", "W.D": "WD", "WITHDRAWN": "WD",
+            "MM": "MM", "MALPRACTICE": "MM", "WH2": "WH2", "WH-2": "WH2", "WITHHELD": "WH2"
+        }
+        for raw, expected in cases.items():
+            norm = app._grade_normalize(raw)
+            self.assertEqual(norm, expected, f"Failed normalizing grade: {raw}")
+
+    def test_all_126_students_extracted_without_loss(self):
+        if not os.path.exists(self.pdf_path):
+            self.skipTest("AID (3).pdf not found in root")
+
+        with open(self.pdf_path, "rb") as f:
+            pdf_bytes = f.read()
+
+        report = app.extract_coe_pdf(pdf_bytes, "AID (3).pdf")
+        df = app.pdf_records_to_dataframe(report.records)
+        ca = app.compute_class_analysis(df, "AID (3).pdf", prev_records=report.prev_records)
+
+        # Ensure all 126 students exist and have valid names and 8 courses
+        self.assertEqual(len(ca.students), 126)
+        for s in ca.students:
+            self.assertTrue(len(s.regno) >= 10)
+            self.assertTrue(bool(s.name.strip()))
+            self.assertNotEqual(s.name.strip(), "—")
+            self.assertEqual(s.total_courses, 8)
+            self.assertIsNotNone(s.gpa)
+
 
 if __name__ == "__main__":
     unittest.main()

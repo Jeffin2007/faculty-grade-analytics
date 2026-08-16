@@ -732,33 +732,52 @@ def extract_coe_pdf(pdf_bytes: bytes, filename: str, analysis_context: Optional[
                         "confidence": conf
                     })
 
-        # 1. Extract course code headers with spatial bounding box awareness
+        # 1. Extract course code headers with dynamic bounding box & spatial awareness
         words = page.get_text("words") or []
-        header_words = [w for w in words if 90 <= w[1] <= 165]
-        code_words = [w for w in header_words if re.match(r"^(?:24)?[A-Z]{2,4}\d{3,5}[A-Z]?$", w[4].strip().upper())]
-        code_words = sorted(code_words, key=lambda w: w[0])
-
         page_course_headers = []
-        for cw in code_words:
-            ccode = cw[4].strip().upper()
-            if ccode not in [ch["code"] for ch in page_course_headers]:
-                can_name, code, cred, sem, cat, conf, amb = resolve_subject_info(ccode)
-                page_course_headers.append({
-                    "code": code or ccode,
-                    "canonical_name": can_name,
-                    "credits": cred,
-                    "semester": sem or current_page_sem,
-                    "category": cat,
-                    "confidence": conf,
-                    "x0": cw[0],
-                    "x1": cw[2],
-                    "center": (cw[0] + cw[2]) / 2,
-                })
 
-        # Fallback to scanning lines if no code words in header area
+        if words:
+            # Locate all student register numbers on the page to determine header boundary
+            reg_words = [w for w in words if student_reg_pattern.search(w[4].strip())]
+            min_student_y = min(w[1] for w in reg_words) if reg_words else (page.rect.height * 0.45)
+
+            # Filter candidate words above student rows matching course code patterns
+            candidate_h_words = [
+                w for w in words
+                if w[3] <= min_student_y and re.match(r"^(?:24[-_]?)?[A-Z]{2,6}[-_]?\d{3,5}[A-Z]?$", w[4].strip().upper())
+            ]
+
+            if candidate_h_words:
+                # Group candidate course words by vertical center into bands
+                y_bands: Dict[int, List[Any]] = defaultdict(list)
+                for w in candidate_h_words:
+                    band_key = int(round((w[1] + w[3]) / 2.0 / 6.0) * 6.0)
+                    y_bands[band_key].append(w)
+
+                # Pick the band containing the largest number of course code headers
+                best_band_key = max(y_bands.keys(), key=lambda k: len(y_bands[k]))
+                header_words = sorted(y_bands[best_band_key], key=lambda w: w[0])
+
+                for cw in header_words:
+                    ccode = cw[4].strip().upper()
+                    if ccode not in [ch["code"] for ch in page_course_headers]:
+                        can_name, code, cred, sem, cat, conf, amb = resolve_subject_info(ccode)
+                        page_course_headers.append({
+                            "code": code or ccode,
+                            "canonical_name": can_name,
+                            "credits": cred,
+                            "semester": sem or current_page_sem,
+                            "category": cat,
+                            "confidence": conf,
+                            "x0": cw[0],
+                            "x1": cw[2],
+                            "center": (cw[0] + cw[2]) / 2.0,
+                        })
+
+        # Fallback: scan top lines of text if word coordinates did not identify headers
         if not page_course_headers:
             for line in page_lines[:25]:
-                codes = re.findall(r"\b((?:24[-_]?)?[A-Z]{2,4}[-_]?\d{3,5}[A-Z]?)\b", line.upper())
+                codes = re.findall(r"\b((?:24[-_]?)?[A-Z]{2,6}[-_]?\d{3,5}[A-Z]?)\b", line.upper())
                 for ccode in codes:
                     can_name, code, cred, sem, cat, conf, amb = resolve_subject_info(ccode)
                     if (code or ccode) not in [ch["code"] for ch in page_course_headers]:
@@ -774,19 +793,32 @@ def extract_coe_pdf(pdf_bytes: bytes, filename: str, analysis_context: Optional[
         cols = []
         for i, h in enumerate(page_course_headers):
             if "x0" in h:
-                left = (page_course_headers[i-1]["x1"] + h["x0"]) / 2 if i > 0 else h["x0"] - 25
-                right = (h["x1"] + page_course_headers[i+1]["x0"]) / 2 if i < len(page_course_headers) - 1 else h["x1"] + 25
+                left = (page_course_headers[i-1]["x1"] + h["x0"]) / 2.0 if i > 0 else h["x0"] - 25.0
+                right = (h["x1"] + page_course_headers[i+1]["x0"]) / 2.0 if i < len(page_course_headers) - 1 else h["x1"] + 25.0
                 cols.append({"header": h, "x0": left, "x1": right, "center": h["center"]})
 
-        # 2. Precision line-word extraction & right-anchored tail alignment
+        # 2. Precision line-word extraction & multi-pass alignment
         if words:
-            lines_by_y: Dict[int, List[Tuple[float, float, float, float, str, int, int, int]]] = defaultdict(list)
-            for w in words:
-                y_key = int(round(w[1] / 3.5) * 3.5)
-                lines_by_y[y_key].append(w)
+            # Sort all words by vertical position for adaptive moving-average line clustering
+            words_sorted = sorted(words, key=lambda w: (w[1] + w[3]) / 2.0)
+            clustered_lines: List[List[Any]] = []
+            curr_line: List[Any] = []
+            curr_y_center = None
 
-            for yk in sorted(lines_by_y.keys()):
-                lw = sorted(lines_by_y[yk], key=lambda x: x[0])
+            for w in words_sorted:
+                wy = (w[1] + w[3]) / 2.0
+                if curr_y_center is None or abs(wy - curr_y_center) <= 4.0:
+                    curr_line.append(w)
+                    curr_y_center = sum((x[1] + x[3]) / 2.0 for x in curr_line) / len(curr_line)
+                else:
+                    clustered_lines.append(curr_line)
+                    curr_line = [w]
+                    curr_y_center = wy
+            if curr_line:
+                clustered_lines.append(curr_line)
+
+            for line_words in clustered_lines:
+                lw = sorted(line_words, key=lambda x: x[0])
                 line_str = " ".join(w[4] for w in lw if w[4])
                 m = student_reg_pattern.search(line_str)
                 if m:
@@ -799,7 +831,7 @@ def extract_coe_pdf(pdf_bytes: bytes, filename: str, analysis_context: Optional[
                     grades_found: List[Tuple[Dict[str, Any], str, str]] = []
                     n_subjs = len(page_course_headers)
 
-                    # Pass 1: Right-anchored tail match for cohort rows (handles multi-part names & initials)
+                    # Pass 1: Right-anchored tail match for regular cohort rows (handles multi-part names & initials)
                     if n_subjs > 0 and len(after_tokens) >= n_subjs:
                         tail = after_tokens[-n_subjs:]
                         tail_norm = [_grade_normalize(t) for t in tail]
@@ -807,13 +839,15 @@ def extract_coe_pdf(pdf_bytes: bytes, filename: str, analysis_context: Optional[
                             grades_found = [(page_course_headers[i], tail[i], tail_norm[i]) for i in range(n_subjs)]
                             raw_name = " ".join(after_tokens[:-n_subjs])
 
-                    # Pass 2: Column coordinates match (handles arrear/sparse rows with blank columns)
+                    # Pass 2: Spatial Voronoi column match (handles arrear/sparse rows with blank columns)
                     if not grades_found and cols:
                         name_words = []
+                        min_col_x = cols[0]["x0"] if cols else 0.0
                         for w in lw[reg_idx + 1:] if reg_idx >= 0 else lw:
+                            w_center = (w[0] + w[2]) / 2.0
                             matched_col = None
                             for c in cols:
-                                if c["x0"] <= ((w[0] + w[2]) / 2) <= c["x1"]:
+                                if c["x0"] <= w_center <= c["x1"]:
                                     matched_col = c
                                     break
                             if matched_col:
@@ -822,7 +856,7 @@ def extract_coe_pdf(pdf_bytes: bytes, filename: str, analysis_context: Optional[
                                     grades_found.append((matched_col["header"], w[4], g_norm))
                                 else:
                                     name_words.append(w[4])
-                            elif not grades_found:
+                            elif not grades_found or w_center < min_col_x:
                                 name_words.append(w[4])
                         raw_name = " ".join(name_words)
 
@@ -843,6 +877,9 @@ def extract_coe_pdf(pdf_bytes: bytes, filename: str, analysis_context: Optional[
                             elif len(grades_found) == 0:
                                 name_parts.append(tok)
                         raw_name = " ".join(name_parts)
+
+                    # Post-process & sanitize raw_name
+                    raw_name = re.sub(r"\s+", " ", raw_name).strip(" -_.,")
 
                     for ch, raw_g, norm_g in grades_found:
                         rec = StudentResultRecord(
