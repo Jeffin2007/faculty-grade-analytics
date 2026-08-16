@@ -300,87 +300,19 @@ STATUS_WD = "wd"
 STATUS_MALPRACTICE = "malpractice"
 
 # =============================================================================
-# 3.1) B.TECH AI & DS (R2024) SYLLABUS CATALOG & ALIAS RESOLVER
+# 3.1) SYLLABUS CATALOG & DYNAMIC ALIAS RESOLVER
 # =============================================================================
 
-SYLLABUS_CATALOG_R2024: List[Dict[str, Any]] = [
-    # Semester 1 (Foundation)
-    {"code": "24HS101", "name": "Technical English", "credits": 3.0, "semester": 1, "category": "Sem 1-4 Foundation", "aliases": ["HS24101", "ENGLISH", "TECH ENG", "ENG", "TECHNICAL ENGLISH I", "PROFESSIONAL ENGLISH I", "PROFESSIONAL ENGLISH"]},
-    {"code": "24MA101", "name": "Linear Algebra and Calculus", "credits": 4.0, "semester": 1, "category": "Sem 1-4 Foundation", "aliases": ["MA24101", "MATHEMATICS I", "MATHS I", "MATH I", "LAC", "M1", "MATHEMATICS", "MATHS", "MATH"]},
-    {"code": "24PH101", "name": "Engineering Physics", "credits": 3.0, "semester": 1, "category": "Sem 1-4 Foundation", "aliases": ["PH24101", "PHYSICS", "PHY", "ENGG PHYSICS", "PHYSICS FOR INFORMATION SCIENCE"]},
-    {"code": "24CY101", "name": "Engineering Chemistry", "credits": 3.0, "semester": 1, "category": "Sem 1-4 Foundation", "aliases": ["CY24101", "CHEMISTRY", "CHEM", "ENGG CHEM", "CHEMISTRY FOR INFORMATION SCIENCE"]},
-    {"code": "24GE101", "name": "Python Programming", "credits": 3.0, "semester": 1, "category": "Sem 1-4 Foundation", "aliases": ["GE24101", "PYTHON", "PROBLEM SOLVING AND PYTHON PROGRAMMING", "PROGRAMMING IN PYTHON", "PY"]},
-    {"code": "24EE101", "name": "Basic Electrical and Electronics Engineering", "credits": 3.0, "semester": 1, "category": "Sem 1-4 Foundation", "aliases": ["EE24101", "BEEE", "BASIC ELECTRICAL AND ELECTRONICS", "ELECTRICAL AND ELECTRONICS", "BEE", "BASIC ELECTRICAL/ELECTRONICS"]},
-    
-    # Semester 2 (Foundation)
-    {"code": "24HS201", "name": "Professional English II", "credits": 3.0, "semester": 2, "category": "Sem 1-4 Foundation", "aliases": ["HS24201", "ENGLISH II", "PROF ENG II", "TECHNICAL ENGLISH II"]},
-    {"code": "24MA201", "name": "Complex Variables and Transforms", "credits": 4.0, "semester": 2, "category": "Sem 1-4 Foundation", "aliases": ["MA24201", "MATHEMATICS II", "MATHS II", "MATH II", "CVT", "TRANSFORMS AND CALCULUS", "M2"]},
-    {"code": "24PH201", "name": "Physics for Computer Science", "credits": 3.0, "semester": 2, "category": "Sem 1-4 Foundation", "aliases": ["PH24201", "PCS", "PHYSICS FOR CS"]},
-    {"code": "24CS201", "name": "Programming in C", "credits": 3.0, "semester": 2, "category": "Sem 1-4 Foundation", "aliases": ["CS24201", "C PROGRAMMING", "C PROG", "C", "PROGRAMMING IN C"]},
-    {"code": "24CS202", "name": "Digital Principles and Computer Organization", "credits": 4.0, "semester": 2, "category": "Sem 1-4 Foundation", "aliases": ["CS24202", "DPCO", "DIGITAL PRINCIPLES", "COMPUTER ORGANIZATION", "DP&CO", "COA", "CA", "DIGITAL PRINCIPLES AND COMPUTER ORGANIZATION"]},
+from syllabus.loader import (
+    get_catalog,
+    get_registered_departments,
+    resolve_course,
+    normalize_course_code,
+    normalize_text,
+    normalize_alphanumeric,
+)
 
-    # Semester 3 (Foundation / Core)
-    {"code": "24MA301", "name": "Discrete Mathematics", "credits": 4.0, "semester": 3, "category": "Sem 1-4 Foundation", "aliases": ["MA24301", "DM", "DISCRETE MATHS", "DISCRETE MATH", "M3", "DISCRETE MATHEMATICS"]},
-    {"code": "24AD301", "name": "Data Structures and Algorithms", "credits": 4.0, "semester": 3, "category": "Sem 1-4 Foundation", "aliases": ["AD24301", "DSA", "DATA STRUCTURES", "DATA STRUCTURES AND ALGORITHMS", "DS", "ALGORITHMS"]},
-    {"code": "24AD302", "name": "Database Design and Management", "credits": 3.0, "semester": 3, "category": "Sem 1-4 Foundation", "aliases": ["AD24302", "DBMS", "DATABASE DESIGN AND MANAGEMENT", "DATABASE MANAGEMENT SYSTEMS", "DATABASE DESIGN", "DATABASE"]},
-    {"code": "24AD303", "name": "Object Oriented Programming", "credits": 3.0, "semester": 3, "category": "Sem 1-4 Foundation", "aliases": ["AD24303", "OOP", "OBJECT ORIENTED PROGRAMMING", "OOPS", "JAVA PROGRAMMING", "OBJECT ORIENTED PROGRAMMING USING JAVA"]},
-    {"code": "24AD304", "name": "Software Engineering", "credits": 3.0, "semester": 3, "category": "Sem 1-4 Foundation", "aliases": ["AD24304", "SE", "SOFTWARE ENG", "SOFTWARE ENGINEERING", "SOFTWARE ENGINEERING AND AGILE"]},
-
-    # Semester 4 (Foundation / Core)
-    {"code": "24MA401", "name": "Discrete Mathematics", "credits": 4.0, "semester": 4, "category": "Sem 1-4 Foundation", "type": "THEORY", "short_name": "DM", "aliases": ["MA24401", "DM", "DISCRETE MATHS", "DISCRETE MATH", "DISCRETE MATHEMATICS", "DISCRETE MATHAMATICS"]},
-    {"code": "24CH401", "name": "Environmental Sciences and Sustainability", "credits": 2.0, "semester": 4, "category": "Sem 1-4 Foundation", "type": "THEORY", "short_name": "ES", "aliases": ["CH24401", "ES", "ENVIRONMENTAL SCIENCE", "ENVIRONMENTAL SCIENCE AND ENGINEERING", "ENVIRONMENTAL SCIENCES AND SUSTAINABILITY", "EVS"]},
-    {"code": "24AD401", "name": "Machine Learning", "credits": 3.0, "semester": 4, "category": "Sem 1-4 Foundation", "type": "THEORY", "short_name": "ML", "aliases": ["AD24401", "ML", "MACHINE LEARNING", "ML CONCEPTS", "MACHINE LEARNING TECHNIQUES"]},
-    {"code": "24AD402", "name": "Data Science and Exploratory Data Analysis", "credits": 3.0, "semester": 4, "category": "Sem 1-4 Foundation", "type": "THEORY", "short_name": "DED", "aliases": ["AD24402", "DSEA", "EDA", "EXPLORATORY DATA ANALYSIS", "DATA SCIENCE AND EDA", "DATA SCIENCE AND EXPLORATORY DATA ANALYSIS", "DATA SCIENCE"]},
-    {"code": "24AD403", "name": "Software Engineering", "credits": 3.0, "semester": 4, "category": "Sem 1-4 Foundation", "type": "THEORY", "short_name": "SE", "aliases": ["AD24403", "SE", "SOFTWARE ENG", "SOFTWARE ENGINEERING", "SOFTWARE ENGINEERING AND AGILE"]},
-    {"code": "24AD404", "name": "Principles of Operating System", "credits": 4.0, "semester": 4, "category": "Sem 1-4 Foundation", "type": "THEORY_CUM_PRACTICAL", "short_name": "POS", "aliases": ["AD24404", "OS", "OPERATING SYSTEM", "OPERATING SYSTEMS", "PRINCIPLES OF OPERATING SYSTEMS", "PRINCIPLES TO OPERATING SYSTEM", "PRINCIPLES OF OPERATING SYSTEM", "OPERATING SYSTEMS CONCEPTS"]},
-    {"code": "24AD411", "name": "Machine Learning Laboratory", "credits": 1.5, "semester": 4, "category": "Sem 1-4 Foundation", "type": "LAB", "short_name": "ML L", "aliases": ["AD24411", "ML LAB", "MACHINE LEARNING LAB", "MACHINE LEARNING LABORATORY"]},
-    {"code": "24AD412", "name": "Data Science and Exploratory Data Analysis Laboratory", "credits": 1.5, "semester": 4, "category": "Sem 1-4 Foundation", "type": "LAB", "short_name": "DED L", "aliases": ["AD24412", "DSEA LAB", "EDA LAB", "DATA SCIENCE LAB", "DATA SCIENCE AND EDA LAB"]},
-    {"code": "24EM401", "name": "Employability Skills II", "credits": 1.0, "semester": 4, "category": "Sem 1-4 Foundation", "type": "LAB", "short_name": "ES II", "aliases": ["EM24401", "EMPLOYABILITY SKILLS II", "EMPLOYABILITY SKILLS 2", "ES II", "SOFT SKILLS II"]},
-
-    # Semester 5 (Advanced Core / Electives)
-    {"code": "24AD501", "name": "Deep Learning", "credits": 4.0, "semester": 5, "category": "Sem 5-8 Advanced", "aliases": ["AD24501", "DL", "DEEP LEARNING", "DEEP LEARNING CONCEPTS"]},
-    {"code": "24CS501", "name": "Computer Networks", "credits": 3.0, "semester": 5, "category": "Sem 5-8 Advanced", "aliases": ["CS24501", "CN", "COMPUTER NETWORK", "COMPUTER NETWORKS", "NETWORKS", "DATA COMMUNICATION AND NETWORKS"]},
-    {"code": "24AD502", "name": "Full Stack Development", "credits": 4.0, "semester": 5, "category": "Sem 5-8 Advanced", "aliases": ["AD24502", "FSD", "FULL STACK", "FULL STACK DEVELOPMENT", "FULL STACK WEB DEVELOPMENT", "WEB DEVELOPMENT"]},
-
-    # Semester 6 (Advanced Core / Electives / Projects)
-    {"code": "24AD601", "name": "Computer Vision", "credits": 3.0, "semester": 6, "category": "Sem 5-8 Advanced", "aliases": ["AD24601", "CV", "COMPUTER VISION", "IMAGE PROCESSING AND COMPUTER VISION"]},
-    {"code": "24AD602", "name": "Natural Language Processing", "credits": 3.0, "semester": 6, "category": "Sem 5-8 Advanced", "aliases": ["AD24602", "NLP", "NATURAL LANGUAGE PROCESSING", "NLP AND TEXT ANALYTICS"]},
-    {"code": "24CS601", "name": "Compiler Design", "credits": 3.0, "semester": 6, "category": "Sem 5-8 Advanced", "aliases": ["CS24601", "CD", "COMPILER DESIGN", "FLAT", "FORMAL LANGUAGES AND AUTOMATA THEORY", "AUTOMATA AND COMPILER DESIGN"]},
-    {"code": "24AD603", "name": "Summer Internship", "credits": 2.0, "semester": 6, "category": "Internship & Project", "aliases": ["AD24603", "SUMMER INTERNSHIP", "INTERNSHIP", "INDUSTRIAL TRAINING"]},
-    {"code": "24AD604", "name": "Mini Project", "credits": 2.0, "semester": 6, "category": "Internship & Project", "aliases": ["AD24604", "MINI PROJECT", "MINIPROJECT"]},
-
-    # Semester 7 (Advanced Core / Electives / Projects)
-    {"code": "24AD701", "name": "Internet of Things", "credits": 3.0, "semester": 7, "category": "Sem 5-8 Advanced", "aliases": ["AD24701", "IOT", "INTERNET OF THINGS", "IOT AND SENSORS"]},
-    {"code": "24AD702", "name": "Generative AI", "credits": 3.0, "semester": 7, "category": "Sem 5-8 Advanced", "aliases": ["AD24702", "GAI", "GEN AI", "GENERATIVE AI", "GENAI", "GENERATIVE ARTIFICIAL INTELLIGENCE"]},
-    {"code": "24AD703", "name": "Project Work Phase 1", "credits": 3.0, "semester": 7, "category": "Internship & Project", "aliases": ["AD24703", "PROJECT PHASE 1", "PROJECT WORK PHASE 1", "PROJECT 1"]},
-
-    # Semester 8 (Project & Electives)
-    {"code": "24AD801", "name": "Project Work", "credits": 8.0, "semester": 8, "category": "Internship & Project", "aliases": ["AD24801", "PROJECT WORK", "PROJECT", "PROJECT PHASE 2", "FINAL PROJECT"]},
-
-    # Electives & Mandatory Special Categories
-    {"code": "24PE001", "name": "Professional Elective I", "credits": 3.0, "semester": 5, "category": "Professional Elective", "aliases": ["PE24001", "PE", "PE1", "PE-1", "PROFESSIONAL ELECTIVE 1", "PROFESSIONAL ELECTIVE I", "PROFESSIONAL ELECTIVE"]},
-    {"code": "24PE002", "name": "Professional Elective II", "credits": 3.0, "semester": 6, "category": "Professional Elective", "aliases": ["PE24002", "PE2", "PE-2", "PROFESSIONAL ELECTIVE 2", "PROFESSIONAL ELECTIVE II"]},
-    {"code": "24PE003", "name": "Professional Elective III", "credits": 3.0, "semester": 7, "category": "Professional Elective", "aliases": ["PE24003", "PE3", "PE-3", "PROFESSIONAL ELECTIVE 3", "PROFESSIONAL ELECTIVE III"]},
-    {"code": "24PE004", "name": "Professional Elective IV", "credits": 3.0, "semester": 8, "category": "Professional Elective", "aliases": ["PE24004", "PE4", "PE-4", "PROFESSIONAL ELECTIVE 4", "PROFESSIONAL ELECTIVE IV"]},
-    {"code": "24OE001", "name": "Open Elective I", "credits": 3.0, "semester": 5, "category": "Open Elective", "aliases": ["OE24001", "OE", "OE1", "OE-1", "OPEN ELECTIVE 1", "OPEN ELECTIVE I", "OPEN ELECTIVE"]},
-    {"code": "24OE002", "name": "Open Elective II", "credits": 3.0, "semester": 7, "category": "Open Elective", "aliases": ["OE24002", "OE2", "OE-2", "OPEN ELECTIVE 2", "OPEN ELECTIVE II"]},
-    {"code": "24MC001", "name": "Mandatory Course", "credits": 0.0, "semester": 1, "category": "Mandatory Course", "aliases": ["MC24001", "MC", "EVS", "ENVIRONMENTAL SCIENCE", "INDIAN CONSTITUTION", "HERITAGE OF TAMILS", "TAMILS AND TECHNOLOGY", "MANDATORY COURSE"]},
-
-    # Labs & Practical Courses
-    {"code": "24GE111", "name": "Engineering Graphics", "credits": 3.0, "semester": 1, "category": "Sem 1-4 Foundation", "aliases": ["GE24111", "EG", "GRAPHICS", "ENGINEERING GRAPHICS", "ENGG GRAPHICS"]},
-    {"code": "24HS111", "name": "Heritage of Tamils", "credits": 1.0, "semester": 1, "category": "Mandatory Course", "aliases": ["HS24111", "HERITAGE OF TAMILS", "HT", "TAMIL HERITAGE", "TAMILS AND TECHNOLOGY"]},
-    {"code": "24HS211", "name": "Tamils and Technology", "credits": 1.0, "semester": 2, "category": "Mandatory Course", "aliases": ["HS24211", "TAMILS AND TECHNOLOGY", "TT", "TAMIL TECH"]},
-    {"code": "24BS111", "name": "Physics and Chemistry Laboratory", "credits": 1.5, "semester": 1, "category": "Sem 1-4 Foundation", "aliases": ["BS24111", "PHYSICS AND CHEMISTRY LAB", "PHY & CHEM LAB", "BS LAB", "PHYSICS LAB", "CHEMISTRY LAB"]},
-    {"code": "24GE112", "name": "Python Programming Laboratory", "credits": 1.5, "semester": 1, "category": "Sem 1-4 Foundation", "aliases": ["GE24112", "PYTHON LAB", "PYTHON PROGRAMMING LAB", "PY LAB"]},
-    {"code": "24HS212", "name": "Communication Laboratory I", "credits": 1.5, "semester": 2, "category": "Sem 1-4 Foundation", "aliases": ["HS24212", "COMMUNICATION LAB I", "COMM LAB 1", "ENGLISH LAB I"]},
-    {"code": "24AD311", "name": "Data Structures and Algorithms Laboratory", "credits": 1.5, "semester": 3, "category": "Sem 1-4 Foundation", "aliases": ["AD24311", "DSA LAB", "DATA STRUCTURES LAB", "DS LAB"]},
-    {"code": "24AD312", "name": "Database Design and Management Laboratory", "credits": 1.5, "semester": 3, "category": "Sem 1-4 Foundation", "aliases": ["AD24312", "DBMS LAB", "DATABASE LAB"]},
-    {"code": "24AD313", "name": "Object Oriented Programming Laboratory", "credits": 1.5, "semester": 3, "category": "Sem 1-4 Foundation", "aliases": ["AD24313", "OOP LAB", "JAVA LAB", "OOPS LAB"]},
-    {"code": "24AD511", "name": "Deep Learning Laboratory", "credits": 1.5, "semester": 5, "category": "Sem 5-8 Advanced", "aliases": ["AD24511", "DL LAB", "DEEP LEARNING LAB"]},
-    {"code": "24CS511", "name": "Computer Networks Laboratory", "credits": 1.5, "semester": 5, "category": "Sem 5-8 Advanced", "aliases": ["CS24511", "CN LAB", "NETWORKS LAB", "NETWORK LAB"]},
-    {"code": "24AD512", "name": "Full Stack Development Laboratory", "credits": 1.5, "semester": 5, "category": "Sem 5-8 Advanced", "aliases": ["AD24512", "FSD LAB", "FULL STACK LAB", "WEB DEV LAB"]}
-]
-
+SYLLABUS_CATALOG_R2024: List[Dict[str, Any]] = []
 
 # Pre-computed O(1) indexes for SYLLABUS_CATALOG_R2024
 COURSE_CODE_INDEX: Dict[str, Dict[str, Any]] = {}
@@ -389,24 +321,64 @@ ALIAS_INDEX: Dict[str, Dict[str, Any]] = {}
 SEMESTER_INDEX: Dict[int, List[Dict[str, Any]]] = {}
 
 def _build_syllabus_indexes():
+    global SYLLABUS_CATALOG_R2024
+    seen_codes = set()
+    all_courses: List[Dict[str, Any]] = []
+
+    # 1. Primary AI_DS department catalog first
+    ai_ds_cat = get_catalog("AI_DS", "R2024")
+    if ai_ds_cat:
+        for item in ai_ds_cat.courses:
+            code = str(item.get("code", "")).strip().upper()
+            if code and code not in seen_codes:
+                seen_codes.add(code)
+                all_courses.append(item)
+
+    # 2. All other registered department catalogs
+    for dept in get_registered_departments():
+        dept_code = dept.get("code", "")
+        if dept_code.upper() == "AI_DS":
+            continue
+        cat = get_catalog(dept_code, "R2024")
+        if cat:
+            for item in cat.courses:
+                code = str(item.get("code", "")).strip().upper()
+                if code and code not in seen_codes:
+                    seen_codes.add(code)
+                    all_courses.append(item)
+
+    SYLLABUS_CATALOG_R2024 = all_courses
+
     for item in SYLLABUS_CATALOG_R2024:
-        code_raw = item["code"].upper()
+        code_raw = str(item.get("code", "")).strip().upper()
         code_clean = re.sub(r"[^A-Z0-9]", "", code_raw)
-        COURSE_CODE_INDEX[code_raw] = item
-        COURSE_CODE_INDEX[code_clean] = item
+        if code_raw:
+            COURSE_CODE_INDEX[code_raw] = item
+        if code_clean:
+            COURSE_CODE_INDEX[code_clean] = item
+            # Variant indexing for trailing 'A' equivalence (e.g. 24EN201 <-> 24EN201A)
+            if not code_clean.endswith("A"):
+                COURSE_CODE_INDEX[f"{code_clean}A"] = item
+            elif code_clean.endswith("A") and len(code_clean) > 4 and code_clean[-2].isdigit():
+                COURSE_CODE_INDEX[code_clean[:-1]] = item
 
-        name_upper = item["name"].upper()
+        name_raw = str(item.get("name", "")).strip()
+        name_upper = name_raw.upper()
         name_clean = re.sub(r"[^A-Z0-9]", "", name_upper)
-        SUBJECT_NAME_INDEX[name_upper] = item
-        SUBJECT_NAME_INDEX[name_clean] = item
+        if name_upper:
+            SUBJECT_NAME_INDEX[name_upper] = item
+        if name_clean:
+            SUBJECT_NAME_INDEX[name_clean] = item
 
-        for alias in item["aliases"]:
-            alias_upper = alias.upper()
+        for alias in item.get("aliases", []):
+            alias_upper = str(alias).strip().upper()
             alias_clean = re.sub(r"[^A-Z0-9]", "", alias_upper)
-            ALIAS_INDEX[alias_upper] = item
-            ALIAS_INDEX[alias_clean] = item
+            if alias_upper:
+                ALIAS_INDEX[alias_upper] = item
+            if alias_clean:
+                ALIAS_INDEX[alias_clean] = item
 
-        sem = item["semester"]
+        sem = int(item.get("semester", 1))
         SEMESTER_INDEX.setdefault(sem, []).append(item)
 
 _build_syllabus_indexes()
@@ -416,34 +388,43 @@ import functools
 # Bump this whenever SYLLABUS_CATALOG_R2024 content changes. It is folded into the
 # memoized resolver's cache key so a catalog edit can never be served from a stale
 # in-process cache entry (defends against hot-reload / long-lived worker scenarios).
-CATALOG_VERSION = "r2024-sem4-fix-2026-08-11"
+CATALOG_VERSION = "r2024-full-catalog-2026-08-16"
 
-@functools.lru_cache(maxsize=2048)
+@functools.lru_cache(maxsize=4096)
 def _memoized_resolve_subject_info(norm: str, clean_code: str, _catalog_version: str = CATALOG_VERSION) -> Tuple[str, str, float, int, str, float, bool]:
     # Stage 1: Exact / Normalized Course Code (O(1))
     if norm in COURSE_CODE_INDEX:
         item = COURSE_CODE_INDEX[norm]
-        return (item["name"], item["code"], item["credits"], item["semester"], item["category"], 1.0, False)
+        return (item["name"], item["code"], float(item.get("credits", 3.0)), int(item.get("semester", 1)), item.get("category", "Sem 1-4 Foundation"), 1.0, False)
     if clean_code in COURSE_CODE_INDEX:
         item = COURSE_CODE_INDEX[clean_code]
-        return (item["name"], item["code"], item["credits"], item["semester"], item["category"], 1.0, False)
+        return (item["name"], item["code"], float(item.get("credits", 3.0)), int(item.get("semester", 1)), item.get("category", "Sem 1-4 Foundation"), 1.0, False)
     stripped_code = re.sub(r"[A-Z]$", "", clean_code)
     if stripped_code and stripped_code in COURSE_CODE_INDEX:
         item = COURSE_CODE_INDEX[stripped_code]
-        return (item["name"], item["code"], item["credits"], item["semester"], item["category"], 1.0, False)
+        return (item["name"], item["code"], float(item.get("credits", 3.0)), int(item.get("semester", 1)), item.get("category", "Sem 1-4 Foundation"), 1.0, False)
 
     # Stage 2: Exact / Normalized Subject Name (O(1))
     if norm in SUBJECT_NAME_INDEX:
         item = SUBJECT_NAME_INDEX[norm]
-        return (item["name"], item["code"], item["credits"], item["semester"], item["category"], 1.0, False)
+        return (item["name"], item["code"], float(item.get("credits", 3.0)), int(item.get("semester", 1)), item.get("category", "Sem 1-4 Foundation"), 1.0, False)
     if clean_code in SUBJECT_NAME_INDEX:
         item = SUBJECT_NAME_INDEX[clean_code]
-        return (item["name"], item["code"], item["credits"], item["semester"], item["category"], 1.0, False)
+        return (item["name"], item["code"], float(item.get("credits", 3.0)), int(item.get("semester", 1)), item.get("category", "Sem 1-4 Foundation"), 1.0, False)
 
     # Stage 3: Exact / Normalized Alias (O(1))
     if norm in ALIAS_INDEX:
         item = ALIAS_INDEX[norm]
-        return (item["name"], item["code"], item["credits"], item["semester"], item["category"], 1.0, False)
+        return (item["name"], item["code"], float(item.get("credits", 3.0)), int(item.get("semester", 1)), item.get("category", "Sem 1-4 Foundation"), 1.0, False)
+
+    # Stage 4: Dynamic Syllabus Resolver Check
+    try:
+        res_course = resolve_course(norm, context={"department": "AI_DS", "regulation": "R2024"})
+        if res_course and not res_course[6]:
+            return (res_course[0], res_course[1], float(res_course[2]), int(res_course[3]), res_course[4], float(res_course[5]), False)
+    except Exception:
+        pass
+
     # If the input is a course code pattern (e.g. 24EN201A, 24TA201, 24CS211, etc.), preserve authoritative code
     code_pattern = re.match(r"^(?:24[-_]?)?([A-Z]{2,4})[-_]?(\d{3,4})[A-Z]?$", clean_code)
     if code_pattern:
@@ -453,32 +434,32 @@ def _memoized_resolve_subject_info(norm: str, clean_code: str, _catalog_version:
         cred_val = 1.0 if (len(num_part) >= 3 and num_part[1] == '1') else 3.0
         return (norm, stripped_code or clean_code, cred_val, sem_digit, "Sem 1-4 Foundation", 1.0, False)
 
-    # Stage 4: Fuzzy Match Fallback (only executed for full descriptive subject titles)
+    # Stage 5: Fuzzy Match Fallback (only executed for full descriptive subject titles)
     best_item = None
     best_score = 0.0
 
     for item in SYLLABUS_CATALOG_R2024:
-        s_name = difflib.SequenceMatcher(None, norm, item["name"].upper()).ratio()
+        s_name = difflib.SequenceMatcher(None, norm, str(item.get("name", "")).upper()).ratio()
         if s_name > best_score:
             best_score = s_name
             best_item = item
-        for alias in item["aliases"]:
-            s_alias = difflib.SequenceMatcher(None, norm, alias.upper()).ratio()
+        for alias in item.get("aliases", []):
+            s_alias = difflib.SequenceMatcher(None, norm, str(alias).upper()).ratio()
             if s_alias > best_score:
                 best_score = s_alias
                 best_item = item
 
     if best_item and best_score >= 0.80:
-        return (best_item["name"], best_item["code"], best_item["credits"], best_item["semester"], best_item["category"], round(best_score, 2), False)
+        return (best_item["name"], best_item["code"], float(best_item.get("credits", 3.0)), int(best_item.get("semester", 1)), best_item.get("category", "Sem 1-4 Foundation"), round(best_score, 2), False)
     elif best_item and best_score >= 0.60:
-        return (best_item["name"], best_item["code"], best_item["credits"], best_item["semester"], best_item["category"], round(best_score, 2), True)
+        return (best_item["name"], best_item["code"], float(best_item.get("credits", 3.0)), int(best_item.get("semester", 1)), best_item.get("category", "Sem 1-4 Foundation"), round(best_score, 2), True)
 
     return (norm, clean_code or norm, 3.0, 1, "Sem 1-4 Foundation", round(best_score, 2), True)
 
 
 def resolve_subject_info(raw_name: Any, custom_overrides: Optional[Dict[str, str]] = None) -> Tuple[str, str, float, int, str, float, bool]:
     """
-    Staged resolver for subject strings, course codes, or abbreviations against R2024 AI & DS catalog.
+    Staged resolver for subject strings, course codes, or abbreviations against R2024 catalog.
     Uses pre-built O(1) hash indexes for course code, name, and alias lookups.
     """
     if not raw_name:
@@ -493,7 +474,7 @@ def resolve_subject_info(raw_name: Any, custom_overrides: Optional[Dict[str, str
         target_name = custom_overrides[norm]
         if target_name.upper() in SUBJECT_NAME_INDEX:
             item = SUBJECT_NAME_INDEX[target_name.upper()]
-            return (item["name"], item["code"], item["credits"], item["semester"], item["category"], 1.0, False)
+            return (item["name"], item["code"], float(item.get("credits", 3.0)), int(item.get("semester", 1)), item.get("category", "Custom Subject"), 1.0, False)
         return (target_name, "", 3.0, 1, "Custom Subject", 1.0, False)
 
     res = _memoized_resolve_subject_info(norm, clean_code, CATALOG_VERSION)
@@ -751,153 +732,216 @@ def extract_coe_pdf(pdf_bytes: bytes, filename: str, analysis_context: Optional[
                         "confidence": conf
                     })
 
-        # 1. Native PyMuPDF fast table extraction
-        try:
-            tabs = page.find_tables()
-            if not tabs or not tabs.tables:
-                tabs = page.find_tables(strategy="text")
-            if tabs and tabs.tables:
-                for tab in tabs.tables:
-                    raw_matrix = tab.extract()
-                    if not raw_matrix or len(raw_matrix) < 2:
-                        continue
-                    headers = [str(c or "").strip() for c in raw_matrix[0]]
-                    regno_col, name_col = _resolve_id_columns(headers)
-                    for row in raw_matrix[1:]:
-                        if not row:
-                            continue
-                        row_str = " ".join(str(c or "") for c in row)
-                        m = student_reg_pattern.search(row_str)
-                        if m:
-                            regno = m.group(1)
-                            name_val = str(row[name_col]).strip() if len(row) > name_col and row[name_col] else ""
-                            if name_val.strip() == regno.strip() and len(row) > regno_col and row[regno_col]:
-                                fallback_idx = name_col + 1
-                                if len(row) > fallback_idx and row[fallback_idx]:
-                                    name_val = str(row[fallback_idx]).strip()
-                            for c_idx in range(len(row)):
-                                if c_idx in (regno_col, name_col):
-                                    continue
-                                cell_v = str(row[c_idx] or "").strip()
-                                norm_g = _grade_normalize(cell_v)
-                                if norm_g and cell_v.upper() != regno:
-                                    subj_hdr = headers[c_idx] if c_idx < len(headers) else f"Column_{c_idx}"
-                                    can_name, code, cred, sem, cat, conf, amb = resolve_subject_info(subj_hdr)
-                                    rec = StudentResultRecord(
-                                        register_number=regno,
-                                        student_name=name_val,
-                                        subject_code=code or subj_hdr,
-                                        subject_name=can_name,
-                                        original_subject_text=subj_hdr,
-                                        credits=cred if cred > 0 else 3.0,
-                                        result_status=norm_g,
-                                        raw_result_status=cell_v,
-                                        result_semester=current_page_sem,
-                                        subject_semester=sem or current_page_sem,
-                                        source_type="PDF",
-                                        source_page=src_page,
-                                        extraction_confidence=0.95
-                                    )
-                                    page_records.append(rec)
-                                    inspector_items.append({
-                                        "source_page": src_page,
-                                        "raw_text": row_str,
-                                        "parsed_regno": regno,
-                                        "parsed_name": name_val or "—",
-                                        "parsed_subject": can_name,
-                                        "parsed_grade": norm_g,
-                                        "confidence": "HIGH"
-                                    })
-        except Exception:
-            pass
+        # 1. Extract course code headers with spatial bounding box awareness
+        words = page.get_text("words") or []
+        header_words = [w for w in words if 90 <= w[1] <= 165]
+        code_words = [w for w in header_words if re.match(r"^(?:24)?[A-Z]{2,4}\d{3,5}[A-Z]?$", w[4].strip().upper())]
+        code_words = sorted(code_words, key=lambda w: w[0])
 
-        # 2. Word-position line alignment fallback
+        page_course_headers = []
+        for cw in code_words:
+            ccode = cw[4].strip().upper()
+            if ccode not in [ch["code"] for ch in page_course_headers]:
+                can_name, code, cred, sem, cat, conf, amb = resolve_subject_info(ccode)
+                page_course_headers.append({
+                    "code": code or ccode,
+                    "canonical_name": can_name,
+                    "credits": cred,
+                    "semester": sem or current_page_sem,
+                    "category": cat,
+                    "confidence": conf,
+                    "x0": cw[0],
+                    "x1": cw[2],
+                    "center": (cw[0] + cw[2]) / 2,
+                })
+
+        # Fallback to scanning lines if no code words in header area
+        if not page_course_headers:
+            for line in page_lines[:25]:
+                codes = re.findall(r"\b((?:24[-_]?)?[A-Z]{2,4}[-_]?\d{3,5}[A-Z]?)\b", line.upper())
+                for ccode in codes:
+                    can_name, code, cred, sem, cat, conf, amb = resolve_subject_info(ccode)
+                    if (code or ccode) not in [ch["code"] for ch in page_course_headers]:
+                        page_course_headers.append({
+                            "code": code or ccode,
+                            "canonical_name": can_name,
+                            "credits": cred,
+                            "semester": sem or current_page_sem,
+                            "category": cat,
+                            "confidence": conf,
+                        })
+
+        cols = []
+        for i, h in enumerate(page_course_headers):
+            if "x0" in h:
+                left = (page_course_headers[i-1]["x1"] + h["x0"]) / 2 if i > 0 else h["x0"] - 25
+                right = (h["x1"] + page_course_headers[i+1]["x0"]) / 2 if i < len(page_course_headers) - 1 else h["x1"] + 25
+                cols.append({"header": h, "x0": left, "x1": right, "center": h["center"]})
+
+        # 2. Precision line-word extraction & right-anchored tail alignment
+        if words:
+            lines_by_y: Dict[int, List[Tuple[float, float, float, float, str, int, int, int]]] = defaultdict(list)
+            for w in words:
+                y_key = int(round(w[1] / 3.5) * 3.5)
+                lines_by_y[y_key].append(w)
+
+            for yk in sorted(lines_by_y.keys()):
+                lw = sorted(lines_by_y[yk], key=lambda x: x[0])
+                line_str = " ".join(w[4] for w in lw if w[4])
+                m = student_reg_pattern.search(line_str)
+                if m:
+                    regno = m.group(1)
+                    tokens = [w[4] for w in lw if w[4]]
+                    reg_idx = next((i for i, t in enumerate(tokens) if regno in t), -1)
+                    after_tokens = tokens[reg_idx + 1:] if reg_idx >= 0 else tokens
+
+                    raw_name = ""
+                    grades_found: List[Tuple[Dict[str, Any], str, str]] = []
+                    n_subjs = len(page_course_headers)
+
+                    # Pass 1: Right-anchored tail match for cohort rows (handles multi-part names & initials)
+                    if n_subjs > 0 and len(after_tokens) >= n_subjs:
+                        tail = after_tokens[-n_subjs:]
+                        tail_norm = [_grade_normalize(t) for t in tail]
+                        if all(tail_norm):
+                            grades_found = [(page_course_headers[i], tail[i], tail_norm[i]) for i in range(n_subjs)]
+                            raw_name = " ".join(after_tokens[:-n_subjs])
+
+                    # Pass 2: Column coordinates match (handles arrear/sparse rows with blank columns)
+                    if not grades_found and cols:
+                        name_words = []
+                        for w in lw[reg_idx + 1:] if reg_idx >= 0 else lw:
+                            matched_col = None
+                            for c in cols:
+                                if c["x0"] <= ((w[0] + w[2]) / 2) <= c["x1"]:
+                                    matched_col = c
+                                    break
+                            if matched_col:
+                                g_norm = _grade_normalize(w[4])
+                                if g_norm:
+                                    grades_found.append((matched_col["header"], w[4], g_norm))
+                                else:
+                                    name_words.append(w[4])
+                            elif not grades_found:
+                                name_words.append(w[4])
+                        raw_name = " ".join(name_words)
+
+                    # Pass 3: Fallback sequential matching
+                    if not grades_found:
+                        name_parts = []
+                        for tok in after_tokens:
+                            g_norm = _grade_normalize(tok)
+                            if g_norm:
+                                idx = len(grades_found)
+                                ch = page_course_headers[idx] if idx < len(page_course_headers) else {
+                                    "code": f"SUBJ_{idx+1}",
+                                    "canonical_name": f"Subject {idx+1}",
+                                    "credits": 3.0,
+                                    "semester": current_page_sem,
+                                }
+                                grades_found.append((ch, tok, g_norm))
+                            elif len(grades_found) == 0:
+                                name_parts.append(tok)
+                        raw_name = " ".join(name_parts)
+
+                    for ch, raw_g, norm_g in grades_found:
+                        rec = StudentResultRecord(
+                            register_number=regno,
+                            student_name=raw_name,
+                            subject_code=ch["code"],
+                            subject_name=ch["canonical_name"],
+                            original_subject_text=ch["code"],
+                            credits=ch.get("credits", 3.0),
+                            result_status=norm_g,
+                            raw_result_status=raw_g,
+                            result_semester=current_page_sem,
+                            subject_semester=ch.get("semester", current_page_sem),
+                            source_type="PDF",
+                            source_page=src_page,
+                            extraction_confidence=0.98,
+                        )
+                        page_records.append(rec)
+                        inspector_items.append({
+                            "source_page": src_page,
+                            "raw_text": line_str,
+                            "parsed_regno": regno,
+                            "parsed_name": raw_name or "—",
+                            "parsed_subject": ch["canonical_name"],
+                            "parsed_grade": norm_g,
+                            "confidence": "HIGH"
+                        })
+
+        # 3. Native PyMuPDF fast table extraction fallback
         if len(page_records) == 0:
             try:
-                words = page.get_text("words")
-                if words:
-                    lines_by_y: Dict[int, List[Tuple[float, float, str]]] = defaultdict(list)
-                    for w in words:
-                        x0, y0, x1, y1, text, b_num, l_num, w_num = w
-                        y_key = int(round(y0 / 3.5) * 3.5)
-                        lines_by_y[y_key].append((x0, y0, text.strip()))
-
-                    sorted_y_keys = sorted(lines_by_y.keys())
-                    for yk in sorted_y_keys:
-                        line_words = sorted(lines_by_y[yk], key=lambda w: w[0])
-                        line_str = " ".join(w[2] for w in line_words if w[2])
-                        m = student_reg_pattern.search(line_str)
-                        if m:
-                            regno = m.group(1)
-                            tokens = [w[2].upper() for w in line_words if w[2]]
-                            reg_idx = next((i for i, t in enumerate(tokens) if regno in t), -1)
-                            after_tokens = tokens[reg_idx + 1:] if reg_idx >= 0 else tokens
-
-                            name_parts: List[str] = []
-                            grades_found: List[Tuple[str, str]] = []
-                            expected_n = len(page_course_headers)
-                            used_anchor = False
-
-                            if expected_n and len(after_tokens) >= expected_n:
-                                tail = after_tokens[-expected_n:]
-                                tail_norm = [_grade_normalize(t) for t in tail]
-                                if all(tail_norm):
-                                    grades_found = list(zip(tail, tail_norm))
-                                    head_tokens = after_tokens[:-expected_n]
-                                    name_parts = [t for t in head_tokens if re.match(r"^[A-Z\.]+$", t)]
-                                    used_anchor = True
-
-                            if not used_anchor:
-                                for tok in after_tokens:
-                                    g_norm = _grade_normalize(tok)
-                                    if g_norm:
-                                        grades_found.append((tok, g_norm))
-                                    elif re.match(r"^[A-Z\.]+$", tok) and len(grades_found) == 0:
-                                        name_parts.append(tok)
-
-                            raw_name = " ".join(name_parts)
-                            for idx, (raw_g, norm_g) in enumerate(grades_found):
-                                if idx < len(page_course_headers):
-                                    ch = page_course_headers[idx]
-                                    subj_code = ch["code"]
-                                    subj_name = ch["canonical_name"]
-                                    credits_val = ch["credits"]
-                                    subj_sem = ch["semester"]
-                                else:
-                                    subj_code = f"SUBJ_{idx+1}"
-                                    subj_name = f"Subject {idx+1}"
-                                    credits_val = 3.0
-                                    subj_sem = current_page_sem
-
-                                rec = StudentResultRecord(
-                                    register_number=regno,
-                                    student_name=raw_name,
-                                    subject_code=subj_code,
-                                    subject_name=subj_name,
-                                    original_subject_text=subj_code,
-                                    credits=credits_val,
-                                    result_status=norm_g,
-                                    raw_result_status=raw_g,
-                                    result_semester=current_page_sem,
-                                    subject_semester=subj_sem,
-                                    source_type="PDF",
-                                    source_page=src_page,
-                                    extraction_confidence=0.92
-                                )
-                                page_records.append(rec)
-                                inspector_items.append({
-                                    "source_page": src_page,
-                                    "raw_text": line_str,
-                                    "parsed_regno": regno,
-                                    "parsed_name": raw_name or "—",
-                                    "parsed_subject": subj_name,
-                                    "parsed_grade": norm_g,
-                                    "confidence": "HIGH"
-                                })
+                tabs = page.find_tables()
+                if not tabs or not tabs.tables:
+                    tabs = page.find_tables(strategy="text")
+                if tabs and tabs.tables:
+                    for tab in tabs.tables:
+                        raw_matrix = tab.extract()
+                        if not raw_matrix or len(raw_matrix) < 2:
+                            continue
+                        headers = [str(c or "").strip() for c in raw_matrix[0]]
+                        regno_col, name_col = _resolve_id_columns(headers)
+                        for row in raw_matrix[1:]:
+                            if not row:
+                                continue
+                            row_str = " ".join(str(c or "") for c in row)
+                            m = student_reg_pattern.search(row_str)
+                            if m:
+                                regno = m.group(1)
+                                name_val = str(row[name_col]).strip() if len(row) > name_col and row[name_col] else ""
+                                if name_val.strip() == regno.strip() and len(row) > regno_col and row[regno_col]:
+                                    fallback_idx = name_col + 1
+                                    if len(row) > fallback_idx and row[fallback_idx]:
+                                        name_val = str(row[fallback_idx]).strip()
+                                for c_idx in range(len(row)):
+                                    if c_idx in (regno_col, name_col):
+                                        continue
+                                    cell_v = str(row[c_idx] or "").strip()
+                                    norm_g = _grade_normalize(cell_v)
+                                    # Handle cell spillover from name
+                                    if not norm_g and cell_v and c_idx == name_col + 1:
+                                        parts = cell_v.split()
+                                        if parts:
+                                            cand_g = _grade_normalize(parts[-1])
+                                            if cand_g:
+                                                norm_g = cand_g
+                                                cell_v = parts[-1]
+                                                name_val = f"{name_val} {' '.join(parts[:-1])}".strip()
+                                    if norm_g and cell_v.upper() != regno:
+                                        subj_hdr = headers[c_idx] if c_idx < len(headers) else f"Column_{c_idx}"
+                                        can_name, code, cred, sem, cat, conf, amb = resolve_subject_info(subj_hdr)
+                                        rec = StudentResultRecord(
+                                            register_number=regno,
+                                            student_name=name_val,
+                                            subject_code=code or subj_hdr,
+                                            subject_name=can_name,
+                                            original_subject_text=subj_hdr,
+                                            credits=cred if cred > 0 else 3.0,
+                                            result_status=norm_g,
+                                            raw_result_status=cell_v,
+                                            result_semester=current_page_sem,
+                                            subject_semester=sem or current_page_sem,
+                                            source_type="PDF",
+                                            source_page=src_page,
+                                            extraction_confidence=0.95
+                                        )
+                                        page_records.append(rec)
+                                        inspector_items.append({
+                                            "source_page": src_page,
+                                            "raw_text": row_str,
+                                            "parsed_regno": regno,
+                                            "parsed_name": name_val or "—",
+                                            "parsed_subject": can_name,
+                                            "parsed_grade": norm_g,
+                                            "confidence": "HIGH"
+                                        })
             except Exception:
                 pass
 
-        # 3. Secondary pdfplumber table fallback
+        # 4. Secondary pdfplumber table fallback
         if len(page_records) == 0:
             try:
                 import pdfplumber
