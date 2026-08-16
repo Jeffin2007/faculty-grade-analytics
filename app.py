@@ -307,10 +307,14 @@ from syllabus.loader import (
     get_catalog,
     get_registered_departments,
     resolve_course,
+    save_and_register_syllabus,
+    invalidate_catalog_cache,
     normalize_course_code,
     normalize_text,
     normalize_alphanumeric,
 )
+from syllabus_tools.extractor import extract_syllabus_pdf
+from syllabus_tools.publisher import publish_syllabus_draft
 
 SYLLABUS_CATALOG_R2024: List[Dict[str, Any]] = []
 
@@ -319,11 +323,17 @@ COURSE_CODE_INDEX: Dict[str, Dict[str, Any]] = {}
 SUBJECT_NAME_INDEX: Dict[str, Dict[str, Any]] = {}
 ALIAS_INDEX: Dict[str, Dict[str, Any]] = {}
 SEMESTER_INDEX: Dict[int, List[Dict[str, Any]]] = {}
+CATALOG_VERSION = "r2024-full-catalog-2026-08-16"
 
 def _build_syllabus_indexes():
-    global SYLLABUS_CATALOG_R2024
+    global SYLLABUS_CATALOG_R2024, CATALOG_VERSION
     seen_codes = set()
     all_courses: List[Dict[str, Any]] = []
+
+    COURSE_CODE_INDEX.clear()
+    SUBJECT_NAME_INDEX.clear()
+    ALIAS_INDEX.clear()
+    SEMESTER_INDEX.clear()
 
     # 1. Primary AI_DS department catalog first
     ai_ds_cat = get_catalog("AI_DS", "R2024")
@@ -381,14 +391,15 @@ def _build_syllabus_indexes():
         sem = int(item.get("semester", 1))
         SEMESTER_INDEX.setdefault(sem, []).append(item)
 
+    CATALOG_VERSION = f"catalog-ver-{time.time()}"
+    try:
+        _memoized_resolve_subject_info.cache_clear()
+    except Exception:
+        pass
+
 _build_syllabus_indexes()
 
 import functools
-
-# Bump this whenever SYLLABUS_CATALOG_R2024 content changes. It is folded into the
-# memoized resolver's cache key so a catalog edit can never be served from a stale
-# in-process cache entry (defends against hot-reload / long-lived worker scenarios).
-CATALOG_VERSION = "r2024-full-catalog-2026-08-16"
 
 @functools.lru_cache(maxsize=4096)
 def _memoized_resolve_subject_info(norm: str, clean_code: str, _catalog_version: str = CATALOG_VERSION) -> Tuple[str, str, float, int, str, float, bool]:
@@ -5938,30 +5949,105 @@ def page_upload() -> Tuple:
             cls="flex items-center gap-6 max-w-5xl mx-auto mb-10 py-4"
         ),
 
-        # ── UPLOAD CARD ─────────────────────────────────────────────────
+        # ── UPLOAD & ACADEMIC CONTEXT CARD ───────────────────────────────
         Div(
             # Mode A: PDF Direct Upload (Primary)
             Form(
+                # Step 1: Academic Department, Semester & Regulation Selection
                 Div(
+                    Div(
                         Div(
-                            # Card header
+                            Span("STEP 1", cls="text-[10px] font-extrabold uppercase tracking-wider text-blue-700 bg-blue-100 px-2.5 py-0.5 rounded-full inline-block mr-2"),
+                            Span("Select Target Academic Department & Cohort", cls="text-sm font-extrabold text-slate-900"),
+                        ),
+                        P("Configure the target academic parameters below for precision syllabus mapping and cohort analytics.", cls="text-xs text-slate-500 mt-1"),
+                        cls="mb-4"
+                    ),
+                    Div(
+                        # 1. Department Dropdown (No default!)
+                        Div(
+                            Label("Department *", cls="block text-xs font-bold text-slate-800 mb-1.5"),
+                            Select(
+                                Option("-- Select Department (Required) --", value="", disabled=True, selected=True),
+                                *[
+                                    Option(
+                                        f"{d.get('name', d.get('code'))} ({d.get('code')})",
+                                        value=d.get('code')
+                                    )
+                                    for d in get_registered_departments()
+                                ],
+                                id="select_department", name="department", required=True,
+                                cls="w-full text-xs font-semibold text-slate-800 bg-white border border-slate-300 rounded-xl p-2.5 shadow-2xs focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all",
+                            ),
+                            Span("Select official department", cls="text-[11px] text-slate-400 block mt-1"),
+                            cls="flex-1"
+                        ),
+                        # 2. Semester Dropdown (No default!)
+                        Div(
+                            Label("Semester *", cls="block text-xs font-bold text-slate-800 mb-1.5"),
+                            Select(
+                                Option("-- Select Semester (Required) --", value="", disabled=True, selected=True),
+                                Option("Semester I (1st Sem)", value="1"),
+                                Option("Semester II (2nd Sem)", value="2"),
+                                Option("Semester III (3rd Sem)", value="3"),
+                                Option("Semester IV (4th Sem)", value="4"),
+                                Option("Semester V (5th Sem)", value="5"),
+                                Option("Semester VI (6th Sem)", value="6"),
+                                Option("Semester VII (7th Sem)", value="7"),
+                                Option("Semester VIII (8th Sem)", value="8"),
+                                id="select_semester", name="semester", required=True,
+                                cls="w-full text-xs font-semibold text-slate-800 bg-white border border-slate-300 rounded-xl p-2.5 shadow-2xs focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all",
+                            ),
+                            Span("Select examination semester", cls="text-[11px] text-slate-400 block mt-1"),
+                            cls="flex-1"
+                        ),
+                        # 3. Regulation Dropdown (Default R2024 & R2026, + NEW)
+                        Div(
+                            Div(
+                                Label("Regulation *", cls="text-xs font-bold text-slate-800"),
+                                Button(
+                                    "+ New Syllabus", type="button", onclick="openNewSyllabusModal()",
+                                    cls="text-[10px] font-bold text-blue-600 hover:text-blue-800 underline bg-transparent border-0 cursor-pointer p-0"
+                                ),
+                                cls="flex items-center justify-between mb-1.5"
+                            ),
+                            Select(
+                                Option("R2024 & R2026 (Autonomous Unified)", value="R2024", selected=True),
+                                Option("➕ Add NEW Regulation / Upload Syllabus...", value="NEW", cls="text-blue-700 font-bold bg-blue-50"),
+                                id="select_regulation", name="regulation", required=True,
+                                cls="w-full text-xs font-semibold text-slate-800 bg-white border border-slate-300 rounded-xl p-2.5 shadow-2xs focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all",
+                                onchange="handleRegulationChange(this)"
+                            ),
+                            Span("R24 & R26 unified course codes", cls="text-[11px] text-slate-400 block mt-1"),
+                            cls="flex-1"
+                        ),
+                        cls="grid grid-cols-1 sm:grid-cols-3 gap-4"
+                    ),
+                    cls="card p-5 mb-6 border border-blue-100 bg-gradient-to-br from-white to-blue-50/40 shadow-xs"
+                ),
+
+                # Step 2: PDF Document Upload Section
+                Div(
+                    Div(
+                        # Card header
+                        Div(
                             Div(
                                 Div(
-                                    Div(
-                                        NotStr('<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="#1a56db" stroke-width="2" style="width:22px;height:22px"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>'),
-                                        cls="w-10 h-10 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center flex-shrink-0"
-                                    ),
-                                    Div(
-                                        Div(
-                                            Span("★ RECOMMENDED FORMAT", cls="inline-flex items-center text-[10px] font-bold text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-200 tracking-wider uppercase"),
-                                        ),
-                                        H3("Upload Official COE Result PDF", cls="text-base font-extrabold text-slate-900 leading-tight mt-1"),
-                                    ),
-                                    cls="flex items-start gap-3"
+                                    NotStr('<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="#1a56db" stroke-width="2" style="width:22px;height:22px"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>'),
+                                    cls="w-10 h-10 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center flex-shrink-0"
                                 ),
-                                cls="mb-3"
+                                Div(
+                                    Div(
+                                        Span("STEP 2", cls="inline-flex items-center text-[10px] font-extrabold text-blue-700 bg-blue-100 px-2.5 py-0.5 rounded-full uppercase tracking-wider mr-2"),
+                                        Span("RECOMMENDED FORMAT", cls="inline-flex items-center text-[10px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full tracking-wider uppercase"),
+                                    ),
+                                    H3("Upload Official COE Result PDF", cls="text-base font-extrabold text-slate-900 leading-tight mt-1"),
+                                ),
+                                cls="flex items-start gap-3"
                             ),
-                            P("Drop your official result PDF here or click to browse. Automatically extracts student records & verifies page provenance.", cls="text-xs text-slate-500 mb-4 leading-relaxed"),
+                            cls="mb-3"
+                        ),
+                        P("Drop your official result PDF here or click to browse. Automatically extracts student records, segregates arrears, & maps syllabus.", cls="text-xs text-slate-500 mb-4 leading-relaxed"),
 
                         # PDF Input & Select
                         Div(
@@ -6016,7 +6102,7 @@ def page_upload() -> Tuple:
                             Div(
                                 Div(Span("✓", cls="text-green-600 font-bold mr-2"), Span("Reading document stream", cls="text-xs text-slate-700"), cls="flex items-center text-xs py-0.5"),
                                 Div(Span("•", cls="text-blue-500 font-bold mr-2 animate-pulse"), Span("Detecting student records & subjects...", cls="text-xs text-slate-700"), cls="flex items-center text-xs py-0.5"),
-                                Div(Span("•", cls="text-slate-300 font-bold mr-2"), Span("Mapping R2024 syllabus...", cls="text-xs text-slate-400"), cls="flex items-center text-xs py-0.5"),
+                                Div(Span("•", cls="text-slate-300 font-bold mr-2"), Span("Mapping syllabus catalog...", cls="text-xs text-slate-400"), cls="flex items-center text-xs py-0.5"),
                                 Div(Span("•", cls="text-slate-300 font-bold mr-2"), Span("Preparing preflight review...", cls="text-xs text-slate-400"), cls="flex items-center text-xs py-0.5"),
                                 cls="bg-blue-50 p-3 rounded-lg border border-blue-100 mt-3"
                             ),
@@ -6026,9 +6112,120 @@ def page_upload() -> Tuple:
                     ),
                 ),
                 action="/upload-pdf", method="POST", enctype="multipart/form-data",
-                onsubmit="handleUploadFormSubmit(this, 'pdf_progress_card', 'Analyzing COE PDF...')"
+                onsubmit="return handleUploadFormSubmit(this, 'pdf_progress_card', 'Analyzing COE PDF...')"
             ),
-            cls="max-w-md mx-auto mb-14"
+            cls="max-w-2xl mx-auto mb-14"
+        ),
+
+        # ── NEW REGULATION & SYLLABUS UPLOAD MODAL ──────────────────────
+        Div(
+            Div(
+                # Modal Header
+                Div(
+                    Div(
+                        H3("Upload & Register New Regulation Syllabus", cls="text-base font-extrabold text-slate-900"),
+                        P("Extract course codes, names, credits, and semesters into the authoritative JSON catalog.", cls="text-xs text-slate-500 mt-0.5"),
+                    ),
+                    Button(
+                        "✕", type="button", onclick="closeNewSyllabusModal()",
+                        cls="text-slate-400 hover:text-slate-700 font-bold text-lg p-1 bg-transparent border-0 cursor-pointer"
+                    ),
+                    cls="flex items-center justify-between pb-3 mb-4 border-b border-slate-200"
+                ),
+
+                # Modal Inputs Grid
+                Div(
+                    Div(
+                        Label("Target Department *", cls="block text-xs font-bold text-slate-800 mb-1"),
+                        Select(
+                            *[
+                                Option(
+                                    f"{d.get('name', d.get('code'))} ({d.get('code')})",
+                                    value=d.get('code')
+                                )
+                                for d in get_registered_departments()
+                            ],
+                            id="modal_dept_select",
+                            cls="w-full text-xs font-medium text-slate-800 bg-white border border-slate-300 rounded-lg p-2 shadow-2xs"
+                        ),
+                        cls="flex-1"
+                    ),
+                    Div(
+                        Label("New Regulation Code *", cls="block text-xs font-bold text-slate-800 mb-1"),
+                        Input(
+                            type="text", id="modal_reg_input", placeholder="e.g. R2028 or R2026-REV",
+                            cls="w-full text-xs font-medium text-slate-800 bg-white border border-slate-300 rounded-lg p-2 shadow-2xs uppercase"
+                        ),
+                        cls="flex-1"
+                    ),
+                    cls="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3"
+                ),
+
+                Div(
+                    Label("Syllabus File (.pdf or .json) *", cls="block text-xs font-bold text-slate-800 mb-1"),
+                    Input(
+                        type="file", id="modal_syllabus_file", accept=".pdf,.json",
+                        cls="block w-full text-xs text-slate-600 bg-white border border-slate-300 rounded-lg p-2 cursor-pointer shadow-2xs"
+                    ),
+                    cls="mb-4"
+                ),
+
+                Button(
+                    "⚡ Extract & Preview Syllabus Courses", type="button", id="btn_extract_syllabus", onclick="extractSyllabusDraft()",
+                    cls="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 px-4 rounded-xl text-xs transition-all shadow-sm flex items-center justify-center gap-2 mb-4"
+                ),
+
+                # Preview & Confirmation Container (Hidden initially)
+                Div(
+                    Div(
+                        Span("✓ Extracted Courses Preview & Staff Verification", cls="text-xs font-bold text-blue-800"),
+                        Span("", id="modal_course_badge", cls="text-[10px] font-bold text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full"),
+                        cls="flex items-center justify-between mb-2"
+                    ),
+                    Div(
+                        Table(
+                            Thead(
+                                Tr(
+                                    Th("Code", cls="px-2 py-1.5 text-left text-[11px] font-bold text-slate-700 bg-slate-100"),
+                                    Th("Subject Title", cls="px-2 py-1.5 text-left text-[11px] font-bold text-slate-700 bg-slate-100"),
+                                    Th("Sem", cls="px-2 py-1.5 text-center text-[11px] font-bold text-slate-700 bg-slate-100 w-12"),
+                                    Th("Credits", cls="px-2 py-1.5 text-center text-[11px] font-bold text-slate-700 bg-slate-100 w-16"),
+                                    Th("Type", cls="px-2 py-1.5 text-left text-[11px] font-bold text-slate-700 bg-slate-100 w-20"),
+                                )
+                            ),
+                            Tbody(id="syllabus_courses_tbody"),
+                            cls="w-full border-collapse"
+                        ),
+                        cls="max-h-60 overflow-y-auto border border-slate-200 rounded-lg mb-4"
+                    ),
+
+                    # Staff Verification Section
+                    Div(
+                        Div(
+                            Label("Confirmed By (Staff / Committee Name):", cls="block text-[11px] font-bold text-slate-700 mb-1"),
+                            Input(type="text", id="modal_staff_name", value="Faculty Academic Committee",
+                                  cls="w-full text-xs text-slate-800 bg-white border border-slate-300 rounded-lg p-1.5"),
+                            cls="mb-2"
+                        ),
+                        Div(
+                            Input(type="checkbox", id="modal_staff_confirm", checked=True, cls="w-4 h-4 text-blue-600 rounded mr-2"),
+                            Label("I confirm that these course codes and credits match the official approved syllabus.",
+                                  for_="modal_staff_confirm", cls="text-[11px] text-slate-700 font-medium cursor-pointer"),
+                            cls="flex items-center mb-3"
+                        ),
+                        Button(
+                            "✓ Confirm & Save to Syllabus Catalog (JSON)", type="button", id="btn_confirm_syllabus", onclick="saveConfirmedSyllabus()",
+                            cls="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-2.5 px-4 rounded-xl text-xs transition-all shadow-sm flex items-center justify-center gap-2"
+                        ),
+                        cls="p-3 bg-slate-50 border border-slate-200 rounded-xl"
+                    ),
+                    id="syllabus_preview_container", cls="hidden"
+                ),
+
+                cls="bg-white rounded-2xl p-6 max-w-xl w-full shadow-2xl border border-slate-200 max-h-[90vh] overflow-y-auto"
+            ),
+            id="new_syllabus_modal",
+            cls="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4"
         ),
 
         # ── PLATFORM CAPABILITIES ────────────────────────────────────────
@@ -6047,11 +6244,11 @@ def page_upload() -> Tuple:
                     P("Extracts student & subject results directly from official result PDFs with page provenance traceability.", cls="text-xs text-slate-500 leading-relaxed"),
                     cls="card p-5 border border-slate-100 hover:border-blue-200 hover:shadow-md transition-all flex flex-col"
                 ),
-                # Card 2 — R2024 Mapping
+                # Card 2 — R2024 / R2026 Mapping
                 Div(
                     NotStr('<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="#1a56db" stroke-width="2" style="width:28px;height:28px;margin-bottom:10px"><path stroke-linecap="round" stroke-linejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/></svg>'),
-                    H4("R2024 Mapping", cls="text-sm font-bold text-slate-800 mb-1"),
-                    P("Automatically identifies course codes, titles, credits, and semester categories against R2024 catalog.", cls="text-xs text-slate-500 leading-relaxed"),
+                    H4("Autonomous Syllabus Mapping", cls="text-sm font-bold text-slate-800 mb-1"),
+                    P("Automatically identifies course codes, titles, credits, and semester categories against authoritative catalogs.", cls="text-xs text-slate-500 leading-relaxed"),
                     cls="card p-5 border border-slate-100 hover:border-blue-200 hover:shadow-md transition-all flex flex-col"
                 ),
                 # Card 3 — Arrear Intelligence
@@ -6093,29 +6290,29 @@ def page_upload() -> Tuple:
             Div(
                 Div(
                     Span("01", cls="text-blue-600 font-extrabold text-lg block mb-1"),
-                    H4("Upload", cls="text-xs font-bold text-slate-800"),
-                    P("Select PDF or Excel file", cls="text-[11px] text-slate-500"),
+                    H4("Configure", cls="text-xs font-bold text-slate-800"),
+                    P("Select Dept & Sem", cls="text-[11px] text-slate-500"),
                     cls="text-center p-3 card border border-slate-100"
                 ),
                 Div(Span("→", cls="text-slate-300 hidden sm:block text-xl self-center")),
                 Div(
                     Span("02", cls="text-blue-600 font-extrabold text-lg block mb-1"),
-                    H4("Verify", cls="text-xs font-bold text-slate-800"),
-                    P("Review preflight mapping", cls="text-[11px] text-slate-500"),
+                    H4("Upload", cls="text-xs font-bold text-slate-800"),
+                    P("Upload COE PDF", cls="text-[11px] text-slate-500"),
                     cls="text-center p-3 card border border-slate-100"
                 ),
                 Div(Span("→", cls="text-slate-300 hidden sm:block text-xl self-center")),
                 Div(
                     Span("03", cls="text-blue-600 font-extrabold text-lg block mb-1"),
-                    H4("Analyze", cls="text-xs font-bold text-slate-800"),
-                    P("Compute cohort metrics", cls="text-[11px] text-slate-500"),
+                    H4("Verify", cls="text-xs font-bold text-slate-800"),
+                    P("Review extraction", cls="text-[11px] text-slate-500"),
                     cls="text-center p-3 card border border-slate-100"
                 ),
                 Div(Span("→", cls="text-slate-300 hidden sm:block text-xl self-center")),
                 Div(
                     Span("04", cls="text-blue-600 font-extrabold text-lg block mb-1"),
                     H4("Act", cls="text-xs font-bold text-slate-800"),
-                    P("Execute remedial plan", cls="text-[11px] text-slate-500"),
+                    P("Actionable metrics", cls="text-[11px] text-slate-500"),
                     cls="text-center p-3 card border border-slate-100"
                 ),
                 cls="grid grid-cols-2 sm:grid-cols-7 gap-2 max-w-4xl mx-auto items-center mb-12"
@@ -6140,6 +6337,8 @@ def page_upload() -> Tuple:
         ),
 
         Script("""
+        var _extractedCourses = [];
+
         function handlePdfFileSelect(input) {
             if (input.files && input.files[0]) {
                 var file = input.files[0];
@@ -6151,22 +6350,183 @@ def page_upload() -> Tuple:
             }
         }
 
-        function handleExcelFileSelect(input) {
-            if (input.files && input.files[0]) {
-                var file = input.files[0];
-                var promptEl = document.getElementById('excel_dropzone_prompt');
-                if (promptEl) promptEl.classList.add('hidden');
-                var info = document.getElementById('excel_file_selected_info');
-                if (info) {
-                    info.classList.remove('hidden');
-                    document.getElementById('excel_file_name').innerText = file.name;
-                    var sizeMB = (file.size / (1024 * 1024)).toFixed(2);
-                    document.getElementById('excel_file_size').innerText = sizeMB + ' MB';
-                }
+        function handleRegulationChange(select) {
+            if (select.value === 'NEW') {
+                openNewSyllabusModal();
+                select.value = 'R2024';
             }
         }
 
+        function openNewSyllabusModal() {
+            var deptSel = document.getElementById('select_department');
+            if (deptSel && deptSel.value) {
+                var mDept = document.getElementById('modal_dept_select');
+                if (mDept) mDept.value = deptSel.value;
+            }
+            var modal = document.getElementById('new_syllabus_modal');
+            if (modal) modal.classList.remove('hidden');
+        }
+
+        function closeNewSyllabusModal() {
+            var modal = document.getElementById('new_syllabus_modal');
+            if (modal) modal.classList.add('hidden');
+        }
+
+        function extractSyllabusDraft() {
+            var fileInput = document.getElementById('modal_syllabus_file');
+            var deptCode = document.getElementById('modal_dept_select').value;
+            var regCode = document.getElementById('modal_reg_input').value.trim();
+
+            if (!regCode) {
+                alert('Please enter a Regulation Name (e.g. R2028).');
+                document.getElementById('modal_reg_input').focus();
+                return;
+            }
+            if (!fileInput.files || !fileInput.files[0]) {
+                alert('Please select a syllabus PDF or JSON file.');
+                return;
+            }
+
+            var btn = document.getElementById('btn_extract_syllabus');
+            var origText = btn.innerHTML;
+            btn.innerHTML = '<span class="animate-spin inline-block mr-1">⏳</span> Extracting syllabus courses...';
+            btn.style.pointerEvents = 'none';
+
+            var formData = new FormData();
+            formData.append('file_syllabus', fileInput.files[0]);
+            formData.append('department_code', deptCode);
+            formData.append('regulation_code', regCode);
+
+            fetch('/api/syllabus/extract-draft', {
+                method: 'POST',
+                body: formData
+            })
+            .then(function(res) { return res.json(); })
+            .then(function(data) {
+                btn.innerHTML = origText;
+                btn.style.pointerEvents = 'auto';
+
+                if (!data.ok) {
+                    alert('Extraction error: ' + (data.error || 'Unknown error'));
+                    return;
+                }
+
+                _extractedCourses = data.courses || [];
+                renderSyllabusPreviewTable(_extractedCourses, data.department_code, data.regulation_code);
+            })
+            .catch(function(err) {
+                btn.innerHTML = origText;
+                btn.style.pointerEvents = 'auto';
+                alert('Network or server error: ' + err);
+            });
+        }
+
+        function renderSyllabusPreviewTable(courses, dept, reg) {
+            var container = document.getElementById('syllabus_preview_container');
+            var tbody = document.getElementById('syllabus_courses_tbody');
+            var badge = document.getElementById('modal_course_badge');
+
+            if (!container || !tbody) return;
+
+            badge.innerText = courses.length + ' Courses Extracted';
+            tbody.innerHTML = '';
+
+            courses.forEach(function(c, idx) {
+                var tr = document.createElement('tr');
+                tr.className = 'border-b border-slate-100 text-xs';
+                tr.innerHTML = `
+                    <td class="p-2 font-mono font-bold text-blue-700">${c.code || ''}</td>
+                    <td class="p-2 font-medium text-slate-800">${c.name || ''}</td>
+                    <td class="p-2 text-center">${c.semester || 1}</td>
+                    <td class="p-2 text-center font-semibold">${c.credits || 3.0}</td>
+                    <td class="p-2 text-slate-500">${c.type || 'THEORY'}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            container.classList.remove('hidden');
+        }
+
+        function saveConfirmedSyllabus() {
+            var chk = document.getElementById('modal_staff_confirm');
+            if (chk && !chk.checked) {
+                alert('Please check the confirmation box to verify the syllabus.');
+                return;
+            }
+
+            var deptCode = document.getElementById('modal_dept_select').value;
+            var regCode = document.getElementById('modal_reg_input').value.trim().toUpperCase();
+            var actor = document.getElementById('modal_staff_name').value.trim() || 'Faculty Academic Committee';
+
+            if (!regCode || _extractedCourses.length === 0) {
+                alert('No extracted courses to save.');
+                return;
+            }
+
+            var btn = document.getElementById('btn_confirm_syllabus');
+            var origText = btn.innerHTML;
+            btn.innerHTML = '<span class="animate-spin inline-block mr-1">⏳</span> Publishing to JSON catalog...';
+            btn.style.pointerEvents = 'none';
+
+            fetch('/api/syllabus/confirm-and-save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    department_code: deptCode,
+                    regulation_code: regCode,
+                    courses: _extractedCourses,
+                    actor: actor
+                })
+            })
+            .then(function(res) { return res.json(); })
+            .then(function(data) {
+                btn.innerHTML = origText;
+                btn.style.pointerEvents = 'auto';
+
+                if (!data.ok) {
+                    alert('Save error: ' + (data.error || 'Unknown error'));
+                    return;
+                }
+
+                // Add to main regulation dropdown & select it
+                var regSel = document.getElementById('select_regulation');
+                if (regSel) {
+                    var newOpt = document.createElement('option');
+                    newOpt.value = regCode;
+                    newOpt.text = regCode + ' (Staff Confirmed)';
+                    newOpt.selected = true;
+                    regSel.add(newOpt, 0);
+                }
+
+                // Also select the department in the main dropdown
+                var deptSel = document.getElementById('select_department');
+                if (deptSel) deptSel.value = deptCode;
+
+                closeNewSyllabusModal();
+                alert('✓ ' + data.message);
+            })
+            .catch(function(err) {
+                btn.innerHTML = origText;
+                btn.style.pointerEvents = 'auto';
+                alert('Save error: ' + err);
+            });
+        }
+
         function handleUploadFormSubmit(form, cardId, btnText) {
+            var deptSel = document.getElementById('select_department');
+            var semSel = document.getElementById('select_semester');
+
+            if (!deptSel || !deptSel.value) {
+                alert('⚠️ Please select a Department before uploading.');
+                if (deptSel) deptSel.focus();
+                return false;
+            }
+            if (!semSel || !semSel.value) {
+                alert('⚠️ Please select a Semester before uploading.');
+                if (semSel) semSel.focus();
+                return false;
+            }
+
             if (cardId) {
                 var card = document.getElementById(cardId);
                 if (card) {
@@ -6179,6 +6539,7 @@ def page_upload() -> Tuple:
                 btn.style.pointerEvents = 'none';
                 btn.classList.add('opacity-75');
             }
+            return true;
         }
 
         document.addEventListener('DOMContentLoaded', function() {
@@ -8887,6 +9248,96 @@ def page_pdf_to_excel(pdf_report: "PDFExtractionReport", ca: "ClassAnalysis", fi
     ))
 
 
+# =============================================================================
+# 13.5) SYLLABUS CATALOG MANAGEMENT API ROUTES
+# =============================================================================
+
+from starlette.responses import JSONResponse
+
+@app.post("/api/syllabus/extract-draft")
+async def api_extract_syllabus_draft(request):
+    try:
+        form = await request.form()
+        file = form.get("file_syllabus")
+        dept_code = str(form.get("department_code") or "AI_DS").strip().upper()
+        reg_code = str(form.get("regulation_code") or "R2028").strip().upper()
+
+        if not file:
+            return JSONResponse({"ok": False, "error": "No syllabus file uploaded."}, status_code=400)
+
+        file_bytes = await file.read()
+        filename = getattr(file, "filename", "") or "syllabus.pdf"
+
+        if filename.lower().endswith(".json"):
+            try:
+                data = json.loads(file_bytes.decode("utf-8"))
+                courses = data.get("courses", [])
+                return JSONResponse({
+                    "ok": True,
+                    "department_code": dept_code,
+                    "regulation_code": reg_code,
+                    "courses": courses,
+                    "count": len(courses)
+                })
+            except Exception as je:
+                return JSONResponse({"ok": False, "error": f"Invalid JSON format: {je}"}, status_code=400)
+
+        try:
+            draft = extract_syllabus_pdf(file_bytes, department_code_hint=dept_code, regulation_hint=reg_code)
+            courses = draft.get("courses", [])
+            return JSONResponse({
+                "ok": True,
+                "department_code": dept_code,
+                "regulation_code": reg_code,
+                "courses": courses,
+                "count": len(courses)
+            })
+        except Exception as pe:
+            return JSONResponse({"ok": False, "error": f"Syllabus extraction failed: {pe}"}, status_code=400)
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+
+@app.post("/api/syllabus/confirm-and-save")
+async def api_confirm_and_save_syllabus(request):
+    try:
+        body = await request.body()
+        payload = json.loads(body.decode("utf-8"))
+        dept_code = str(payload.get("department_code", "")).strip().upper()
+        reg_code = str(payload.get("regulation_code", "")).strip().upper()
+        courses = payload.get("courses", [])
+        actor = str(payload.get("actor", "Faculty / Staff Confirmation")).strip()
+
+        if not dept_code or not reg_code:
+            return JSONResponse({"ok": False, "error": "Department code and regulation name are required."}, status_code=400)
+
+        if not courses:
+            return JSONResponse({"ok": False, "error": "Course list cannot be empty."}, status_code=400)
+
+        dept_name = None
+        programme = None
+        for d in get_registered_departments():
+            if d.get("code") == dept_code:
+                dept_name = d.get("name")
+                programme = d.get("programme")
+                break
+
+        res = save_and_register_syllabus(
+            department_code=dept_code,
+            regulation_code=reg_code,
+            courses=courses,
+            department_name=dept_name,
+            programme=programme,
+            actor=actor
+        )
+
+        _build_syllabus_indexes()
+
+        return JSONResponse(res)
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+
 @app.post("/upload-pdf")
 async def route_upload_pdf(request):
     try:
@@ -8909,7 +9360,19 @@ async def route_upload_pdf(request):
             push_alert("Uploaded PDF file is empty.", "red")
             return RedirectResponse("/upload", status_code=303)
 
-        pdf_report = extract_coe_pdf(pdf_bytes, filename)
+        dept = str(form.get("department", "") or "").strip()
+        sem_raw = str(form.get("semester", "") or "").strip()
+        reg = str(form.get("regulation", "") or "").strip() or "R2024"
+        sem = int(sem_raw) if sem_raw and sem_raw.isdigit() else None
+
+        analysis_ctx = {
+            "department": dept,
+            "semester": sem,
+            "regulation": reg
+        }
+        SESSION["analysis_context"] = analysis_ctx
+
+        pdf_report = extract_coe_pdf(pdf_bytes, filename, analysis_context=analysis_ctx)
         if not pdf_report.ok:
             push_alert(pdf_report.fatal_error, "red")
             return RedirectResponse("/upload", status_code=303)
@@ -8928,7 +9391,7 @@ async def route_upload_pdf(request):
             if prev_bytes:
                 p_filename = os.path.basename(getattr(file_prev, "filename", "prev_result.pdf"))
                 p_filename = re.sub(r"[^\w\.\-]", "_", p_filename)
-                prev_pdf_report = extract_coe_pdf(prev_bytes, p_filename)
+                prev_pdf_report = extract_coe_pdf(prev_bytes, p_filename, analysis_context=analysis_ctx)
                 if prev_pdf_report.ok and prev_pdf_report.records:
                     p_df = pdf_records_to_dataframe(prev_pdf_report.records)
                     prev_ca = compute_class_analysis(p_df, p_filename)
@@ -8959,7 +9422,19 @@ async def route_upload_dual(request):
         pdf_filename = os.path.basename(getattr(file_pdf, "filename", "") or "result.pdf")
         excel_filename = os.path.basename(getattr(file_excel, "filename", "") or "result.xlsx")
 
-        pdf_report = extract_coe_pdf(pdf_bytes, pdf_filename)
+        dept = str(form.get("department", "") or "").strip()
+        sem_raw = str(form.get("semester", "") or "").strip()
+        reg = str(form.get("regulation", "") or "").strip() or "R2024"
+        sem = int(sem_raw) if sem_raw and sem_raw.isdigit() else None
+
+        analysis_ctx = {
+            "department": dept,
+            "semester": sem,
+            "regulation": reg
+        }
+        SESSION["analysis_context"] = analysis_ctx
+
+        pdf_report = extract_coe_pdf(pdf_bytes, pdf_filename, analysis_context=analysis_ctx)
         if not pdf_report.ok:
             push_alert(f"PDF error: {pdf_report.fatal_error}", "red")
             return RedirectResponse("/upload", status_code=303)

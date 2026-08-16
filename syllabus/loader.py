@@ -451,3 +451,114 @@ def get_expected_subjects(
         "arrear_semesters_loaded": list(range(1, sem_int)) if sem_int > 1 else []
     }
 
+
+def save_and_register_syllabus(
+    department_code: str,
+    regulation_code: str,
+    courses: List[Dict[str, Any]],
+    department_name: Optional[str] = None,
+    programme: Optional[str] = None,
+    actor: str = "Faculty / Staff Confirmation"
+) -> Dict[str, Any]:
+    """
+    Saves confirmed syllabus courses to syllabus/<dept>/<regulation>.json,
+    updates registry.json, invalidates memory caches, and returns status metadata.
+    """
+    dept_code = department_code.strip().upper()
+    reg_code = regulation_code.strip().upper()
+    dept_folder_name = dept_code.lower()
+    reg_filename = f"{reg_code.lower()}.json"
+
+    dept_dir = os.path.join(SYLLABUS_DIR, dept_folder_name)
+    os.makedirs(dept_dir, exist_ok=True)
+    target_catalog_path = os.path.join(dept_dir, reg_filename)
+
+    # Format courses
+    courses_cleaned = []
+    for c in courses:
+        code = str(c.get("code", "")).strip().upper()
+        if not code:
+            continue
+        c_sem = int(c.get("semester", 1))
+        c_id = c.get("id") or f"{dept_code}_{reg_code}_{code}"
+        courses_cleaned.append({
+            "id": c_id,
+            "code": code,
+            "name": str(c.get("name", "")).strip(),
+            "short_name": str(c.get("short_name", "")).strip(),
+            "semester": c_sem,
+            "credits": float(c.get("credits", 3.0)),
+            "type": str(c.get("type", "THEORY")).strip().upper(),
+            "category": str(c.get("category", "Sem 1-4 Foundation" if c_sem <= 4 else "Sem 5-8 Advanced")),
+            "aliases": c.get("aliases", []) or []
+        })
+
+    import time
+    created_date = time.strftime("%Y-%m-%d")
+
+    data = {
+        "catalog_version": "1.0",
+        "catalog_hash": "",
+        "status": "ACTIVE",
+        "department": department_name or dept_code,
+        "department_code": dept_code,
+        "programme": programme or (f"B.Tech. - {dept_code}" if dept_code in ("AI_DS", "IT") else f"B.E. - {dept_code}"),
+        "regulation": reg_code,
+        "source": f"Faculty Confirmed {reg_code} Curriculum",
+        "approved_by": actor,
+        "created_date": created_date,
+        "academic_structure": {"semesters": 8},
+        "courses": courses_cleaned
+    }
+
+    raw_json_str = json.dumps(data, indent=2, ensure_ascii=False)
+    sha256_hash = hashlib.sha256(raw_json_str.encode("utf-8")).hexdigest()
+    data["catalog_hash"] = sha256_hash
+
+    # Write file
+    with open(target_catalog_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+
+    # Update registry.json
+    reg_data = load_registry()
+    depts = reg_data.get("departments", [])
+    dept_entry = next((d for d in depts if d.get("code") == dept_code), None)
+    if not dept_entry:
+        dept_entry = {
+            "code": dept_code,
+            "name": department_name or dept_code,
+            "programme": programme or (f"B.Tech. - {dept_code}" if dept_code in ("AI_DS", "IT") else f"B.E. - {dept_code}"),
+            "catalogs": {}
+        }
+        depts.append(dept_entry)
+        reg_data["departments"] = depts
+
+    if "catalogs" not in dept_entry:
+        dept_entry["catalogs"] = {}
+
+    rel_file_path = f"{dept_folder_name}/{reg_filename}"
+    dept_entry["catalogs"][reg_code] = {
+        "status": "ACTIVE",
+        "file": rel_file_path,
+        "version": "1.0",
+        "hash": sha256_hash,
+        "published_at": created_date
+    }
+
+    with open(REGISTRY_PATH, "w", encoding="utf-8") as f:
+        json.dump(reg_data, f, indent=2, ensure_ascii=False)
+
+    # Invalidate caches
+    invalidate_catalog_cache(dept_code, reg_code)
+
+    return {
+        "ok": True,
+        "department_code": dept_code,
+        "regulation": reg_code,
+        "course_count": len(courses_cleaned),
+        "filepath": target_catalog_path,
+        "catalog_hash": sha256_hash,
+        "message": f"Successfully published and registered syllabus for {dept_code} ({reg_code}) with {len(courses_cleaned)} courses."
+    }
+
+
