@@ -1231,7 +1231,7 @@ def parse_combined_ia_marks_content(
                 regno = m_reg.group(1)
                 batchno = cells[2] if len(cells) > 2 else ""
                 name = cells[3] if len(cells) > 3 else ""
-                quota = cells[4].strip().upper() if len(cells) > 4 and cells[4].strip() else "GQ"
+                quota = cells[4].strip().upper() if len(cells) > 4 and cells[4].strip() else "NA"
                 cgpa = cells[6].strip() if len(cells) > 6 else ""
 
                 student_meta[regno] = {
@@ -1779,8 +1779,9 @@ def department_excel_filename(pdf_report: "PDFExtractionReport") -> str:
     return re.sub(r"[^\w\.\-]", "_", fname)
 
 
-def _semester_parity(semester_text: str) -> str:
-    m = re.search(r"([IVX]+|\d+)", (semester_text or "").upper())
+def _semester_parity(semester_text: Any) -> str:
+    s_str = str(semester_text or "").strip().upper()
+    m = re.search(r"([IVX]+|\d+)", s_str)
     if not m:
         return ""
     tok = m.group(1)
@@ -1921,47 +1922,44 @@ def build_department_excel(
 
         ws1.cell(row=r, column=3).alignment = LEFT_WRAP
         r += 1
+    # ── Note row ────────────────────────────────────────────────────────────
     ws1.cell(row=r, column=1,
              value="Note: Absent-count is not separately tracked by COE PDF extraction; shown as 0 rather than fabricated.")
     ws1.merge_cells(start_row=r, start_column=1, end_row=r, end_column=ncols1)
     ws1.cell(row=r, column=1).font = NOTE_FONT
 
-    # Add Overall Pass Percentage from 1.txt if exists
-    try:
-        current_dir = os.path.dirname(__file__)
-        path_1 = os.path.join(current_dir, "1.txt")
-        if os.path.exists(path_1):
-            r_val = r + 2
-            with open(path_1, "r", encoding="utf-8") as f:
-                for line in f:
-                    line = line.strip()
-                    if not line:
-                        continue
-                    parts = line.split("\t")
-                    if len(parts) >= 2:
-                        key, val = parts[0], parts[1]
-                        ws1.cell(row=r_val, column=3, value=key)
-                        try:
-                            val_float = float(val)
-                            val_cell = ws1.cell(row=r_val, column=4, value=val_float)
-                            val_cell.number_format = '0.00'
-                        except ValueError:
-                            ws1.cell(row=r_val, column=4, value=val)
-                        
-                        # Style the row cells with border and bold font
-                        for col_idx in range(1, ncols1 + 1):
-                            cell = ws1.cell(row=r_val, column=col_idx)
-                            cell.border = BORDER
-                            if col_idx in (3, 4):
-                                cell.font = Font(bold=True, size=10, color="0F1B33")
-                                if col_idx == 3:
-                                    cell.alignment = Alignment(horizontal="left", vertical="center")
-                                else:
-                                    cell.alignment = Alignment(horizontal="center", vertical="center")
-                        r_val += 1
-            r = r_val - 1
-    except Exception as e:
-        print(f"Error reading 1.txt: {e}")
+    # ── Overall Pass Percentage row (matches departmental format) ────────────
+    r += 1
+    total_registered = sum(
+        (code_to_subj[m["course_code"]].student_count if code_to_subj.get(m["course_code"]) else 0)
+        for m in mappings
+    )
+    total_passed = sum(
+        (code_to_subj[m["course_code"]].pass_count if code_to_subj.get(m["course_code"]) else 0)
+        for m in mappings
+    )
+    overall_pct = round((total_passed / total_registered * 100), 2) if total_registered > 0 else 0.0
+
+    # Apply full border to all columns in the row first
+    for col_idx in range(1, ncols1 + 1):
+        cell = ws1.cell(row=r, column=col_idx)
+        cell.border = BORDER
+        cell.alignment = CENTER
+
+    # Col 3: "Overall Pass Percentage" label — bold, left-aligned
+    label_cell = ws1.cell(row=r, column=3, value="Overall Pass Percentage")
+    label_cell.font = Font(bold=True, size=10, color="0F1B33")
+    label_cell.alignment = Alignment(horizontal="left", vertical="center", wrap_text=False)
+    label_cell.border = BORDER
+
+    # Col 4: numeric value — bold, centered
+    val_cell = ws1.cell(row=r, column=4, value=overall_pct)
+    val_cell.number_format = "0.00"
+    val_cell.font = Font(bold=True, size=10, color="0F1B33")
+    val_cell.alignment = Alignment(horizontal="center", vertical="center")
+    val_cell.border = BORDER
+
+
 
     ws1.column_dimensions["A"].width = 6
     ws1.column_dimensions["B"].width = 14
@@ -2141,7 +2139,7 @@ def build_department_excel(
     c3.alignment = CENTER
 
     sem_num = 1
-    sem_m = re.search(r"([IVX]+|\d+)", meta.semester or "")
+    sem_m = re.search(r"([IVX]+|\d+)", str(meta.semester or ""))
     if sem_m:
         tok = sem_m.group(1).upper()
         roman = {"I": 1, "II": 2, "III": 3, "IV": 4, "V": 5, "VI": 6, "VII": 7, "VIII": 8}
@@ -2220,7 +2218,7 @@ def build_department_excel(
         ws3.cell(row=r, column=1, value=n_failed)
         ws3.cell(row=r, column=2, value=s.regno)
         ws3.cell(row=r, column=3, value=s.name)
-        ws3.cell(row=r, column=4, value=s.meta.get("quota", "GQ"))
+        ws3.cell(row=r, column=4, value=s.meta.get("quota") or "NA")
 
         for j, m in enumerate(analysis3_mappings, start=5):
             grade, _pts = gp_lookup.get(m["course_code"], ("", 0))
@@ -2328,7 +2326,7 @@ def build_department_excel(
                 ia2_dict.get(s.regno, {}).get("quota") or
                 mut2_dict.get(s.regno, {}).get("quota") or
                 ia3_dict.get(s.regno, {}).get("quota") or
-                "Unknown"
+                "NA"
             )
 
             ws4.cell(row=r, column=1, value=s_no)
@@ -2642,55 +2640,51 @@ def build_department_excel(
     for c in range(4, ncols7 + 1):
         ws7.column_dimensions[get_column_letter(c)].width = 9
 
-    # Add class metrics from 7.txt if exists
-    last_row_7 = r + 16
-    try:
-        current_dir = os.path.dirname(__file__)
-        path_7 = os.path.join(current_dir, "7.txt")
-        if os.path.exists(path_7):
-            r_val_7 = r + 18
-            with open(path_7, "r", encoding="utf-8") as f:
-                for line in f:
-                    line = line.strip()
-                    if not line:
-                        continue
-                    parts = line.split("\t")
-                    if len(parts) >= 2:
-                        key, val = parts[0], parts[1]
-                        ws7.cell(row=r_val_7, column=3, value=key)
-                        try:
-                            val_num = int(val)
-                            ws7.cell(row=r_val_7, column=4, value=val_num)
-                        except ValueError:
-                            try:
-                                val_num = float(val)
-                                val_cell = ws7.cell(row=r_val_7, column=4, value=val_num)
-                                val_cell.number_format = '0.00'
-                            except ValueError:
-                                ws7.cell(row=r_val_7, column=4, value=val)
-                        
-                        # Style the row cells
-                        style_body_row(ws7, r_val_7, ncols7)
-                        
-                        # Bold and left-align the key in Column 3
-                        cell_key = ws7.cell(row=r_val_7, column=3)
-                        cell_key.font = summary_font
-                        cell_key.alignment = Alignment(horizontal="left", vertical="center")
-                        
-                        # Bold and center-align the value in Column 4
-                        cell_val = ws7.cell(row=r_val_7, column=4)
-                        cell_val.font = summary_font
-                        cell_val.alignment = Alignment(horizontal="center", vertical="center")
-                        
-                        # Style other cells in that row to have summary font
-                        for c in range(1, ncols7 + 1):
-                            if c not in (3, 4):
-                                cell = ws7.cell(row=r_val_7, column=c)
-                                cell.font = summary_font
-                        r_val_7 += 1
-            last_row_7 = r_val_7 - 1
-    except Exception as e:
-        print(f"Error reading 7.txt: {e}")
+    # ── Arrear count distribution table at bottom of Analysis 7 ─────────────
+    r_val_7 = r + 18
+    arr_1 = sum(1 for s in ca.students if s.arrear_count == 1)
+    arr_2 = sum(1 for s in ca.students if s.arrear_count == 2)
+    arr_3 = sum(1 for s in ca.students if s.arrear_count == 3)
+    arr_4 = sum(1 for s in ca.students if s.arrear_count == 4)
+    arr_5_more = sum(1 for s in ca.students if s.arrear_count >= 5)
+    all_pass = sum(1 for s in ca.students if s.arrear_count == 0)
+    total_students = len(ca.students)
+
+    arrear_distribution = [
+        ("1 Arr", arr_1),
+        ("2 Arr", arr_2),
+        ("3 Arr", arr_3),
+        ("4 Arr", arr_4),
+        ("5 and MORE", arr_5_more),
+        ("All Pass", all_pass),
+        ("Total", total_students),
+    ]
+
+    for label, count_val in arrear_distribution:
+        style_body_row(ws7, r_val_7, ncols7)
+
+        # Bold and left-align the label in Column 3
+        cell_key = ws7.cell(row=r_val_7, column=3, value=label)
+        cell_key.font = summary_font
+        cell_key.alignment = Alignment(horizontal="left", vertical="center")
+        cell_key.border = BORDER
+
+        # Bold and center-align the value in Column 4
+        cell_val = ws7.cell(row=r_val_7, column=4, value=count_val)
+        cell_val.font = summary_font
+        cell_val.alignment = Alignment(horizontal="center", vertical="center")
+        cell_val.border = BORDER
+
+        # Style other cells in that row to have summary font & borders
+        for c in range(1, ncols7 + 1):
+            if c not in (3, 4):
+                cell = ws7.cell(row=r_val_7, column=c)
+                cell.font = summary_font
+                cell.border = BORDER
+
+        r_val_7 += 1
+
+    last_row_7 = r_val_7 - 1
 
     sig_r7 = add_hod_signature(ws7, ncols7, last_row_7)
     page_setup(ws7, ncols7, sig_r7, landscape=True, freeze=f"D{hdr_bot + 1}")
@@ -3558,6 +3552,7 @@ class ClassAnalysis:
     ra_student_count: int = 0
     ua_student_count: int = 0
     arrear_student_count: int = 0
+    single_u_count: int = 0
     multiple_u_count: int = 0
     sa_student_count: int = 0
     wd_student_count: int = 0
@@ -4561,6 +4556,7 @@ def compute_class_analysis(records: pd.DataFrame, file_name: str, prev_records: 
     ca.ra_student_count = sum(1 for s in ca.students if s.ra_count > 0)
     ca.ua_student_count = sum(1 for s in ca.students if s.ua_count > 0)
     ca.arrear_student_count = sum(1 for s in ca.students if s.arrear_count > 0)
+    ca.single_u_count = sum(1 for s in ca.students if s.arrear_count == 1)
     ca.multiple_u_count = sum(1 for s in ca.students if s.arrear_count >= 2)
     ca.backlog_student_count = sum(1 for s in ca.students if s.has_backlog_arrears)
     ca.sa_student_count = sum(1 for s in ca.students if s.sa_count > 0)
@@ -6067,7 +6063,13 @@ def layout(title: str, active: str, content, ca: Optional[ClassAnalysis] = None)
     alerts = pop_alerts()
     alert_divs = [alert_bar(k, m) for k, m in alerts]
 
-    main_content = Div(*alert_divs, content,
+    app_footer = Div(
+        P("Developed by Srimuthukrishnan S and Jeffin Josva S from AI&DS 2024-2028 Batch",
+          cls="text-xs font-semibold text-slate-500 text-center tracking-wide"),
+        cls="border-t border-slate-200/80 pt-6 mt-12 pb-4 w-full"
+    )
+
+    main_content = Div(*alert_divs, content, app_footer,
                        cls="flex-1 max-w-full p-4 sm:p-6 lg:p-8 ml-0 lg:ml-64 min-h-screen bg-slate-50 main-content")
 
     return (
@@ -6129,12 +6131,6 @@ def page_upload() -> Tuple:
                     onclick="toggleTheme()",
                     title="Toggle dark / light mode",
                     cls="w-8 h-8 rounded-full border border-slate-200 bg-white hover:bg-slate-50 flex items-center justify-center cursor-pointer transition-all"
-                ),
-                # User Profile Avatar Dropdown Pill
-                Div(
-                    Div("AD", cls="w-7 h-7 rounded-full bg-blue-600 text-white font-extrabold text-[11px] flex items-center justify-center shadow-xs"),
-                    NotStr('<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;color:#64748b"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>'),
-                    cls="flex items-center gap-1.5 p-1 pr-2.5 bg-white border border-slate-200/80 rounded-full shadow-xs cursor-pointer hover:bg-slate-50 transition-all"
                 ),
                 cls="flex items-center gap-3"
             ),
@@ -6238,27 +6234,26 @@ def page_upload() -> Tuple:
         Div(
             # Mode A: PDF Direct Upload (Primary)
             Form(
-                # Step 1: Academic Department, Semester & Regulation Selection (MODERNIZED)
+                # Step 1: Academic Department, Semester & Regulation Selection (MODERNIZED & DARK-MODE AWARE)
                 Div(
                     # Step header with gradient accent bar
                     Div(
                         Div(
                             Div(
                                 NotStr('<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="width:16px;height:16px"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12a7.5 7.5 0 0 0 15 0m-15 0a7.5 7.5 0 1 1 15 0m-15 0H3m16.5 0H21m-1.5 0H12m-8.457 3.077 1.41-.513m14.095-5.13 1.41-.513M5.106 17.785l1.15-.964m11.49-9.642 1.149-.964M7.501 19.795l.75-1.3m7.5-12.99.75-1.3m-6.063 16.658.26-1.477m2.605-14.772.26-1.477m0 17.726-.26-1.477M10.698 4.614l-.26-1.477M16.5 19.794l-.75-1.299M7.5 4.205 6.75 2.906m-.63 17.668L5.7 19.3M4.5 12H3"/></svg>'),
-                                cls="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 text-blue-600",
-                                style="background:linear-gradient(135deg,#eff6ff,#dbeafe)"
+                                cls="ctx-icon-bg w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 text-blue-600 shadow-2xs"
                             ),
                             Div(
                                 Div(
                                     Span("01", cls="text-[9px] font-black text-blue-500 tracking-widest mr-1.5 font-mono"),
-                                    Span("ACADEMIC CONTEXT", cls="text-[9px] font-black uppercase tracking-widest text-blue-600"),
+                                    Span("ACADEMIC CONTEXT", cls="text-[9px] font-black uppercase tracking-widest text-blue-600 dark:text-blue-400"),
                                     cls="flex items-center mb-0.5"
                                 ),
-                                Span("Configure Target Department & Cohort", cls="text-sm font-extrabold text-slate-900 leading-tight block"),
+                                Span("Configure Target Department & Cohort", cls="ctx-title text-sm font-extrabold leading-tight block"),
                             ),
                             cls="flex items-center gap-3"
                         ),
-                        P("Set your department, semester and regulation before uploading — enables precision syllabus mapping and cohort analytics.", cls="text-xs text-slate-500 mt-3 leading-relaxed pl-11"),
+                        P("Set your department, semester and regulation before uploading — enables precision syllabus mapping and cohort analytics.", cls="ctx-desc text-xs mt-3 leading-relaxed pl-11"),
                         cls="mb-5"
                     ),
                     # Fields grid — modernized
@@ -6267,7 +6262,7 @@ def page_upload() -> Tuple:
                         Div(
                             Div(
                                 NotStr('<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="width:13px;height:13px"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21"/></svg>'),
-                                Label("Department", cls="text-[11px] font-bold text-slate-600 uppercase tracking-wide"),
+                                Label("Department", cls="ctx-label text-[11px] font-bold uppercase tracking-wide"),
                                 cls="flex items-center gap-1.5 mb-2"
                             ),
                             Div(
@@ -6281,20 +6276,20 @@ def page_upload() -> Tuple:
                                         for d in get_registered_departments()
                                     ],
                                     id="select_department", name="department", required=True,
-                                    cls="w-full text-sm font-semibold text-slate-800 bg-white rounded-xl px-3.5 py-2.5 appearance-none focus:outline-none transition-all cursor-pointer",
-                                    style="border:1.5px solid #cbd5e1; padding-right:2.5rem"
+                                    cls="ctx-select w-full text-sm font-semibold rounded-xl px-3.5 py-2.5 appearance-none focus:outline-none transition-all cursor-pointer",
+                                    style="padding-right:2.5rem"
                                 ),
-                                NotStr('<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="#94a3b8" style="width:14px;height:14px;position:absolute;right:12px;top:50%;transform:translateY(-50%);pointer-events:none"><path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5"/></svg>'),
+                                NotStr('<svg class="ctx-chevron" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="#94a3b8" style="width:14px;height:14px;position:absolute;right:12px;top:50%;transform:translateY(-50%);pointer-events:none"><path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5"/></svg>'),
                                 style="position:relative"
                             ),
-                            Span("Official department code", cls="text-[10px] text-slate-400 mt-1.5 block"),
+                            Span("Official department code", cls="ctx-hint text-[10px] mt-1.5 block"),
                             cls="flex-1"
                         ),
                         # 2. Semester field
                         Div(
                             Div(
                                 NotStr('<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="width:13px;height:13px"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5"/></svg>'),
-                                Label("Semester", cls="text-[11px] font-bold text-slate-600 uppercase tracking-wide"),
+                                Label("Semester", cls="ctx-label text-[11px] font-bold uppercase tracking-wide"),
                                 cls="flex items-center gap-1.5 mb-2"
                             ),
                             Div(
@@ -6309,65 +6304,97 @@ def page_upload() -> Tuple:
                                     Option("Semester VII", value="7"),
                                     Option("Semester VIII", value="8"),
                                     id="select_semester", name="semester", required=True,
-                                    cls="w-full text-sm font-semibold text-slate-800 bg-white rounded-xl px-3.5 py-2.5 appearance-none focus:outline-none transition-all cursor-pointer",
-                                    style="border:1.5px solid #cbd5e1; padding-right:2.5rem"
+                                    cls="ctx-select w-full text-sm font-semibold rounded-xl px-3.5 py-2.5 appearance-none focus:outline-none transition-all cursor-pointer",
+                                    style="padding-right:2.5rem"
                                 ),
-                                NotStr('<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="#94a3b8" style="width:14px;height:14px;position:absolute;right:12px;top:50%;transform:translateY(-50%);pointer-events:none"><path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5"/></svg>'),
+                                NotStr('<svg class="ctx-chevron" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="#94a3b8" style="width:14px;height:14px;position:absolute;right:12px;top:50%;transform:translateY(-50%);pointer-events:none"><path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5"/></svg>'),
                                 style="position:relative"
                             ),
-                            Span("Current examination cycle", cls="text-[10px] text-slate-400 mt-1.5 block"),
+                            Span("Current examination cycle", cls="ctx-hint text-[10px] mt-1.5 block"),
                             cls="flex-1"
                         ),
                         # 3. Regulation field
                         Div(
                             Div(
-                                Div(
-                                    NotStr('<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="width:13px;height:13px"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 0 0 2.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 0 0-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-.1-.664m-5.8 0A2.251 2.251 0 0 1 13.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25Z"/></svg>'),
-                                    Label("Regulation", cls="text-[11px] font-bold text-slate-600 uppercase tracking-wide"),
-                                    cls="flex items-center gap-1.5"
-                                ),
-                                Button(
-                                    NotStr('<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" style="width:10px;height:10px"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>'),
-                                    " New", type="button", onclick="openNewSyllabusModal()",
-                                    cls="ml-auto text-[10px] font-bold text-blue-600 hover:text-white hover:bg-blue-600 border border-blue-300 bg-blue-50 px-2 py-0.5 rounded-full flex items-center gap-1 transition-all cursor-pointer"
-                                ),
-                                cls="flex items-center mb-2 gap-2"
+                                NotStr('<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="width:13px;height:13px"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 0 0 2.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 0 0-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-.1-.664m-5.8 0A2.251 2.251 0 0 1 13.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25Z"/></svg>'),
+                                Label("Regulation", cls="ctx-label text-[11px] font-bold uppercase tracking-wide"),
+                                cls="flex items-center gap-1.5 mb-2"
                             ),
                             Div(
                                 Select(
                                     Option("R2024 & R2026 (Autonomous Unified)", value="R2024", selected=True),
-                                    Option("➕ Add NEW Regulation / Upload Syllabus...", value="NEW", cls="text-blue-700 font-bold bg-blue-50"),
+                                    Option("➕ Add NEW Regulation / Upload Syllabus...", value="NEW", cls="text-blue-700 font-bold bg-blue-50 dark:bg-slate-800 dark:text-blue-400"),
                                     id="select_regulation", name="regulation", required=True,
-                                    cls="w-full text-sm font-semibold text-slate-800 bg-white rounded-xl px-3.5 py-2.5 appearance-none focus:outline-none transition-all cursor-pointer",
-                                    style="border:1.5px solid #cbd5e1; padding-right:2.5rem",
+                                    cls="ctx-select w-full text-sm font-semibold rounded-xl px-3.5 py-2.5 appearance-none focus:outline-none transition-all cursor-pointer",
+                                    style="padding-right:2.5rem",
                                     onchange="handleRegulationChange(this)"
                                 ),
-                                NotStr('<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="#94a3b8" style="width:14px;height:14px;position:absolute;right:12px;top:50%;transform:translateY(-50%);pointer-events:none"><path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5"/></svg>'),
+                                NotStr('<svg class="ctx-chevron" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="#94a3b8" style="width:14px;height:14px;position:absolute;right:12px;top:50%;transform:translateY(-50%);pointer-events:none"><path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5"/></svg>'),
                                 style="position:relative"
                             ),
-                            Span("R24 & R26 unified course codes", cls="text-[10px] text-slate-400 mt-1.5 block"),
+                            Span("R24 & R26 unified course codes", cls="ctx-hint text-[10px] mt-1.5 block"),
                             cls="flex-1"
                         ),
                         cls="grid grid-cols-1 sm:grid-cols-3 gap-5",
                         style="align-items:start"
                     ),
-                    # Inline style for focus ring on selects
+                    # Embedded style block with full light & dark mode tokens
                     NotStr("""<style>
-                    #select_department, #select_semester, #select_regulation {
-                        transition: border-color 0.15s, box-shadow 0.15s;
+                    .academic-context-card {
+                        background: linear-gradient(135deg, #ffffff 0%, #f0f7ff 60%, #e8f1ff 100%);
+                        border: 1.5px solid #bfdbfe;
+                        border-radius: 1.25rem;
+                        padding: 1.5rem;
+                        box-shadow: 0 2px 12px 0 rgba(59,130,246,0.07), 0 1px 3px 0 rgba(0,0,0,0.04);
                     }
-                    #select_department:focus, #select_semester:focus, #select_regulation:focus {
+                    .academic-context-card .ctx-title { color: #0f172a; }
+                    .academic-context-card .ctx-desc { color: #64748b; }
+                    .academic-context-card .ctx-label { color: #475569; }
+                    .academic-context-card .ctx-hint { color: #94a3b8; }
+                    .academic-context-card .ctx-icon-bg {
+                        background: linear-gradient(135deg, #eff6ff, #dbeafe);
+                        color: #2563eb;
+                    }
+                    .academic-context-card .ctx-select {
+                        background-color: #ffffff;
+                        color: #0f172a;
+                        border: 1.5px solid #cbd5e1;
+                    }
+                    .academic-context-card .ctx-select:focus {
                         border-color: #3b82f6 !important;
                         box-shadow: 0 0 0 3px rgba(59,130,246,0.15);
-                        outline: none;
                     }
-                    #select_department:valid:not([value=""]), #select_semester:valid:not([value=""]) {
-                        border-color: #22c55e !important;
-                        background-color: #f0fdf4;
+
+                    /* Dark Mode overrides for Academic Context */
+                    body.dark .academic-context-card {
+                        background: linear-gradient(135deg, #111827 0%, #172238 60%, #1b2842 100%) !important;
+                        border-color: #2d456b !important;
+                        box-shadow: 0 4px 20px 0 rgba(0,0,0,0.5), 0 0 15px rgba(59,130,246,0.1) !important;
                     }
+                    body.dark .academic-context-card .ctx-title { color: #f8fafc !important; }
+                    body.dark .academic-context-card .ctx-desc { color: #94a3b8 !important; }
+                    body.dark .academic-context-card .ctx-label { color: #cbd5e1 !important; }
+                    body.dark .academic-context-card .ctx-hint { color: #64748b !important; }
+                    body.dark .academic-context-card .ctx-icon-bg {
+                        background: linear-gradient(135deg, #1e3a8a, #1d4ed8) !important;
+                        color: #93c5fd !important;
+                    }
+                    body.dark .academic-context-card .ctx-select {
+                        background-color: #1a2333 !important;
+                        color: #f1f5f9 !important;
+                        border-color: #334155 !important;
+                    }
+                    body.dark .academic-context-card .ctx-select option {
+                        background-color: #1a2333 !important;
+                        color: #f1f5f9 !important;
+                    }
+                    body.dark .academic-context-card .ctx-select:focus {
+                        border-color: #60a5fa !important;
+                        box-shadow: 0 0 0 3px rgba(96,165,250,0.25) !important;
+                    }
+                    body.dark .academic-context-card .ctx-chevron { stroke: #64748b !important; }
                     </style>"""),
-                    cls="mb-6",
-                    style="background:linear-gradient(135deg,#ffffff 0%,#f0f7ff 60%,#e8f1ff 100%); border:1.5px solid #bfdbfe; border-radius:1.25rem; padding:1.5rem; box-shadow:0 2px 12px 0 rgba(59,130,246,0.07), 0 1px 3px 0 rgba(0,0,0,0.04)"
+                    cls="academic-context-card mb-6"
                 ),
 
                 # Step 2: PDF Document Upload Section
@@ -6665,12 +6692,6 @@ def page_upload() -> Tuple:
                 cls="flex items-center justify-center flex-wrap gap-2 p-3 bg-slate-100 border border-slate-200 rounded-xl max-w-3xl mx-auto text-center"
             ),
             cls="mb-8"
-        ),
-
-        # ── FOOTER ────────────────────────────────────────────────────────
-        Div(
-            P("© 2024 Saranathan College of Engineering, Tiruchirappalli. All rights reserved.", cls="text-xs text-slate-400 text-center"),
-            cls="border-t border-slate-200 pt-6 mt-4 pb-2"
         ),
 
         Script("""
