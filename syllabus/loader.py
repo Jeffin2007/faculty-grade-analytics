@@ -191,6 +191,14 @@ def get_catalog(
         if code_clean:
             catalog_index.course_code_index[code_clean] = item
 
+            # Unified R2024 <-> R2026 bidirectional indexing ('A' suffix on course code)
+            if code_clean.endswith("A") and len(code_clean) > 4 and code_clean[-2].isdigit():
+                base_c = code_clean[:-1]
+                catalog_index.course_code_index.setdefault(base_c, item)
+            elif not code_clean.endswith("A") and len(code_clean) >= 4 and code_clean[-1].isdigit():
+                var_a = f"{code_clean}A"
+                catalog_index.course_code_index.setdefault(var_a, item)
+
         name_upper = normalize_text(item.get("name", ""))
         name_clean = normalize_alphanumeric(name_upper)
         if name_upper:

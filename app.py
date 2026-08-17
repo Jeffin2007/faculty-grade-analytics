@@ -1142,14 +1142,14 @@ def resolve_staff_for_code(code: str, staff_map: Dict[str, str]) -> str:
         if k_clean == code_clean:
             return str(v).strip()
 
-    # Try matching base code (stripping trailing section letter e.g. 24CS201A -> 24CS201 or 24CS201 -> 24CS201A / 24CS201B)
-    base_clean = re.sub(r"([A-Z])$", "", code_clean) if re.search(r"^(?:24)?[A-Z]{2,4}\d{3}[A-Z]$", code_clean) else code_clean
+    # Try matching base code (stripping trailing section/R26 letter e.g. 24CS201A -> 24CS201 or 24CS201 -> 24CS201A / 24CS201B)
+    base_clean = re.sub(r"([A-Z])$", "", code_clean) if re.search(r"^(?:\d{2})?[A-Z]{2,4}\d{3,4}[A-Z]$", code_clean) else code_clean
     matched_names = []
     for k, v in staff_map.items():
         if not v:
             continue
         k_clean = re.sub(r"[^A-Z0-9]", "", k.upper())
-        k_base = re.sub(r"([A-Z])$", "", k_clean) if re.search(r"^(?:24)?[A-Z]{2,4}\d{3}[A-Z]$", k_clean) else k_clean
+        k_base = re.sub(r"([A-Z])$", "", k_clean) if re.search(r"^(?:\d{2})?[A-Z]{2,4}\d{3,4}[A-Z]$", k_clean) else k_clean
         if k_base == base_clean or k_clean == base_clean:
             for name_part in [x.strip() for x in str(v).split("&")]:
                 if name_part and name_part not in matched_names:
