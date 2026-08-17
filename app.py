@@ -1327,8 +1327,6 @@ def parse_combined_ia_marks_content(
                                 test_key = "ia2"
                             elif sub_clean in ("A3", "IAT3", "IA3", "CT3", "TEST3", "3"):
                                 test_key = "ia3"
-                            elif sub_clean in ("A4", "A5", "MODEL", "MUT", "RETEST", "TEST4", "TEST5", "4", "5"):
-                                test_key = "ia4"
 
                             if test_key:
                                 test_marks.setdefault(test_key, {})
@@ -1738,6 +1736,17 @@ def build_class_analysis_excel(ca: "ClassAnalysis") -> bytes:
         ["Validation passed", "YES" if ok else "NO"],
     ] + [["Issue", i] for i in issues])
 
+    # Unlock all cells and remove workbook protection
+    wb.security = None
+    UNLOCKED = Protection(locked=False, hidden=False)
+    for ws in wb.worksheets:
+        ws.freeze_panes = None
+        ws.protection.sheet = False
+        ws.protection.enabled = False
+        for row in ws.iter_rows(min_row=1, max_row=ws.max_row, min_col=1, max_col=ws.max_column):
+            for cell in row:
+                cell.protection = UNLOCKED
+
     bio = io.BytesIO()
     wb.save(bio)
     return bio.getvalue()
@@ -1914,7 +1923,7 @@ def build_department_excel(
     departmental workbook.
     """
     import openpyxl
-    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side, Protection
     from openpyxl.utils import get_column_letter
 
     meta = pdf_report.doc_metadata
@@ -1949,6 +1958,7 @@ def build_department_excel(
     NOTE_FONT = Font(italic=True, size=8, color="64748B")
 
     wb = openpyxl.Workbook()
+    wb.security = None
     wb.remove(wb.active)
 
     def title_block(ws, ncols: int, extra_lines: List[str], analysis_title: str) -> int:
@@ -1995,7 +2005,7 @@ def build_department_excel(
         ws.oddFooter.center.text = "Page &P of &N"
         last_col = get_column_letter(max(ncols, 1))
         ws.print_area = f"A1:{last_col}{max(last_row, 1)}"
-        ws.freeze_panes = freeze
+        ws.freeze_panes = None
 
     # ---------------------------------------------------------------
     # Analysis 1 - University Examination Result Analysis
@@ -2030,12 +2040,6 @@ def build_department_excel(
 
         ws1.cell(row=r, column=3).alignment = LEFT_WRAP
         r += 1
-    # ── Note row ────────────────────────────────────────────────────────────
-    ws1.cell(row=r, column=1,
-             value="Note: Absent-count is not separately tracked by COE PDF extraction; shown as 0 rather than fabricated.")
-    ws1.merge_cells(start_row=r, start_column=1, end_row=r, end_column=ncols1)
-    ws1.cell(row=r, column=1).font = NOTE_FONT
-
     # ── Overall Pass Percentage row (matches departmental format) ────────────
     r += 1
     total_registered = sum(
@@ -2176,6 +2180,25 @@ def build_department_excel(
             prev_subj_map[ps.course_code.upper()] = ps
             prev_subj_map[code_c] = ps
             prev_subj_map[name_c] = ps
+
+    if prev_pdf_report and prev_pdf_report.all_records:
+        subj_grouped = defaultdict(list)
+        for rec in prev_pdf_report.all_records:
+            subj_grouped[rec.subject_code].append(rec)
+        for code, recs in subj_grouped.items():
+            code_u = code.upper()
+            code_c = re.sub(r"[^A-Z0-9]", "", code_u)
+            if code_u not in prev_subj_map and code_c not in prev_subj_map:
+                passed = sum(1 for r in recs if r.result_status not in ("U", "RA", "UA", "AB", "WH", "W", "WH1", "WH2"))
+                total = len(recs)
+                pass_p = (passed / total * 100.0) if total > 0 else 0.0
+                subj_name = recs[0].subject_name or code
+                dummy_ps = type("DummySubj", (), {"course_code": code, "subject": subj_name, "pass_pct": pass_p})()
+                prev_subj_map[code_u] = dummy_ps
+                prev_subj_map[code_c] = dummy_ps
+                name_c = re.sub(r"[^A-Z0-9]", "", subj_name.upper())
+                if name_c and name_c not in prev_subj_map:
+                    prev_subj_map[name_c] = dummy_ps
 
     for i, m in enumerate(mappings, start=1):
         c_code = m["course_code"]
@@ -2450,10 +2473,6 @@ def build_department_excel(
             mark_iat1 = get_mark(ia1_dict, s.regno, code_key, is_lab)
             mark_iat2 = get_mark(ia2_dict, s.regno, code_key, is_lab)
             mark_iat3 = get_mark(ia3_dict, s.regno, code_key, is_lab)
-            # If IAT3 was not found, check if a model / retest / A5 mark was recorded
-            if not mark_iat3 and ia4_dict:
-                mark_iat3 = get_mark(ia4_dict, s.regno, code_key, is_lab)
-            mark_mut = get_mark(ia4_dict, s.regno, code_key, is_lab) if ia4_dict else ""
 
             staff_name = code_to_staff.get(c.course_code, "") or resolve_staff_for_code(c.course_code, staff_map) or "(Staff name not entered)"
             subj_obj = code_to_subj.get(c.course_code)
@@ -2464,7 +2483,6 @@ def build_department_excel(
                 ia1_dict.get(s.regno, {}).get("quota") or
                 ia2_dict.get(s.regno, {}).get("quota") or
                 ia3_dict.get(s.regno, {}).get("quota") or
-                (ia4_dict.get(s.regno, {}).get("quota") if ia4_dict else "") or
                 ""
             )
             quota = raw_quota.strip().upper() if raw_quota and raw_quota.strip().upper() not in ("NA", "N/A", "NONE", "") else "GQ"
@@ -2477,13 +2495,11 @@ def build_department_excel(
             ws4.cell(row=r, column=6, value=s.regno)
             ws4.cell(row=r, column=7, value=s.name)
             ws4.cell(row=r, column=8, value=quota)
-            ws4.cell(row=r, column=9, value=mark_iat1)
+            ws4.cell(row=r, column=9, value=mark_iat1 if mark_iat1 and str(mark_iat1).strip() != "" else "-")
             ws4.cell(row=r, column=10, value="")
-            ws4.cell(row=r, column=11, value=mark_iat2)
+            ws4.cell(row=r, column=11, value=mark_iat2 if mark_iat2 and str(mark_iat2).strip() != "" else "-")
             ws4.cell(row=r, column=12, value="")
-            ws4.cell(row=r, column=13, value=mark_iat3)
-            if mark_mut and mark_mut != mark_iat3 and ncols4 >= 14:
-                ws4.cell(row=r, column=14, value=mark_mut)
+            ws4.cell(row=r, column=13, value=mark_iat3 if mark_iat3 and str(mark_iat3).strip() != "" else "-")
 
             style_body_row(ws4, r, ncols4)
             ws4.cell(row=r, column=2).alignment = LEFT_WRAP
@@ -2854,6 +2870,17 @@ def build_department_excel(
     ws_meta.column_dimensions["A"].width = 22
     ws_meta.column_dimensions["B"].width = 44
     ws_meta.sheet_state = "hidden"
+
+    # Unlock all cells across all worksheets and strip workbookProtection tag so output Excel is fully editable
+    wb.security = None
+    UNLOCKED = Protection(locked=False, hidden=False)
+    for ws in wb.worksheets:
+        ws.freeze_panes = None
+        ws.protection.sheet = False
+        ws.protection.enabled = False
+        for row in ws.iter_rows(min_row=1, max_row=ws.max_row, min_col=1, max_col=ws.max_column):
+            for cell in row:
+                cell.protection = UNLOCKED
 
     bio = io.BytesIO()
     wb.save(bio)
