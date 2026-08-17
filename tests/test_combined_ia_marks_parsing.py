@@ -43,9 +43,8 @@ class TestCombinedIAMarksParsing(unittest.TestCase):
             multi_marks, titles, staff, meta = parse_combined_ia_marks_content(f.read(), "II A IA.html")
 
         self.assertEqual(len(multi_marks["ia1"]), 63)
-        self.assertEqual(len(multi_marks["mut1"]), 63)
         self.assertEqual(len(multi_marks["ia2"]), 63)
-        self.assertEqual(len(multi_marks["mut2"]), 63)
+        self.assertEqual(len(multi_marks["ia3"]), 63)
 
         # Verify staff names
         self.assertEqual(staff.get("24CS201A"), "Gohila Priyadharshini")
@@ -69,9 +68,8 @@ class TestCombinedIAMarksParsing(unittest.TestCase):
             multi_marks, titles, staff, meta = parse_combined_ia_marks_content(f.read(), "II B.html")
 
         self.assertEqual(len(multi_marks["ia1"]), 41)
-        self.assertEqual(len(multi_marks["mut1"]), 41)
         self.assertEqual(len(multi_marks["ia2"]), 41)
-        self.assertEqual(len(multi_marks["mut2"]), 41)
+        self.assertEqual(len(multi_marks["ia3"]), 41)
 
         # Verify Section B staff names
         self.assertEqual(staff.get("24CS201A"), "Mangalambigai")
@@ -90,7 +88,7 @@ class TestCombinedIAMarksParsing(unittest.TestCase):
         if not os.path.exists(self.ia_a_path) or not os.path.exists(self.ia_b_path):
             self.skipTest("Section HTML files not found")
 
-        ia_store = {"ia1": {}, "mut1": {}, "ia2": {}, "mut2": {}, "ia3": {}}
+        ia_store = {"ia1": {}, "ia2": {}, "ia3": {}}
         staff_directory = {}
 
         for p in [self.ia_a_path, self.ia_b_path]:
@@ -142,15 +140,17 @@ class TestCombinedIAMarksParsing(unittest.TestCase):
         self.assertIn("Analysis 4_New", wb.sheetnames)
         ws4 = wb["Analysis 4_New"]
         
-        # Check student row contains IAT 1 mark 96 and MUT 1 mark 86 for 24CS201A
+        # Check student row contains IAT 1 mark 96, blank MUT 1, IAT 2 mark 86, blank MUT 2, IAT 3 mark 94 for 24CS201A
         found = False
         for r in range(1, ws4.max_row + 1):
             if ws4.cell(row=r, column=6).value == "813825243001":
                 found = True
                 self.assertEqual(ws4.cell(row=r, column=8).value, "GQ") # Quota
                 self.assertEqual(ws4.cell(row=r, column=9).value, "96") # IAT 1
-                self.assertEqual(ws4.cell(row=r, column=10).value, "86") # MUT 1
-                self.assertEqual(ws4.cell(row=r, column=11).value, "94") # IAT 2
+                self.assertIn(ws4.cell(row=r, column=10).value, ("", None)) # MUT 1 is blank
+                self.assertEqual(ws4.cell(row=r, column=11).value, "86") # IAT 2
+                self.assertIn(ws4.cell(row=r, column=12).value, ("", None)) # MUT 2 is blank
+                self.assertEqual(ws4.cell(row=r, column=13).value, "94") # IAT 3
                 break
         self.assertTrue(found, "Student 813825243001 should be present in Analysis 4_New")
 
@@ -158,7 +158,7 @@ class TestCombinedIAMarksParsing(unittest.TestCase):
         if not os.path.exists(self.ia_a_path) or not os.path.exists(self.ia_b_path):
             self.skipTest("Section HTML files not found")
 
-        ia_store = {"ia1": {}, "mut1": {}, "ia2": {}, "mut2": {}, "ia3": {}}
+        ia_store = {"ia1": {}, "ia2": {}, "ia3": {}}
         staff_directory = {}
 
         for p in [self.ia_a_path, self.ia_b_path]:
@@ -211,6 +211,8 @@ class TestCombinedIAMarksParsing(unittest.TestCase):
                 found = True
                 self.assertEqual(ws4.cell(row=r, column=2).value, "Gohila Priyadharshini & Mangalambigai")
                 self.assertEqual(ws4.cell(row=r, column=9).value, "96")
+                self.assertIn(ws4.cell(row=r, column=10).value, ("", None))
+                self.assertIn(ws4.cell(row=r, column=12).value, ("", None))
                 break
         self.assertTrue(found, "Student 813825243001 should be present in Analysis 4_New for 24CS201")
 

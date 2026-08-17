@@ -1196,7 +1196,7 @@ def parse_combined_ia_marks_content(
     from bs4 import BeautifulSoup
 
     test_marks: Dict[str, Dict[str, Dict[str, Any]]] = {
-        "ia1": {}, "mut1": {}, "ia2": {}, "mut2": {}, "ia3": {}
+        "ia1": {}, "ia2": {}, "ia3": {}
     }
     course_titles: Dict[str, str] = {}
     course_staff: Dict[str, str] = {}
@@ -1233,8 +1233,8 @@ def parse_combined_ia_marks_content(
             r1_cells = r1.find_all(['th', 'td'])
             r1_texts = [c.get_text().strip().upper() for c in r1_cells]
 
-            # Check if this table has multi-test subheaders (A1, A2, A3, A5 or IAT1, MUT1, etc.)
-            has_multi_tests = any(t in ("A1", "A2", "A3", "A5", "IAT1", "IAT2", "IAT3", "MUT1", "MUT2", "MODEL") for t in r1_texts)
+            # Check if this table has multi-test subheaders (A1, A2, A3, etc.)
+            has_multi_tests = any(t in ("A1", "A2", "A3", "A4", "A5", "IAT1", "IAT2", "IAT3", "IA1", "IA2", "IA3", "CT1", "CT2", "CT3") for t in r1_texts)
             if not has_multi_tests:
                 continue
 
@@ -1304,28 +1304,26 @@ def parse_combined_ia_marks_content(
                     if col_idx < len(cells):
                         mark_val = cells[col_idx].strip()
                         if mark_val and mark_val not in ("&nbsp;", "-", "—"):
-                            test_key = "ia1"
-                            if sub_test in ("A1", "IAT1", "IA1", "CT1"):
+                            test_key = None
+                            sub_clean = re.sub(r"[\s\-_]+", "", sub_test).upper()
+                            if sub_clean in ("A1", "IAT1", "IA1", "CT1", "TEST1", "1"):
                                 test_key = "ia1"
-                            elif sub_test in ("A2", "MUT1", "MT1"):
-                                test_key = "mut1"
-                            elif sub_test in ("A3", "IAT2", "IA2", "CT2"):
+                            elif sub_clean in ("A2", "IAT2", "IA2", "CT2", "TEST2", "2"):
                                 test_key = "ia2"
-                            elif sub_test in ("A5", "MUT2", "MT2", "MODEL"):
-                                test_key = "mut2"
-                            elif sub_test in ("A4", "IAT3", "IA3", "CT3"):
+                            elif sub_clean in ("A3", "A4", "A5", "IAT3", "IA3", "CT3", "TEST3", "3"):
                                 test_key = "ia3"
 
-                            st_rec = test_marks[test_key].setdefault(regno, {
-                                "name": name,
-                                "batch_no": batchno,
-                                "quota": quota,
-                                "marks": {}
-                            })
-                            st_rec["marks"][ccode] = mark_val
-                            base_c = re.sub(r"([A-Z])$", "", ccode) if re.search(r"^(?:24)?[A-Z]{2,4}\d{3}[A-Z]$", ccode) else ccode
-                            if base_c != ccode:
-                                st_rec["marks"][base_c] = mark_val
+                            if test_key:
+                                st_rec = test_marks[test_key].setdefault(regno, {
+                                    "name": name,
+                                    "batch_no": batchno,
+                                    "quota": quota,
+                                    "marks": {}
+                                })
+                                st_rec["marks"][ccode] = mark_val
+                                base_c = re.sub(r"([A-Z])$", "", ccode) if re.search(r"^(?:24)?[A-Z]{2,4}\d{3}[A-Z]$", ccode) else ccode
+                                if base_c != ccode:
+                                    st_rec["marks"][base_c] = mark_val
 
     except Exception:
         pass
@@ -1347,7 +1345,7 @@ def parse_ia_marks_content(
         # If target test exists in multi_marks, return that; otherwise return first non-empty
         if multi_marks.get(target_test_key):
             return multi_marks[target_test_key], c_titles, c_staff
-        for t_k in ("ia1", "ia2", "ia3", "mut1", "mut2"):
+        for t_k in ("ia1", "ia2", "ia3"):
             if multi_marks.get(t_k):
                 return multi_marks[t_k], c_titles, c_staff
 
@@ -1754,7 +1752,7 @@ def _is_theory_course(course_code: str, subject_name: str = "", credits: float =
         return False
 
     # Check course code digit patterns (e.g., 24CS211, 24EM211, 24PH111, CS8381, GE8261)
-    # Anna University / Autonomous regulations designate 1, 8, or 9 in tens place for practical/lab courses
+    # Saranathan College Of Engineering / Autonomous regulations designate 1, 8, or 9 in tens place for practical/lab courses
     m = re.search(r"(\d{3,4})[A-Z]?$", code_upper)
     if m:
         num_str = m.group(1)
@@ -2354,8 +2352,6 @@ def build_department_excel(
     ia1_dict = ia_data.get("ia1", {})
     ia2_dict = ia_data.get("ia2", {})
     ia3_dict = ia_data.get("ia3", {})
-    mut1_dict = ia_data.get("mut1", {})
-    mut2_dict = ia_data.get("mut2", {})
 
     s_no = 0
     for s in ca.students:
@@ -2386,9 +2382,7 @@ def build_department_excel(
                 return "N/A"
 
             mark_iat1 = get_mark(ia1_dict, s.regno, code_key)
-            mark_mut1 = get_mark(mut1_dict, s.regno, code_key)
             mark_iat2 = get_mark(ia2_dict, s.regno, code_key)
-            mark_mut2 = get_mark(mut2_dict, s.regno, code_key)
             mark_iat3 = get_mark(ia3_dict, s.regno, code_key)
 
             staff_name = code_to_staff.get(c.course_code, "") or resolve_staff_for_code(c.course_code, staff_map) or "(Staff name not entered)"
@@ -2396,9 +2390,7 @@ def build_department_excel(
             num_failures = subj_obj.arrear_count if subj_obj else 0
             quota = s.meta.get("quota") or (
                 ia1_dict.get(s.regno, {}).get("quota") or
-                mut1_dict.get(s.regno, {}).get("quota") or
                 ia2_dict.get(s.regno, {}).get("quota") or
-                mut2_dict.get(s.regno, {}).get("quota") or
                 ia3_dict.get(s.regno, {}).get("quota") or
                 "NA"
             )
@@ -2412,9 +2404,9 @@ def build_department_excel(
             ws4.cell(row=r, column=7, value=s.name)
             ws4.cell(row=r, column=8, value=quota)
             ws4.cell(row=r, column=9, value=mark_iat1)
-            ws4.cell(row=r, column=10, value=mark_mut1)
+            ws4.cell(row=r, column=10, value="")
             ws4.cell(row=r, column=11, value=mark_iat2)
-            ws4.cell(row=r, column=12, value=mark_mut2)
+            ws4.cell(row=r, column=12, value="")
             ws4.cell(row=r, column=13, value=mark_iat3)
 
             style_body_row(ws4, r, ncols4)
@@ -2428,7 +2420,7 @@ def build_department_excel(
         ws4.cell(row=r, column=1, value="No students with academic arrears (U / RA) were found.")
         r += 1
     elif not ia1_dict and not ia2_dict and not ia3_dict:
-        ws4.cell(row=r, column=1, value="Note: Internal Assessment (Cycle Test) mark sheets can be uploaded on the PDF-to-Excel page to populate IAT 1, MUT 1, IAT 2, MUT 2, and IAT 3 marks.")
+        ws4.cell(row=r, column=1, value="Note: Internal Assessment mark sheets can be uploaded on the PDF-to-Excel page to populate IAT 1, IAT 2, and IAT 3 marks.")
         ws4.merge_cells(start_row=r, start_column=1, end_row=r, end_column=ncols4)
         ws4.cell(row=r, column=1).font = NOTE_FONT
         r += 1
@@ -6506,7 +6498,7 @@ def page_upload() -> Tuple:
                                         NotStr('<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="#1a56db" stroke-width="2" style="width:22px;height:22px;flex-shrink:0"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>'),
                                         Div(
                                             Label("Current Batch COE Result PDF:", cls="block text-xs font-bold text-slate-800 leading-snug"),
-                                            Span("Select official Anna University grade sheet PDF", cls="block text-[11px] text-slate-500 font-normal"),
+                                            Span("Select official Saranathan College Of Engineering grade sheet PDF", cls="block text-[11px] text-slate-500 font-normal"),
                                         ),
                                         cls="flex items-center gap-2.5 mb-2"
                                     ),
@@ -9621,15 +9613,11 @@ def page_pdf_to_excel(pdf_report: "PDFExtractionReport", ca: "ClassAnalysis", fi
 
     # Internal Assessment Marks Upload Panel for Analysis 4
     ia1_count = len(ia_marks_store.get("ia1", {}))
-    mut1_count = len(ia_marks_store.get("mut1", {}))
     ia2_count = len(ia_marks_store.get("ia2", {}))
-    mut2_count = len(ia_marks_store.get("mut2", {}))
     ia3_count = len(ia_marks_store.get("ia3", {}))
     total_ia_students = len(set().union(
         ia_marks_store.get("ia1", {}).keys(),
-        ia_marks_store.get("mut1", {}).keys(),
         ia_marks_store.get("ia2", {}).keys(),
-        ia_marks_store.get("mut2", {}).keys(),
         ia_marks_store.get("ia3", {}).keys()
     ))
 
@@ -9638,7 +9626,7 @@ def page_pdf_to_excel(pdf_report: "PDFExtractionReport", ca: "ClassAnalysis", fi
             Div(
                 Div(
                     H3("Analysis 4 — Internal Assessment (Cycle Test) Mark Sheets", cls="text-sm font-bold text-slate-800 mb-1"),
-                    P("Upload Internal Assessment mark sheets to populate IAT 1, MUT 1, IAT 2, MUT 2, and IAT 3 marks, Quota, and faculty names of failed students in Analysis 4:", cls="text-xs text-slate-500"),
+                    P("Upload Internal Assessment mark sheets to populate IAT 1, IAT 2, and IAT 3 marks, Quota, and faculty names of failed students in Analysis 4:", cls="text-xs text-slate-500"),
                     cls="flex-1"
                 ),
                 Div(
@@ -9652,9 +9640,7 @@ def page_pdf_to_excel(pdf_report: "PDFExtractionReport", ca: "ClassAnalysis", fi
             # Status Summary Badges
             Div(
                 Span(f"IAT 1: {ia1_count} loaded", cls=f"text-[11px] font-semibold px-2.5 py-1 rounded {('bg-green-50 text-green-700 border border-green-200' if ia1_count else 'bg-slate-50 text-slate-400 border border-slate-200')}"),
-                Span(f"MUT 1: {mut1_count} loaded", cls=f"text-[11px] font-semibold px-2.5 py-1 rounded {('bg-green-50 text-green-700 border border-green-200' if mut1_count else 'bg-slate-50 text-slate-400 border border-slate-200')}"),
                 Span(f"IAT 2: {ia2_count} loaded", cls=f"text-[11px] font-semibold px-2.5 py-1 rounded {('bg-green-50 text-green-700 border border-green-200' if ia2_count else 'bg-slate-50 text-slate-400 border border-slate-200')}"),
-                Span(f"MUT 2: {mut2_count} loaded", cls=f"text-[11px] font-semibold px-2.5 py-1 rounded {('bg-green-50 text-green-700 border border-green-200' if mut2_count else 'bg-slate-50 text-slate-400 border border-slate-200')}"),
                 Span(f"IAT 3: {ia3_count} loaded", cls=f"text-[11px] font-semibold px-2.5 py-1 rounded {('bg-green-50 text-green-700 border border-green-200' if ia3_count else 'bg-slate-50 text-slate-400 border border-slate-200')}"),
                 cls="flex flex-wrap gap-2 mb-5"
             ),
@@ -9665,7 +9651,7 @@ def page_pdf_to_excel(pdf_report: "PDFExtractionReport", ca: "ClassAnalysis", fi
                 Div(
                     Div(
                         Span("⚡ Option 1: Combined Section-Wise Reports (Recommended)", cls="text-xs font-bold text-indigo-900 block mb-1"),
-                        P("Upload all-cycle-test section mark sheets (e.g. II A IA.html, II B.html). Select all section files together — extracts all tests (IAT 1, MUT 1, IAT 2, MUT 2, IAT 3), Quota, and faculty names at once:", cls="text-xs text-slate-600 mb-2"),
+                        P("Upload all-cycle-test section mark sheets (e.g. II A IA.html, II B.html). Select all section files together — extracts all tests (IAT 1, IAT 2, IAT 3), Quota, and faculty names at once:", cls="text-xs text-slate-600 mb-2"),
                         Input(type="file", name="combined_files", accept=".html,.htm,.mhtml,.mht,.xlsx,.xls,.csv", multiple=True,
                               cls="w-full text-xs text-slate-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-indigo-100 file:text-indigo-800 hover:file:bg-indigo-200"),
                         cls="card p-4 bg-indigo-50/40 border border-indigo-200 rounded-lg mb-4"
@@ -9683,20 +9669,8 @@ def page_pdf_to_excel(pdf_report: "PDFExtractionReport", ca: "ClassAnalysis", fi
                             cls="p-2.5 bg-slate-50 border border-slate-200 rounded"
                         ),
                         Div(
-                            Label("MUT 1 / Mid Term 1", cls="block text-xs font-semibold text-slate-700 mb-1"),
-                            Input(type="file", name="mut1_file", accept=".mhtml,.mht,.html,.htm,.xlsx,.xls,.csv", multiple=True,
-                                  cls="w-full text-xs text-slate-500 file:mr-1 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-slate-100"),
-                            cls="p-2.5 bg-slate-50 border border-slate-200 rounded"
-                        ),
-                        Div(
                             Label("IAT 2 / Cycle Test 2", cls="block text-xs font-semibold text-slate-700 mb-1"),
                             Input(type="file", name="ia2_file", accept=".mhtml,.mht,.html,.htm,.xlsx,.xls,.csv", multiple=True,
-                                  cls="w-full text-xs text-slate-500 file:mr-1 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-slate-100"),
-                            cls="p-2.5 bg-slate-50 border border-slate-200 rounded"
-                        ),
-                        Div(
-                            Label("MUT 2 / Model Exam", cls="block text-xs font-semibold text-slate-700 mb-1"),
-                            Input(type="file", name="mut2_file", accept=".mhtml,.mht,.html,.htm,.xlsx,.xls,.csv", multiple=True,
                                   cls="w-full text-xs text-slate-500 file:mr-1 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-slate-100"),
                             cls="p-2.5 bg-slate-50 border border-slate-200 rounded"
                         ),
@@ -9706,7 +9680,7 @@ def page_pdf_to_excel(pdf_report: "PDFExtractionReport", ca: "ClassAnalysis", fi
                                   cls="w-full text-xs text-slate-500 file:mr-1 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-slate-100"),
                             cls="p-2.5 bg-slate-50 border border-slate-200 rounded"
                         ),
-                        cls="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5"
+                        cls="grid grid-cols-1 sm:grid-cols-3 gap-2.5"
                     ),
                     cls="card p-4 bg-slate-50/70 border border-slate-200 rounded-lg mb-4"
                 ),
@@ -10057,7 +10031,7 @@ async def route_pdf_to_excel_upload_ia(request):
         return RedirectResponse("/upload", status_code=303)
 
     form = await request.form()
-    ia_store = SESSION.setdefault("ia_marks_directory", {"ia1": {}, "mut1": {}, "ia2": {}, "mut2": {}, "ia3": {}})
+    ia_store = SESSION.setdefault("ia_marks_directory", {"ia1": {}, "ia2": {}, "ia3": {}})
     staff_directory = SESSION.setdefault("staff_directory", {})
     student_meta_dir = SESSION.setdefault("student_meta_directory", {})
     uploaded_counts = []
@@ -10108,10 +10082,10 @@ async def route_pdf_to_excel_upload_ia(request):
     if comb_files_processed > 0:
         uploaded_counts.append(f"Combined Section Reports ({len(comb_students_loaded)} students across {comb_files_processed} section file(s))")
 
-    # 2. Process Individual IA Files (ia1_file, mut1_file, ia2_file, mut2_file, ia3_file)
+    # 2. Process Individual IA Files (ia1_file, ia2_file, ia3_file)
     for test_key, field_name in [
-        ("ia1", "ia1_file"), ("mut1", "mut1_file"),
-        ("ia2", "ia2_file"), ("mut2", "mut2_file"),
+        ("ia1", "ia1_file"),
+        ("ia2", "ia2_file"),
         ("ia3", "ia3_file")
     ]:
         file_objs = form.getlist(field_name)
@@ -10176,7 +10150,7 @@ async def route_pdf_to_excel_upload_ia(request):
 
 @app.post("/pdf-to-excel/clear-ia")
 def route_pdf_to_excel_clear_ia():
-    SESSION["ia_marks_directory"] = {"ia1": {}, "mut1": {}, "ia2": {}, "mut2": {}, "ia3": {}}
+    SESSION["ia_marks_directory"] = {"ia1": {}, "ia2": {}, "ia3": {}}
     push_alert("Saved Internal Assessment marks cleared.", "blue")
     return RedirectResponse("/pdf-to-excel", status_code=303)
 
