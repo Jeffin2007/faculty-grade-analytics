@@ -1278,6 +1278,23 @@ def parse_combined_ia_marks_content(
                         col_mappings.append((cur_data_col, ccode, sub_test, staff_clean))
                         cur_data_col += 1
 
+            # Determine fixed metadata column positions dynamically if present
+            quota_col_idx = 4
+            batch_col_idx = 2
+            name_col_idx = 3
+            cgpa_col_idx = 6
+
+            for c_idx, c in enumerate(r0_cells):
+                txt_lower = c.get_text().strip().lower()
+                if "quota" in txt_lower:
+                    quota_col_idx = c_idx
+                elif "batch" in txt_lower:
+                    batch_col_idx = c_idx
+                elif "name" in txt_lower and "staff" not in txt_lower:
+                    name_col_idx = c_idx
+                elif "cgpa" in txt_lower or "gpa" in txt_lower:
+                    cgpa_col_idx = c_idx
+
             for r in rows[2:]:
                 cells = [c.get_text().strip() for c in r.find_all(['th', 'td'])]
                 if len(cells) < fixed_col_count:
@@ -1288,10 +1305,11 @@ def parse_combined_ia_marks_content(
                     continue
 
                 regno = m_reg.group(1)
-                batchno = cells[2] if len(cells) > 2 else ""
-                name = cells[3] if len(cells) > 3 else ""
-                quota = cells[4].strip().upper() if len(cells) > 4 and cells[4].strip() else "NA"
-                cgpa = cells[6].strip() if len(cells) > 6 else ""
+                batchno = cells[batch_col_idx].strip() if batch_col_idx < len(cells) else (cells[2] if len(cells) > 2 else "")
+                name = cells[name_col_idx].strip() if name_col_idx < len(cells) else (cells[3] if len(cells) > 3 else "")
+                raw_q = cells[quota_col_idx].strip().upper() if quota_col_idx < len(cells) else (cells[4].strip().upper() if len(cells) > 4 else "")
+                quota = raw_q if raw_q and raw_q not in ("&NBSP;", "-", "—", "NA", "N/A", "NONE") else "GQ"
+                cgpa = cells[cgpa_col_idx].strip() if cgpa_col_idx < len(cells) else (cells[6].strip() if len(cells) > 6 else "")
 
                 student_meta[regno] = {
                     "quota": quota,
@@ -1834,12 +1852,31 @@ def _session_short_code(exam_session: str) -> str:
     return f"RESULT_{year}"
 
 
+def _semester_short_code(semester_text: Any) -> str:
+    """
+    Extracts a clean, normalized semester code (e.g. SEM_I, SEM_II, SEM_III, SEM_IV, etc.)
+    derived from roman numerals, digit numbers, or textual representation.
+    """
+    s_str = str(semester_text or "").strip().upper()
+    m = re.search(r"(?:SEMESTER\s*|SEM\s*)?([IVX]+|\d+)", s_str)
+    if m:
+        tok = m.group(1)
+        int_to_roman = {1: "I", 2: "II", 3: "III", 4: "IV", 5: "V", 6: "VI", 7: "VII", 8: "VIII"}
+        roman = int_to_roman.get(int(tok)) if tok.isdigit() and int(tok) in int_to_roman else tok
+        return f"SEM_{roman}"
+    return "SEM"
+
+
 def department_excel_filename(pdf_report: "PDFExtractionReport") -> str:
-    """Filename derived dynamically from department / exam session / year -- never hardcoded."""
+    """
+    Filename format: <dept>_<exam_duration>_<semester>_Result_Analysis.xlsx
+    e.g. AI_DS_NOV_DEC_2025_SEM_II_Result_Analysis.xlsx
+    """
     meta = pdf_report.doc_metadata
     dept_code = _dept_short_code(meta.department, meta.programme)
     session_code = _session_short_code(meta.exam_session)
-    fname = f"{dept_code}_{session_code}_Result_Analysis.xlsx"
+    sem_code = _semester_short_code(meta.semester)
+    fname = f"{dept_code}_{session_code}_{sem_code}_Result_Analysis.xlsx"
     return re.sub(r"[^\w\.\-]", "_", fname)
 
 
@@ -1869,6 +1906,7 @@ def build_department_excel(
     prev_ca: Optional["ClassAnalysis"] = None,
     prev_pdf_report: Optional["PDFExtractionReport"] = None,
     mentor_map: Optional[Dict[str, str]] = None,
+    student_meta_map: Optional[Dict[str, Dict[str, str]]] = None,
 ) -> bytes:
     """
     Build the departmental official result-analysis workbook: Analysis 1_New, 2_New,
@@ -1893,6 +1931,11 @@ def build_department_excel(
     mappings = list(ca.subject_mappings or [])  # first-seen order == PDF course order
     code_to_staff = {m["course_code"]: resolve_staff_for_code(m["course_code"], staff_map) for m in mappings}
     code_to_subj: Dict[str, "SubjectAnalysis"] = {s.course_code: s for s in ca.subjects}
+
+    ia_data = ia_marks_dir or {}
+    ia1_dict = ia_data.get("ia1", {})
+    ia2_dict = ia_data.get("ia2", {})
+    ia3_dict = ia_data.get("ia3", {})
 
     THIN = Side(style="thin", color="9AA5B1")
     BORDER = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
@@ -2279,10 +2322,20 @@ def build_department_excel(
         n_failed += 1
         gp_lookup = _grade_gp_lookup(s)
 
+        raw_q3 = (
+            (student_meta_map.get(s.regno, {}).get("quota") if student_meta_map else "") or
+            s.meta.get("quota") or
+            ia1_dict.get(s.regno, {}).get("quota") or
+            ia2_dict.get(s.regno, {}).get("quota") or
+            ia3_dict.get(s.regno, {}).get("quota") or
+            ""
+        )
+        quota3 = raw_q3.strip().upper() if raw_q3 and raw_q3.strip().upper() not in ("NA", "N/A", "NONE", "") else "GQ"
+
         ws3.cell(row=r, column=1, value=n_failed)
         ws3.cell(row=r, column=2, value=s.regno)
         ws3.cell(row=r, column=3, value=s.name)
-        ws3.cell(row=r, column=4, value=s.meta.get("quota") or "NA")
+        ws3.cell(row=r, column=4, value=quota3)
 
         for j, m in enumerate(analysis3_mappings, start=5):
             grade, _pts = gp_lookup.get(m["course_code"], ("", 0))
@@ -2388,12 +2441,15 @@ def build_department_excel(
             staff_name = code_to_staff.get(c.course_code, "") or resolve_staff_for_code(c.course_code, staff_map) or "(Staff name not entered)"
             subj_obj = code_to_subj.get(c.course_code)
             num_failures = subj_obj.arrear_count if subj_obj else 0
-            quota = s.meta.get("quota") or (
+            raw_quota = (
+                (student_meta_map.get(s.regno, {}).get("quota") if student_meta_map else "") or
+                s.meta.get("quota") or
                 ia1_dict.get(s.regno, {}).get("quota") or
                 ia2_dict.get(s.regno, {}).get("quota") or
                 ia3_dict.get(s.regno, {}).get("quota") or
-                "NA"
+                ""
             )
+            quota = raw_quota.strip().upper() if raw_quota and raw_quota.strip().upper() not in ("NA", "N/A", "NONE", "") else "GQ"
 
             ws4.cell(row=r, column=1, value=s_no)
             ws4.cell(row=r, column=2, value=staff_name)
@@ -9620,6 +9676,22 @@ def page_pdf_to_excel(pdf_report: "PDFExtractionReport", ca: "ClassAnalysis", fi
         ia_marks_store.get("ia2", {}).keys(),
         ia_marks_store.get("ia3", {}).keys()
     ))
+    student_meta_store = SESSION.get("student_meta_directory", {})
+    gq_count = 0
+    mq_count = 0
+    for s in ca.students:
+        q = (
+            student_meta_store.get(s.regno, {}).get("quota") or
+            s.meta.get("quota") or
+            ia_marks_store.get("ia1", {}).get(s.regno, {}).get("quota") or
+            ia_marks_store.get("ia2", {}).get(s.regno, {}).get("quota") or
+            ia_marks_store.get("ia3", {}).get(s.regno, {}).get("quota") or
+            "GQ"
+        ).strip().upper()
+        if q == "MQ":
+            mq_count += 1
+        else:
+            gq_count += 1
 
     ia_upload_form = Form(
         Div(
@@ -9642,6 +9714,7 @@ def page_pdf_to_excel(pdf_report: "PDFExtractionReport", ca: "ClassAnalysis", fi
                 Span(f"IAT 1: {ia1_count} loaded", cls=f"text-[11px] font-semibold px-2.5 py-1 rounded {('bg-green-50 text-green-700 border border-green-200' if ia1_count else 'bg-slate-50 text-slate-400 border border-slate-200')}"),
                 Span(f"IAT 2: {ia2_count} loaded", cls=f"text-[11px] font-semibold px-2.5 py-1 rounded {('bg-green-50 text-green-700 border border-green-200' if ia2_count else 'bg-slate-50 text-slate-400 border border-slate-200')}"),
                 Span(f"IAT 3: {ia3_count} loaded", cls=f"text-[11px] font-semibold px-2.5 py-1 rounded {('bg-green-50 text-green-700 border border-green-200' if ia3_count else 'bg-slate-50 text-slate-400 border border-slate-200')}"),
+                Span(f"Quotas: {gq_count} GQ · {mq_count} MQ", cls="text-[11px] font-semibold px-2.5 py-1 rounded bg-indigo-50 text-indigo-700 border border-indigo-200"),
                 cls="flex flex-wrap gap-2 mb-5"
             ),
 
@@ -10155,6 +10228,38 @@ def route_pdf_to_excel_clear_ia():
     return RedirectResponse("/pdf-to-excel", status_code=303)
 
 
+@app.post("/pdf-to-excel/save-student-meta")
+async def route_pdf_to_excel_save_student_meta(request):
+    pdf_report, ca = _get_pdf_to_excel_context()
+    if not pdf_report or not ca:
+        push_alert("Upload a COE PDF first to convert it to a department Excel workbook.", "amber")
+        return RedirectResponse("/upload", status_code=303)
+    form = await request.form()
+    student_meta_dir = SESSION.setdefault("student_meta_directory", {})
+    action = str(form.get("bulk_action") or "").strip()
+
+    if action == "default_all_gq":
+        for s in ca.students:
+            cur_q = student_meta_dir.get(s.regno, {}).get("quota", "")
+            if not cur_q or cur_q in ("NA", "N/A"):
+                student_meta_dir.setdefault(s.regno, {})["quota"] = "GQ"
+                s.meta["quota"] = "GQ"
+        push_alert("All missing/unassigned student quotas set to GQ (Government Quota).", "green")
+    else:
+        updated = 0
+        for s in ca.students:
+            q_key = f"quota__{s.regno}"
+            if q_key in form:
+                val = str(form[q_key]).strip().upper()
+                if val in ("GQ", "MQ"):
+                    student_meta_dir.setdefault(s.regno, {})["quota"] = val
+                    s.meta["quota"] = val
+                    updated += 1
+        push_alert(f"Saved quota metadata for {updated} students.", "green")
+
+    return page_pdf_to_excel(pdf_report, ca, SESSION.get("preview_pdf_filename", "coe_result.pdf"))
+
+
 @app.get("/pdf-to-excel/download")
 def route_pdf_to_excel_download():
     pdf_report, ca = _get_pdf_to_excel_context()
@@ -10167,11 +10272,16 @@ def route_pdf_to_excel_download():
         return RedirectResponse("/pdf-to-excel", status_code=303)
     staff_map = SESSION.get("staff_directory", {})
     ia_store = SESSION.get("ia_marks_directory", {})
+    student_meta_dir = SESSION.get("student_meta_directory", {})
     filename = SESSION.get("preview_pdf_filename", "coe_result.pdf")
     prev_ca = SESSION.get("prev_ca")
     prev_pdf_report = SESSION.get("prev_pdf_report")
     mentor_map = SESSION.get("mentor_directory", {})
-    xlsx_bytes = build_department_excel(ca, pdf_report, staff_map, filename, ia_store, prev_ca=prev_ca, prev_pdf_report=prev_pdf_report, mentor_map=mentor_map)
+    xlsx_bytes = build_department_excel(
+        ca, pdf_report, staff_map, filename, ia_store,
+        prev_ca=prev_ca, prev_pdf_report=prev_pdf_report,
+        mentor_map=mentor_map, student_meta_map=student_meta_dir
+    )
     fname = department_excel_filename(pdf_report)
     return Response(
         content=xlsx_bytes,

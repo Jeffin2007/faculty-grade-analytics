@@ -216,6 +216,95 @@ class TestCombinedIAMarksParsing(unittest.TestCase):
                 break
         self.assertTrue(found, "Student 813825243001 should be present in Analysis 4_New for 24CS201")
 
+    def test_semester_code_and_department_excel_filename(self):
+        from app import _semester_short_code, department_excel_filename, PDFExtractionReport, DocumentMetadata
+        self.assertEqual(_semester_short_code("II"), "SEM_II")
+        self.assertEqual(_semester_short_code("Semester II"), "SEM_II")
+        self.assertEqual(_semester_short_code("Semester 2"), "SEM_II")
+        self.assertEqual(_semester_short_code("Semester I"), "SEM_I")
+        self.assertEqual(_semester_short_code("1"), "SEM_I")
+        self.assertEqual(_semester_short_code("Semester IV"), "SEM_IV")
+        self.assertEqual(_semester_short_code("Semester 4"), "SEM_IV")
+
+        rep = PDFExtractionReport(doc_metadata=DocumentMetadata(
+            department="Artificial Intelligence and Data Science",
+            programme="B.Tech. AI & DS",
+            semester="Semester II",
+            academic_year="2025-2026",
+            exam_session="Nov / Dec 2025"
+        ))
+        fname = department_excel_filename(rep)
+        self.assertEqual(fname, "AI_DS_NOV_DEC_2025_SEM_II_Result_Analysis.xlsx")
+
+        rep2 = PDFExtractionReport(doc_metadata=DocumentMetadata(
+            department="Computer Science and Engineering",
+            programme="B.E. Computer Science and Engineering",
+            semester="Semester I",
+            academic_year="2025-2026",
+            exam_session="Nov / Dec 2025"
+        ))
+        self.assertEqual(department_excel_filename(rep2), "CSE_NOV_DEC_2025_SEM_I_Result_Analysis.xlsx")
+
+    def test_quota_fallback_resolution_without_na(self):
+        # Build mock analysis with 2 failed students: 1 in IA store, 1 not in IA store
+        records = [
+            {"regno": "813825243001", "name": "ABINASH. S", "subject": "Data Structures", "course_code": "24CS201A", "credits": 4.0, "grade": "RA", "points": 0.0},
+            {"regno": "813825243064", "name": "NIKIL BHARATHI R", "subject": "Data Structures", "course_code": "24CS201A", "credits": 4.0, "grade": "RA", "points": 0.0},
+        ]
+        df = pd.DataFrame(records)
+        ca = compute_class_analysis(df, "mock.pdf")
+        ca.subject_mappings = [
+            {"course_code": "24CS201A", "official_subject_name": "Data Structures", "credits": 4.0},
+        ]
+
+        from app import PDFExtractionReport, DocumentMetadata
+        rep = PDFExtractionReport(doc_metadata=DocumentMetadata(
+            institution="Saranathan College of Engineering",
+            department="Artificial Intelligence and Data Science",
+            programme="B.Tech. AI & DS",
+            semester="II",
+            academic_year="2025-2026",
+            exam_session="Nov / Dec 2025"
+        ))
+
+        # IA store only has 813825243001 (MQ), 813825243064 is missing
+        ia_store = {
+            "ia1": {"813825243001": {"quota": "MQ", "marks": {"24CS201A": "88"}}},
+            "ia2": {},
+            "ia3": {}
+        }
+        staff_directory = {"24CS201A": "Staff Member"}
+
+        xlsx_bytes = build_department_excel(ca, rep, staff_directory, "mock.pdf", ia_marks_dir=ia_store)
+        import openpyxl, io
+        wb = openpyxl.load_workbook(io.BytesIO(xlsx_bytes))
+
+        # Check Analysis 3_New
+        ws3 = wb["Analysis 3_New"]
+        q_3001 = None
+        q_3064 = None
+        for r in range(1, ws3.max_row + 1):
+            if ws3.cell(row=r, column=2).value == "813825243001":
+                q_3001 = ws3.cell(row=r, column=4).value
+            elif ws3.cell(row=r, column=2).value == "813825243064":
+                q_3064 = ws3.cell(row=r, column=4).value
+
+        self.assertEqual(q_3001, "MQ")
+        self.assertEqual(q_3064, "GQ")  # Defaults to GQ instead of NA
+
+        # Check Analysis 4_New
+        ws4 = wb["Analysis 4_New"]
+        q4_3001 = None
+        q4_3064 = None
+        for r in range(1, ws4.max_row + 1):
+            if ws4.cell(row=r, column=6).value == "813825243001":
+                q4_3001 = ws4.cell(row=r, column=8).value
+            elif ws4.cell(row=r, column=6).value == "813825243064":
+                q4_3064 = ws4.cell(row=r, column=8).value
+
+        self.assertEqual(q4_3001, "MQ")
+        self.assertEqual(q4_3064, "GQ")  # Defaults to GQ instead of NA
+
 
 if __name__ == "__main__":
     unittest.main()
