@@ -95,7 +95,7 @@ class TestCombinedIAMarksParsing(unittest.TestCase):
             with open(p, "rb") as f:
                 multi_marks, titles, staff, meta = parse_combined_ia_marks_content(f.read(), os.path.basename(p))
                 for tk, tdata in multi_marks.items():
-                    ia_store[tk].update(tdata)
+                    ia_store.setdefault(tk, {}).update(tdata)
                 for code, sname in staff.items():
                     if code not in staff_directory:
                         staff_directory[code] = sname
@@ -165,7 +165,7 @@ class TestCombinedIAMarksParsing(unittest.TestCase):
             with open(p, "rb") as f:
                 multi_marks, titles, staff, meta = parse_combined_ia_marks_content(f.read(), os.path.basename(p))
                 for tk, tdata in multi_marks.items():
-                    ia_store[tk].update(tdata)
+                    ia_store.setdefault(tk, {}).update(tdata)
                 for code, sname in staff.items():
                     if code not in staff_directory:
                         staff_directory[code] = sname
@@ -304,6 +304,47 @@ class TestCombinedIAMarksParsing(unittest.TestCase):
 
         self.assertEqual(q4_3001, "MQ")
         self.assertEqual(q4_3064, "GQ")  # Defaults to GQ instead of NA
+
+    def test_universal_course_codes_and_separate_a5_model(self):
+        # Sample HTML representing another department (e.g. ECE / R2021) with 4-digit codes & A1, A2, A3, A5
+        html_content = """
+        <html><body>
+        <table><tr><td>Classwise Mark Summary</td></tr></table>
+        <table>
+          <tr>
+            <th rowspan="2">S.no</th><th rowspan="2">Regno</th><th rowspan="2">Batchno</th><th rowspan="2">Name</th><th rowspan="2">Quota</th><th rowspan="2">ArrearCount</th><th rowspan="2">CGPA</th>
+            <th colspan="4">EC3351-karthik-ece</th>
+            <th colspan="4">MA3151-saravanan-mat</th>
+          </tr>
+          <tr>
+            <th>A1</th><th>A2</th><th>A3</th><th>A5</th>
+            <th>A1</th><th>A2</th><th>A3</th><th>A5</th>
+          </tr>
+          <tr>
+            <td>1</td><td>813821106001</td><td>21001</td><td>ANITHA R</td><td>MQ</td><td>0</td><td>8.5</td>
+            <td>85</td><td>78</td><td>90</td><td>95</td>
+            <td>70</td><td>65</td><td>80</td><td></td>
+          </tr>
+        </table>
+        </body></html>
+        """
+        multi_marks, titles, staff, meta = parse_combined_ia_marks_content(html_content.encode("utf-8"), "ECE_Marks.html")
+        self.assertIn("ia1", multi_marks)
+        self.assertIn("ia2", multi_marks)
+        self.assertIn("ia3", multi_marks)
+        self.assertIn("ia4", multi_marks)
+
+        # Verify A3 (90) is NOT overwritten by A5 (95)
+        self.assertEqual(multi_marks["ia3"]["813821106001"]["marks"]["EC3351"], "90")
+        self.assertEqual(multi_marks["ia4"]["813821106001"]["marks"]["EC3351"], "95")
+        self.assertEqual(multi_marks["ia1"]["813821106001"]["marks"]["MA3151"], "70")
+
+        # Verify staff resolution
+        self.assertEqual(staff.get("EC3351"), "Karthik")
+        self.assertEqual(staff.get("MA3151"), "Saravanan")
+
+        # Verify quota
+        self.assertEqual(meta["813821106001"]["quota"], "MQ")
 
 
 if __name__ == "__main__":

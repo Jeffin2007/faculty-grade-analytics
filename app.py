@@ -1258,9 +1258,9 @@ def parse_combined_ia_marks_content(
                     staff_raw = parts[1].strip() if len(parts) > 1 else ""
 
                     staff_clean = clean_staff_name(staff_raw)
-                    m_code = re.search(r"((?:24)?[A-Z]{2,4}\d{3}[A-Z]?)", code_raw)
-                    ccode = m_code.group(1) if m_code else code_raw
-                    base_code = re.sub(r"([A-Z])$", "", ccode) if re.search(r"^(?:24)?[A-Z]{2,4}\d{3}[A-Z]$", ccode) else ccode
+                    m_code = re.search(r"((?:\d{2})?[A-Z]{2,4}[-_]?\d{3,4}[A-Z]?)", code_raw)
+                    ccode = m_code.group(1).replace("-", "").replace("_", "") if m_code else code_raw
+                    base_code = re.sub(r"([A-Z])$", "", ccode) if re.search(r"^(?:\d{2})?[A-Z]{2,4}\d{3,4}[A-Z]$", ccode) else ccode
 
                     if ccode and staff_clean:
                         course_staff[ccode] = staff_clean
@@ -1328,10 +1328,13 @@ def parse_combined_ia_marks_content(
                                 test_key = "ia1"
                             elif sub_clean in ("A2", "IAT2", "IA2", "CT2", "TEST2", "2"):
                                 test_key = "ia2"
-                            elif sub_clean in ("A3", "A4", "A5", "IAT3", "IA3", "CT3", "TEST3", "3"):
+                            elif sub_clean in ("A3", "IAT3", "IA3", "CT3", "TEST3", "3"):
                                 test_key = "ia3"
+                            elif sub_clean in ("A4", "A5", "MODEL", "MUT", "RETEST", "TEST4", "TEST5", "4", "5"):
+                                test_key = "ia4"
 
                             if test_key:
+                                test_marks.setdefault(test_key, {})
                                 st_rec = test_marks[test_key].setdefault(regno, {
                                     "name": name,
                                     "batch_no": batchno,
@@ -1339,7 +1342,7 @@ def parse_combined_ia_marks_content(
                                     "marks": {}
                                 })
                                 st_rec["marks"][ccode] = mark_val
-                                base_c = re.sub(r"([A-Z])$", "", ccode) if re.search(r"^(?:24)?[A-Z]{2,4}\d{3}[A-Z]$", ccode) else ccode
+                                base_c = re.sub(r"([A-Z])$", "", ccode) if re.search(r"^(?:\d{2})?[A-Z]{2,4}\d{3,4}[A-Z]$", ccode) else ccode
                                 if base_c != ccode:
                                     st_rec["marks"][base_c] = mark_val
 
@@ -1414,7 +1417,7 @@ def parse_ia_marks_content(
                                 if faculty_col >= 0 and len(cells) > faculty_col:
                                     st_clean = clean_staff_name(cells[faculty_col])
                                     course_staff[code_tok] = st_clean
-                                    base_tok = re.sub(r"([A-Z])$", "", code_tok) if re.search(r"^(?:24)?[A-Z]{2,4}\d{3}[A-Z]$", code_tok) else code_tok
+                                    base_tok = re.sub(r"([A-Z])$", "", code_tok) if re.search(r"^(?:\d{2})?[A-Z]{2,4}\d{3,4}[A-Z]$", code_tok) else code_tok
                                     if base_tok != code_tok:
                                         course_staff[base_tok] = st_clean
                     continue
@@ -1428,9 +1431,9 @@ def parse_ia_marks_content(
                     code_cols: Dict[int, str] = {}
                     for col_idx, h_text in enumerate(header_cells):
                         clean_h = re.sub(r"\s+", "", h_text.upper())
-                        m_code = re.search(r"((?:24[-_]?)?[A-Z]{2,4}[-_]?\d{3,5})", clean_h)
+                        m_code = re.search(r"((?:\d{2}[-_]?)?[A-Z]{2,4}[-_]?\d{3,4}[A-Z]?)", clean_h)
                         if m_code and clean_h not in ("TOTAL", "AVG", "ATT%", "S.NO", "REGNO", "BATCHNO", "NAME"):
-                            code_cols[col_idx] = m_code.group(1)
+                            code_cols[col_idx] = m_code.group(1).replace("-", "").replace("_", "")
 
                     for r in rows[1:]:
                         cells = [re.sub(r"\s+", " ", c.get_text()).strip() for c in r.find_all(['th', 'td'])]
@@ -1936,6 +1939,7 @@ def build_department_excel(
     ia1_dict = ia_data.get("ia1", {})
     ia2_dict = ia_data.get("ia2", {})
     ia3_dict = ia_data.get("ia3", {})
+    ia4_dict = ia_data.get("ia4", {}) or ia_data.get("model", {}) or ia_data.get("retest", {})
 
     THIN = Side(style="thin", color="9AA5B1")
     BORDER = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
@@ -2417,26 +2421,42 @@ def build_department_excel(
             code_key = c.course_code.upper()
             code_clean = re.sub(r"[^A-Z0-9]", "", code_key)
 
-            def get_mark(ia_map: Dict[str, Dict[str, Any]], reg: str, ccode: str) -> str:
-                if reg not in ia_map:
-                    return "N/A"
+            def is_lab_course(ccode: str, sub_name: str) -> bool:
+                s_up = (sub_name or "").upper()
+                c_up = (ccode or "").upper()
+                if any(w in s_up for w in ("LAB", "LABORATORY", "PRACTICAL", "SEMINAR", "PROJECT", "STUDIO", "INTERNSHIP")):
+                    return True
+                if re.search(r"^[A-Z0-9]{2,4}\d1\d[A-Z]?$", c_up) or re.search(r"^\d{2}[A-Z]{2,4}\d1\d[A-Z]?$", c_up):
+                    return True
+                return False
+
+            def get_mark(ia_map: Dict[str, Dict[str, Any]], reg: str, ccode: str, is_lab: bool = False) -> str:
+                if not ia_map or reg not in ia_map:
+                    return ""
                 m_dict = ia_map[reg].get("marks", {})
                 if not m_dict:
-                    return "N/A"
+                    return ""
                 if ccode in m_dict:
-                    return str(m_dict[ccode])
+                    val = str(m_dict[ccode]).strip()
+                    return "AB" if val.upper() in ("A", "AB", "ABS") else val
                 c_clean = re.sub(r"[^A-Z0-9]", "", ccode.upper())
-                c_base = re.sub(r"([A-Z])$", "", c_clean) if re.search(r"^(?:24)?[A-Z]{2,4}\d{3}[A-Z]$", c_clean) else c_clean
+                c_base = re.sub(r"([A-Z])$", "", c_clean) if re.search(r"^(?:\d{2})?[A-Z]{2,4}\d{3,4}[A-Z]$", c_clean) else c_clean
                 for k, v in m_dict.items():
                     k_clean = re.sub(r"[^A-Z0-9]", "", k.upper())
-                    k_base = re.sub(r"([A-Z])$", "", k_clean) if re.search(r"^(?:24)?[A-Z]{2,4}\d{3}[A-Z]$", k_clean) else k_clean
+                    k_base = re.sub(r"([A-Z])$", "", k_clean) if re.search(r"^(?:\d{2})?[A-Z]{2,4}\d{3,4}[A-Z]$", k_clean) else k_clean
                     if k_clean == c_clean or k_base == c_base or k_clean == c_base or k_base == c_clean:
-                        return str(v)
-                return "N/A"
+                        val = str(v).strip()
+                        return "AB" if val.upper() in ("A", "AB", "ABS") else val
+                return ""
 
-            mark_iat1 = get_mark(ia1_dict, s.regno, code_key)
-            mark_iat2 = get_mark(ia2_dict, s.regno, code_key)
-            mark_iat3 = get_mark(ia3_dict, s.regno, code_key)
+            is_lab = is_lab_course(c.course_code, c.subject)
+            mark_iat1 = get_mark(ia1_dict, s.regno, code_key, is_lab)
+            mark_iat2 = get_mark(ia2_dict, s.regno, code_key, is_lab)
+            mark_iat3 = get_mark(ia3_dict, s.regno, code_key, is_lab)
+            # If IAT3 was not found, check if a model / retest / A5 mark was recorded
+            if not mark_iat3 and ia4_dict:
+                mark_iat3 = get_mark(ia4_dict, s.regno, code_key, is_lab)
+            mark_mut = get_mark(ia4_dict, s.regno, code_key, is_lab) if ia4_dict else ""
 
             staff_name = code_to_staff.get(c.course_code, "") or resolve_staff_for_code(c.course_code, staff_map) or "(Staff name not entered)"
             subj_obj = code_to_subj.get(c.course_code)
@@ -2447,6 +2467,7 @@ def build_department_excel(
                 ia1_dict.get(s.regno, {}).get("quota") or
                 ia2_dict.get(s.regno, {}).get("quota") or
                 ia3_dict.get(s.regno, {}).get("quota") or
+                (ia4_dict.get(s.regno, {}).get("quota") if ia4_dict else "") or
                 ""
             )
             quota = raw_quota.strip().upper() if raw_quota and raw_quota.strip().upper() not in ("NA", "N/A", "NONE", "") else "GQ"
@@ -2464,6 +2485,8 @@ def build_department_excel(
             ws4.cell(row=r, column=11, value=mark_iat2)
             ws4.cell(row=r, column=12, value="")
             ws4.cell(row=r, column=13, value=mark_iat3)
+            if mark_mut and mark_mut != mark_iat3 and ncols4 >= 14:
+                ws4.cell(row=r, column=14, value=mark_mut)
 
             style_body_row(ws4, r, ncols4)
             ws4.cell(row=r, column=2).alignment = LEFT_WRAP
@@ -10110,6 +10133,23 @@ async def route_pdf_to_excel_upload_ia(request):
     uploaded_counts = []
     has_new_staff = False
 
+    def _merge_marks_records(dest: Dict[str, Dict[str, Any]], src: Dict[str, Dict[str, Any]]):
+        for regno, sdata in src.items():
+            if regno not in dest:
+                dest[regno] = {
+                    "name": sdata.get("name", ""),
+                    "batch_no": sdata.get("batch_no", ""),
+                    "quota": sdata.get("quota", "GQ"),
+                    "marks": dict(sdata.get("marks", {}))
+                }
+            else:
+                cur = dest[regno]
+                for field in ("name", "batch_no", "quota"):
+                    val = sdata.get(field)
+                    if val and (not cur.get(field) or cur.get(field) in ("NA", "N/A", "GQ")):
+                        cur[field] = val
+                cur.setdefault("marks", {}).update(sdata.get("marks", {}))
+
     # 1. Process Combined Section Mark Sheets (e.g. II A IA.html, II B.html)
     combined_files = form.getlist("combined_files")
     comb_files_processed = 0
@@ -10125,7 +10165,8 @@ async def route_pdf_to_excel_upload_ia(request):
                     comb_files_processed += 1
                     for t_key, t_map in multi_marks.items():
                         if t_map:
-                            ia_store.setdefault(t_key, {}).update(t_map)
+                            dest_map = ia_store.setdefault(t_key, {})
+                            _merge_marks_records(dest_map, t_map)
                             comb_students_loaded.update(t_map.keys())
 
                     for regno, smeta in stu_meta.items():
@@ -10140,7 +10181,7 @@ async def route_pdf_to_excel_upload_ia(request):
                             staff_name = staff_name.strip()
                             if not staff_name:
                                 continue
-                            base_code = re.sub(r"([A-Z])$", "", code) if re.search(r"^(?:24)?[A-Z]{2,4}\d{3}[A-Z]$", code) else code
+                            base_code = re.sub(r"([A-Z])$", "", code) if re.search(r"^(?:\d{2})?[A-Z]{2,4}\d{3,4}[A-Z]$", code) else code
                             for target_code in set([code, base_code]):
                                 existing_staff = staff_directory.get(target_code, "").strip()
                                 if not existing_staff:
@@ -10162,7 +10203,6 @@ async def route_pdf_to_excel_upload_ia(request):
         ("ia3", "ia3_file")
     ]:
         file_objs = form.getlist(field_name)
-        merged_marks = dict(ia_store.get(test_key, {}))
         processed_files_count = 0
 
         for file_obj in file_objs:
@@ -10175,7 +10215,8 @@ async def route_pdf_to_excel_upload_ia(request):
                     if any(multi_marks.values()):
                         for t_k, t_map in multi_marks.items():
                             if t_map:
-                                ia_store.setdefault(t_k, {}).update(t_map)
+                                dest_map = ia_store.setdefault(t_k, {})
+                                _merge_marks_records(dest_map, t_map)
                         if stu_meta:
                             for regno, smeta in stu_meta.items():
                                 student_meta_dir.setdefault(regno, {}).update(smeta)
@@ -10186,16 +10227,16 @@ async def route_pdf_to_excel_upload_ia(request):
                     else:
                         parsed_marks, _titles, parsed_staff = parse_ia_marks_content(raw_bytes, fname, target_test_key=test_key)
                         if parsed_marks:
-                            merged_marks.update(parsed_marks)
+                            dest_map = ia_store.setdefault(test_key, {})
+                            _merge_marks_records(dest_map, parsed_marks)
                             processed_files_count += 1
-                            ia_store[test_key] = merged_marks
 
                     if parsed_staff:
                         for code, staff_name in parsed_staff.items():
                             staff_name = staff_name.strip()
                             if not staff_name:
                                 continue
-                            base_code = re.sub(r"([A-Z])$", "", code) if re.search(r"^(?:24)?[A-Z]{2,4}\d{3}[A-Z]$", code) else code
+                            base_code = re.sub(r"([A-Z])$", "", code) if re.search(r"^(?:\d{2})?[A-Z]{2,4}\d{3,4}[A-Z]$", code) else code
                             for target_code in set([code, base_code]):
                                 existing_staff = staff_directory.get(target_code, "").strip()
                                 if not existing_staff:
