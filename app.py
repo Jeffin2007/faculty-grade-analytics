@@ -1116,14 +1116,65 @@ def clean_staff_name(staff_raw: str) -> str:
     """Cleans and standardizes staff names extracted from HTML mark sheets."""
     if not staff_raw:
         return ""
-    # Strip trailing digits (e.g. employee IDs like 7130, 7126)
+    # Strip trailing digits (e.g. employee IDs like 7130, 7126, 7164)
     s = re.sub(r"\d+$", "", staff_raw).strip()
     # Strip department suffix tags (e.g. -eee, -mat, -phy, -eng, -tamil, -cse, -aids)
     s = re.sub(r"[-_](?:eee|mat|math|maths|phy|physics|tamil|eng|english|cse|it|aids|ai_ds|mech|ece|civil|chem|chemistry)$", "", s, flags=re.IGNORECASE).strip()
-    # Replace dots or underscores with spaces
-    s = re.sub(r"[._]", " ", s)
+    # Replace dots, underscores, or hyphens with spaces
+    s = re.sub(r"[._\-]", " ", s)
     s = re.sub(r"\s+", " ", s).strip()
     return " ".join(w.capitalize() for w in s.split())
+
+
+def resolve_staff_for_code(code: str, staff_map: Dict[str, str]) -> str:
+    """
+    Resolves staff name for a given course code from staff_map with robust fuzzy/prefix/suffix matching.
+    Handles matching '24CS201' <-> '24CS201A', 'CS201' <-> '24CS201', and multiple section teachers.
+    """
+    if not code or not staff_map:
+        return ""
+    code_raw = str(code).strip().upper()
+    if code_raw in staff_map and staff_map[code_raw]:
+        return str(staff_map[code_raw]).strip()
+
+    code_clean = re.sub(r"[^A-Z0-9]", "", code_raw)
+    for k, v in staff_map.items():
+        if not v:
+            continue
+        k_clean = re.sub(r"[^A-Z0-9]", "", k.upper())
+        if k_clean == code_clean:
+            return str(v).strip()
+
+    # Try matching base code (stripping trailing section letter e.g. 24CS201A -> 24CS201 or 24CS201 -> 24CS201A / 24CS201B)
+    base_clean = re.sub(r"([A-Z])$", "", code_clean) if re.search(r"^(?:24)?[A-Z]{2,4}\d{3}[A-Z]$", code_clean) else code_clean
+    matched_names = []
+    for k, v in staff_map.items():
+        if not v:
+            continue
+        k_clean = re.sub(r"[^A-Z0-9]", "", k.upper())
+        k_base = re.sub(r"([A-Z])$", "", k_clean) if re.search(r"^(?:24)?[A-Z]{2,4}\d{3}[A-Z]$", k_clean) else k_clean
+        if k_base == base_clean or k_clean == base_clean:
+            for name_part in [x.strip() for x in str(v).split("&")]:
+                if name_part and name_part not in matched_names:
+                    matched_names.append(name_part)
+    if matched_names:
+        return " & ".join(matched_names)
+
+    # Try regulation prefix stripping (e.g. 24CS201 vs CS201)
+    no_reg_code = re.sub(r"^(?:24|21|22|23)", "", base_clean)
+    for k, v in staff_map.items():
+        if not v:
+            continue
+        k_clean = re.sub(r"[^A-Z0-9]", "", k.upper())
+        k_no_reg = re.sub(r"^(?:24|21|22|23)", "", re.sub(r"([A-Z])$", "", k_clean))
+        if k_no_reg == no_reg_code:
+            for name_part in [x.strip() for x in str(v).split("&")]:
+                if name_part and name_part not in matched_names:
+                    matched_names.append(name_part)
+    if matched_names:
+        return " & ".join(matched_names)
+
+    return ""
 
 
 def parse_combined_ia_marks_content(
@@ -1209,9 +1260,17 @@ def parse_combined_ia_marks_content(
                     staff_clean = clean_staff_name(staff_raw)
                     m_code = re.search(r"((?:24)?[A-Z]{2,4}\d{3}[A-Z]?)", code_raw)
                     ccode = m_code.group(1) if m_code else code_raw
+                    base_code = re.sub(r"([A-Z])$", "", ccode) if re.search(r"^(?:24)?[A-Z]{2,4}\d{3}[A-Z]$", ccode) else ccode
 
                     if ccode and staff_clean:
                         course_staff[ccode] = staff_clean
+                        if base_code != ccode:
+                            if base_code not in course_staff:
+                                course_staff[base_code] = staff_clean
+                            else:
+                                existing = [x.strip() for x in course_staff[base_code].split("&")]
+                                if staff_clean not in existing:
+                                    course_staff[base_code] = f"{course_staff[base_code]} & {staff_clean}"
 
                     for _ in range(colspan):
                         sub_test = r1_texts[r1_idx] if r1_idx < len(r1_texts) else ""
@@ -1264,6 +1323,9 @@ def parse_combined_ia_marks_content(
                                 "marks": {}
                             })
                             st_rec["marks"][ccode] = mark_val
+                            base_c = re.sub(r"([A-Z])$", "", ccode) if re.search(r"^(?:24)?[A-Z]{2,4}\d{3}[A-Z]$", ccode) else ccode
+                            if base_c != ccode:
+                                st_rec["marks"][base_c] = mark_val
 
     except Exception:
         pass
@@ -1334,7 +1396,11 @@ def parse_ia_marks_content(
                             if code_tok:
                                 course_titles[code_tok] = cells[title_col]
                                 if faculty_col >= 0 and len(cells) > faculty_col:
-                                    course_staff[code_tok] = clean_staff_name(cells[faculty_col])
+                                    st_clean = clean_staff_name(cells[faculty_col])
+                                    course_staff[code_tok] = st_clean
+                                    base_tok = re.sub(r"([A-Z])$", "", code_tok) if re.search(r"^(?:24)?[A-Z]{2,4}\d{3}[A-Z]$", code_tok) else code_tok
+                                    if base_tok != code_tok:
+                                        course_staff[base_tok] = st_clean
                     continue
 
                 # Main Marks Table
@@ -1827,7 +1893,7 @@ def build_department_excel(
     session_line = meta.exam_session
 
     mappings = list(ca.subject_mappings or [])  # first-seen order == PDF course order
-    code_to_staff = {m["course_code"]: (staff_map.get(m["course_code"], "") or "").strip() for m in mappings}
+    code_to_staff = {m["course_code"]: resolve_staff_for_code(m["course_code"], staff_map) for m in mappings}
     code_to_subj: Dict[str, "SubjectAnalysis"] = {s.course_code: s for s in ca.subjects}
 
     THIN = Side(style="thin", color="9AA5B1")
@@ -2306,8 +2372,16 @@ def build_department_excel(
                 if reg not in ia_map:
                     return "N/A"
                 m_dict = ia_map[reg].get("marks", {})
+                if not m_dict:
+                    return "N/A"
+                if ccode in m_dict:
+                    return str(m_dict[ccode])
+                c_clean = re.sub(r"[^A-Z0-9]", "", ccode.upper())
+                c_base = re.sub(r"([A-Z])$", "", c_clean) if re.search(r"^(?:24)?[A-Z]{2,4}\d{3}[A-Z]$", c_clean) else c_clean
                 for k, v in m_dict.items():
-                    if k.upper() == ccode or re.sub(r"[^A-Z0-9]", "", k.upper()) == code_clean:
+                    k_clean = re.sub(r"[^A-Z0-9]", "", k.upper())
+                    k_base = re.sub(r"([A-Z])$", "", k_clean) if re.search(r"^(?:24)?[A-Z]{2,4}\d{3}[A-Z]$", k_clean) else k_clean
+                    if k_clean == c_clean or k_base == c_base or k_clean == c_base or k_base == c_clean:
                         return str(v)
                 return "N/A"
 
@@ -2317,7 +2391,7 @@ def build_department_excel(
             mark_mut2 = get_mark(mut2_dict, s.regno, code_key)
             mark_iat3 = get_mark(ia3_dict, s.regno, code_key)
 
-            staff_name = code_to_staff.get(c.course_code, "") or "(Staff name not entered)"
+            staff_name = code_to_staff.get(c.course_code, "") or resolve_staff_for_code(c.course_code, staff_map) or "(Staff name not entered)"
             subj_obj = code_to_subj.get(c.course_code)
             num_failures = subj_obj.arrear_count if subj_obj else 0
             quota = s.meta.get("quota") or (
@@ -5528,6 +5602,9 @@ def build_subject_pdf(subj: SubjectAnalysis, ca: ClassAnalysis, ai_text: str) ->
     parts.append(f"<h2>Subject Performance Analysis: {html.escape(subj.subject)}</h2>")
     if subj.course_code:
         parts.append(f"<p><b>Course Code:</b> {html.escape(subj.course_code)}</p>")
+        staff_name = resolve_staff_for_code(subj.course_code, SESSION.get("staff_directory", {}))
+        if staff_name:
+            parts.append(f"<p><b>Faculty In-Charge:</b> {html.escape(staff_name)}</p>")
     parts.append("<table><tr><th>Metric</th><th>Value</th></tr>")
     for label, val in [
         ("Course Credits", subj.credits),
@@ -6064,7 +6141,7 @@ def layout(title: str, active: str, content, ca: Optional[ClassAnalysis] = None)
     alert_divs = [alert_bar(k, m) for k, m in alerts]
 
     app_footer = Div(
-        P("Developed by Srimuthukrishnan S and Jeffin Josva S from AI&DS 2024-2028 Batch",
+        P("Developed by Jeffin Josva S and Srimuthukrishnan S from AI&DS 2024-2028 Batch",
           cls="text-xs font-semibold text-slate-500 text-center tracking-wide"),
         cls="border-t border-slate-200/80 pt-6 mt-12 pb-4 w-full"
     )
@@ -9486,7 +9563,7 @@ def page_pdf_to_excel(pdf_report: "PDFExtractionReport", ca: "ClassAnalysis", fi
     rows = []
     for i, m in enumerate(mappings, start=1):
         code = m["course_code"]
-        prefill = staff_directory.get(code, "")
+        prefill = resolve_staff_for_code(code, staff_directory)
         status = "✓" if not m.get("unresolved") else "⚠"
         rows.append(Tr(
             Td(str(i), cls="px-3 py-2 text-xs text-slate-600 border-b"),
@@ -9955,7 +10032,11 @@ async def route_pdf_to_excel_save_staff(request):
         code = m["course_code"]
         key = f"staff__{code}"
         if key in form:
-            directory[code] = str(form[key]).strip()
+            val = str(form[key]).strip()
+            directory[code] = val
+            base_code = re.sub(r"([A-Z])$", "", code) if re.search(r"^(?:24)?[A-Z]{2,4}\d{3}[A-Z]$", code) else code
+            if base_code != code:
+                directory[base_code] = val
     SESSION["staff_verified"] = True
     push_alert("Staff names saved and verified.", "green")
     return page_pdf_to_excel(pdf_report, ca, SESSION.get("preview_pdf_filename", "coe_result.pdf"))
@@ -10012,15 +10093,17 @@ async def route_pdf_to_excel_upload_ia(request):
                             staff_name = staff_name.strip()
                             if not staff_name:
                                 continue
-                            existing_staff = staff_directory.get(code, "").strip()
-                            if not existing_staff:
-                                staff_directory[code] = staff_name
-                                has_new_staff = True
-                            else:
-                                existing_names = [s.strip() for s in existing_staff.split("&")]
-                                if staff_name not in existing_names:
-                                    staff_directory[code] = f"{existing_staff} & {staff_name}"
+                            base_code = re.sub(r"([A-Z])$", "", code) if re.search(r"^(?:24)?[A-Z]{2,4}\d{3}[A-Z]$", code) else code
+                            for target_code in set([code, base_code]):
+                                existing_staff = staff_directory.get(target_code, "").strip()
+                                if not existing_staff:
+                                    staff_directory[target_code] = staff_name
                                     has_new_staff = True
+                                else:
+                                    existing_names = [s.strip() for s in existing_staff.split("&")]
+                                    if staff_name not in existing_names:
+                                        staff_directory[target_code] = f"{existing_staff} & {staff_name}"
+                                        has_new_staff = True
 
     if comb_files_processed > 0:
         uploaded_counts.append(f"Combined Section Reports ({len(comb_students_loaded)} students across {comb_files_processed} section file(s))")
@@ -10065,15 +10148,17 @@ async def route_pdf_to_excel_upload_ia(request):
                             staff_name = staff_name.strip()
                             if not staff_name:
                                 continue
-                            existing_staff = staff_directory.get(code, "").strip()
-                            if not existing_staff:
-                                staff_directory[code] = staff_name
-                                has_new_staff = True
-                            else:
-                                existing_names = [s.strip() for s in existing_staff.split("&")]
-                                if staff_name not in existing_names:
-                                    staff_directory[code] = f"{existing_staff} & {staff_name}"
+                            base_code = re.sub(r"([A-Z])$", "", code) if re.search(r"^(?:24)?[A-Z]{2,4}\d{3}[A-Z]$", code) else code
+                            for target_code in set([code, base_code]):
+                                existing_staff = staff_directory.get(target_code, "").strip()
+                                if not existing_staff:
+                                    staff_directory[target_code] = staff_name
                                     has_new_staff = True
+                                else:
+                                    existing_names = [s.strip() for s in existing_staff.split("&")]
+                                    if staff_name not in existing_names:
+                                        staff_directory[target_code] = f"{existing_staff} & {staff_name}"
+                                        has_new_staff = True
 
         if processed_files_count > 0:
             uploaded_counts.append(f"{test_key.upper()} ({len(ia_store.get(test_key, {}))} students from {processed_files_count} file(s))")

@@ -8,6 +8,7 @@ from app import (
     parse_combined_ia_marks_content,
     parse_ia_marks_content,
     clean_staff_name,
+    resolve_staff_for_code,
     build_department_excel,
     compute_class_analysis,
 )
@@ -23,6 +24,17 @@ class TestCombinedIAMarksParsing(unittest.TestCase):
         self.assertEqual(clean_staff_name("subhashini-mat"), "Subhashini")
         self.assertEqual(clean_staff_name("murali-phy"), "Murali")
         self.assertEqual(clean_staff_name("thangam-tamil"), "Thangam")
+
+    def test_resolve_staff_for_code(self):
+        staff_map = {
+            "24CS201A": "Gohila Priyadharshini",
+            "24CS201B": "Mangalambigai",
+            "24MA201": "Subhashini & Arunkumar"
+        }
+        self.assertEqual(resolve_staff_for_code("24CS201A", staff_map), "Gohila Priyadharshini")
+        self.assertEqual(resolve_staff_for_code("24CS201", staff_map), "Gohila Priyadharshini & Mangalambigai")
+        self.assertEqual(resolve_staff_for_code("CS201", staff_map), "Gohila Priyadharshini & Mangalambigai")
+        self.assertEqual(resolve_staff_for_code("24MA201A", staff_map), "Subhashini & Arunkumar")
 
     def test_parse_section_a_html(self):
         if not os.path.exists(self.ia_a_path):
@@ -141,6 +153,66 @@ class TestCombinedIAMarksParsing(unittest.TestCase):
                 self.assertEqual(ws4.cell(row=r, column=11).value, "94") # IAT 2
                 break
         self.assertTrue(found, "Student 813825243001 should be present in Analysis 4_New")
+
+    def test_base_code_matching_in_excel(self):
+        if not os.path.exists(self.ia_a_path) or not os.path.exists(self.ia_b_path):
+            self.skipTest("Section HTML files not found")
+
+        ia_store = {"ia1": {}, "mut1": {}, "ia2": {}, "mut2": {}, "ia3": {}}
+        staff_directory = {}
+
+        for p in [self.ia_a_path, self.ia_b_path]:
+            with open(p, "rb") as f:
+                multi_marks, titles, staff, meta = parse_combined_ia_marks_content(f.read(), os.path.basename(p))
+                for tk, tdata in multi_marks.items():
+                    ia_store[tk].update(tdata)
+                for code, sname in staff.items():
+                    if code not in staff_directory:
+                        staff_directory[code] = sname
+                    else:
+                        existing = [x.strip() for x in staff_directory[code].split("&")]
+                        if sname not in existing:
+                            staff_directory[code] = f"{staff_directory[code]} & {sname}"
+
+        # Test case: Official COE PDF has base course code '24CS201' (not '24CS201A')
+        records = [
+            {"regno": "813825243001", "name": "ABINASH. S", "subject": "Data Structures", "course_code": "24CS201", "credits": 4.0, "grade": "RA", "points": 0.0},
+        ]
+        df = pd.DataFrame(records)
+        ca = compute_class_analysis(df, "mock.pdf")
+        ca.subject_mappings = [
+            {"course_code": "24CS201", "official_subject_name": "Data Structures", "credits": 4.0},
+        ]
+
+        from app import PDFExtractionReport, DocumentMetadata
+        rep = PDFExtractionReport(doc_metadata=DocumentMetadata(
+            institution="Saranathan College of Engineering",
+            department="Artificial Intelligence and Data Science",
+            programme="B.Tech. AI & DS",
+            semester="II",
+            academic_year="2025-2026",
+            exam_session="April/May 2026"
+        ))
+
+        xlsx_bytes = build_department_excel(ca, rep, staff_directory, "mock.pdf", ia_marks_dir=ia_store)
+        import openpyxl, io
+        wb = openpyxl.load_workbook(io.BytesIO(xlsx_bytes))
+        
+        # Verify Analysis 1 has staff name for 24CS201
+        ws1 = wb["Analysis 1_New"]
+        a1_staff_found = any("Gohila Priyadharshini" in str(ws1.cell(row=r, column=3).value or "") for r in range(1, ws1.max_row + 1))
+        self.assertTrue(a1_staff_found, "Analysis 1 should contain resolved faculty name for 24CS201")
+
+        # Verify Analysis 4 has staff name and marks for 24CS201
+        ws4 = wb["Analysis 4_New"]
+        found = False
+        for r in range(1, ws4.max_row + 1):
+            if ws4.cell(row=r, column=6).value == "813825243001":
+                found = True
+                self.assertEqual(ws4.cell(row=r, column=2).value, "Gohila Priyadharshini & Mangalambigai")
+                self.assertEqual(ws4.cell(row=r, column=9).value, "96")
+                break
+        self.assertTrue(found, "Student 813825243001 should be present in Analysis 4_New for 24CS201")
 
 
 if __name__ == "__main__":
