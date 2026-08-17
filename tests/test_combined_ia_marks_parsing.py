@@ -306,7 +306,7 @@ class TestCombinedIAMarksParsing(unittest.TestCase):
         self.assertEqual(q4_3064, "GQ")  # Defaults to GQ instead of NA
 
     def test_universal_course_codes_and_separate_a5_model(self):
-        # Sample HTML representing another department (e.g. ECE / R2021) with 4-digit codes & A1, A2, A3, A5
+        # Sample HTML representing another department (e.g. ECE / 4-digit codes) with A1, A2, A3, A5
         html_content = """
         <html><body>
         <table><tr><td>Classwise Mark Summary</td></tr></table>

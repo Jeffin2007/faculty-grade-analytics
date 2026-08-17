@@ -690,10 +690,7 @@ def extract_coe_pdf(pdf_bytes: bytes, filename: str, analysis_context: Optional[
                     report.doc_metadata.programme = f"{prefix} {d['name']}"
                     break
 
-        if "REGULATION 2024" in p_upper or "R2024" in p_upper or "R-2024" in p_upper:
-            report.doc_metadata.regulation = "R2024"
-        elif "REGULATION 2021" in p_upper or "R2021" in p_upper:
-            report.doc_metadata.regulation = "R2021"
+        report.doc_metadata.regulation = "R2024"
 
         ay_m = re.search(r"(202\d\s*-\s*202\d|NOV\s*/\s*DEC\s*202\d|APR\s*/\s*MAY\s*202\d)", p_upper)
         if ay_m and not report.doc_metadata.exam_session:

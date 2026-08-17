@@ -74,7 +74,6 @@ new_upload_selection = """P("Drop your official result PDF here or click to brow
                                     Label("Regulation:", cls="block text-[11px] font-bold text-slate-700 mb-1"),
                                     Select(
                                         Option("R2024 (Active)", value="R2024", selected=True),
-                                        Option("R2021 (Legacy)", value="R2021"),
                                         name="regulation", id="upload_reg_select", required=True,
                                         cls="block w-full text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg p-2 focus:ring-2 focus:ring-blue-500 shadow-xs"
                                     ),
