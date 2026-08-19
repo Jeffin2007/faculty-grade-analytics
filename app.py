@@ -690,10 +690,7 @@ def extract_coe_pdf(pdf_bytes: bytes, filename: str, analysis_context: Optional[
                     report.doc_metadata.programme = f"{prefix} {d['name']}"
                     break
 
-        if "REGULATION 2024" in p_upper or "R2024" in p_upper or "R-2024" in p_upper:
-            report.doc_metadata.regulation = "R2024"
-        elif "REGULATION 2021" in p_upper or "R2021" in p_upper:
-            report.doc_metadata.regulation = "R2021"
+        report.doc_metadata.regulation = "R2024"
 
         ay_m = re.search(r"(202\d\s*-\s*202\d|NOV\s*/\s*DEC\s*202\d|APR\s*/\s*MAY\s*202\d)", p_upper)
         if ay_m and not report.doc_metadata.exam_session:
@@ -1116,14 +1113,65 @@ def clean_staff_name(staff_raw: str) -> str:
     """Cleans and standardizes staff names extracted from HTML mark sheets."""
     if not staff_raw:
         return ""
-    # Strip trailing digits (e.g. employee IDs like 7130, 7126)
+    # Strip trailing digits (e.g. employee IDs like 7130, 7126, 7164)
     s = re.sub(r"\d+$", "", staff_raw).strip()
     # Strip department suffix tags (e.g. -eee, -mat, -phy, -eng, -tamil, -cse, -aids)
     s = re.sub(r"[-_](?:eee|mat|math|maths|phy|physics|tamil|eng|english|cse|it|aids|ai_ds|mech|ece|civil|chem|chemistry)$", "", s, flags=re.IGNORECASE).strip()
-    # Replace dots or underscores with spaces
-    s = re.sub(r"[._]", " ", s)
+    # Replace dots, underscores, or hyphens with spaces
+    s = re.sub(r"[._\-]", " ", s)
     s = re.sub(r"\s+", " ", s).strip()
     return " ".join(w.capitalize() for w in s.split())
+
+
+def resolve_staff_for_code(code: str, staff_map: Dict[str, str]) -> str:
+    """
+    Resolves staff name for a given course code from staff_map with robust fuzzy/prefix/suffix matching.
+    Handles matching '24CS201' <-> '24CS201A', 'CS201' <-> '24CS201', and multiple section teachers.
+    """
+    if not code or not staff_map:
+        return ""
+    code_raw = str(code).strip().upper()
+    if code_raw in staff_map and staff_map[code_raw]:
+        return str(staff_map[code_raw]).strip()
+
+    code_clean = re.sub(r"[^A-Z0-9]", "", code_raw)
+    for k, v in staff_map.items():
+        if not v:
+            continue
+        k_clean = re.sub(r"[^A-Z0-9]", "", k.upper())
+        if k_clean == code_clean:
+            return str(v).strip()
+
+    # Try matching base code (stripping trailing section/R26 letter e.g. 24CS201A -> 24CS201 or 24CS201 -> 24CS201A / 24CS201B)
+    base_clean = re.sub(r"([A-Z])$", "", code_clean) if re.search(r"^(?:\d{2})?[A-Z]{2,4}\d{3,4}[A-Z]$", code_clean) else code_clean
+    matched_names = []
+    for k, v in staff_map.items():
+        if not v:
+            continue
+        k_clean = re.sub(r"[^A-Z0-9]", "", k.upper())
+        k_base = re.sub(r"([A-Z])$", "", k_clean) if re.search(r"^(?:\d{2})?[A-Z]{2,4}\d{3,4}[A-Z]$", k_clean) else k_clean
+        if k_base == base_clean or k_clean == base_clean:
+            for name_part in [x.strip() for x in str(v).split("&")]:
+                if name_part and name_part not in matched_names:
+                    matched_names.append(name_part)
+    if matched_names:
+        return " & ".join(matched_names)
+
+    # Try regulation prefix stripping (e.g. 24CS201 vs CS201)
+    no_reg_code = re.sub(r"^(?:24|21|22|23)", "", base_clean)
+    for k, v in staff_map.items():
+        if not v:
+            continue
+        k_clean = re.sub(r"[^A-Z0-9]", "", k.upper())
+        k_no_reg = re.sub(r"^(?:24|21|22|23)", "", re.sub(r"([A-Z])$", "", k_clean))
+        if k_no_reg == no_reg_code:
+            for name_part in [x.strip() for x in str(v).split("&")]:
+                if name_part and name_part not in matched_names:
+                    matched_names.append(name_part)
+    if matched_names:
+        return " & ".join(matched_names)
+
+    return ""
 
 
 def parse_combined_ia_marks_content(
@@ -1145,7 +1193,7 @@ def parse_combined_ia_marks_content(
     from bs4 import BeautifulSoup
 
     test_marks: Dict[str, Dict[str, Dict[str, Any]]] = {
-        "ia1": {}, "mut1": {}, "ia2": {}, "mut2": {}, "ia3": {}
+        "ia1": {}, "ia2": {}, "ia3": {}
     }
     course_titles: Dict[str, str] = {}
     course_staff: Dict[str, str] = {}
@@ -1182,8 +1230,8 @@ def parse_combined_ia_marks_content(
             r1_cells = r1.find_all(['th', 'td'])
             r1_texts = [c.get_text().strip().upper() for c in r1_cells]
 
-            # Check if this table has multi-test subheaders (A1, A2, A3, A5 or IAT1, MUT1, etc.)
-            has_multi_tests = any(t in ("A1", "A2", "A3", "A5", "IAT1", "IAT2", "IAT3", "MUT1", "MUT2", "MODEL") for t in r1_texts)
+            # Check if this table has multi-test subheaders (A1, A2, A3, etc.)
+            has_multi_tests = any(t in ("A1", "A2", "A3", "A4", "A5", "IAT1", "IAT2", "IAT3", "IA1", "IA2", "IA3", "CT1", "CT2", "CT3") for t in r1_texts)
             if not has_multi_tests:
                 continue
 
@@ -1207,17 +1255,42 @@ def parse_combined_ia_marks_content(
                     staff_raw = parts[1].strip() if len(parts) > 1 else ""
 
                     staff_clean = clean_staff_name(staff_raw)
-                    m_code = re.search(r"((?:24)?[A-Z]{2,4}\d{3}[A-Z]?)", code_raw)
-                    ccode = m_code.group(1) if m_code else code_raw
+                    m_code = re.search(r"((?:\d{2})?[A-Z]{2,4}[-_]?\d{3,4}[A-Z]?)", code_raw)
+                    ccode = m_code.group(1).replace("-", "").replace("_", "") if m_code else code_raw
+                    base_code = re.sub(r"([A-Z])$", "", ccode) if re.search(r"^(?:\d{2})?[A-Z]{2,4}\d{3,4}[A-Z]$", ccode) else ccode
 
                     if ccode and staff_clean:
                         course_staff[ccode] = staff_clean
+                        if base_code != ccode:
+                            if base_code not in course_staff:
+                                course_staff[base_code] = staff_clean
+                            else:
+                                existing = [x.strip() for x in course_staff[base_code].split("&")]
+                                if staff_clean not in existing:
+                                    course_staff[base_code] = f"{course_staff[base_code]} & {staff_clean}"
 
                     for _ in range(colspan):
                         sub_test = r1_texts[r1_idx] if r1_idx < len(r1_texts) else ""
                         r1_idx += 1
                         col_mappings.append((cur_data_col, ccode, sub_test, staff_clean))
                         cur_data_col += 1
+
+            # Determine fixed metadata column positions dynamically if present
+            quota_col_idx = 4
+            batch_col_idx = 2
+            name_col_idx = 3
+            cgpa_col_idx = 6
+
+            for c_idx, c in enumerate(r0_cells):
+                txt_lower = c.get_text().strip().lower()
+                if "quota" in txt_lower:
+                    quota_col_idx = c_idx
+                elif "batch" in txt_lower:
+                    batch_col_idx = c_idx
+                elif "name" in txt_lower and "staff" not in txt_lower:
+                    name_col_idx = c_idx
+                elif "cgpa" in txt_lower or "gpa" in txt_lower:
+                    cgpa_col_idx = c_idx
 
             for r in rows[2:]:
                 cells = [c.get_text().strip() for c in r.find_all(['th', 'td'])]
@@ -1229,10 +1302,11 @@ def parse_combined_ia_marks_content(
                     continue
 
                 regno = m_reg.group(1)
-                batchno = cells[2] if len(cells) > 2 else ""
-                name = cells[3] if len(cells) > 3 else ""
-                quota = cells[4].strip().upper() if len(cells) > 4 and cells[4].strip() else "NA"
-                cgpa = cells[6].strip() if len(cells) > 6 else ""
+                batchno = cells[batch_col_idx].strip() if batch_col_idx < len(cells) else (cells[2] if len(cells) > 2 else "")
+                name = cells[name_col_idx].strip() if name_col_idx < len(cells) else (cells[3] if len(cells) > 3 else "")
+                raw_q = cells[quota_col_idx].strip().upper() if quota_col_idx < len(cells) else (cells[4].strip().upper() if len(cells) > 4 else "")
+                quota = raw_q if raw_q and raw_q not in ("&NBSP;", "-", "—", "NA", "N/A", "NONE") else "GQ"
+                cgpa = cells[cgpa_col_idx].strip() if cgpa_col_idx < len(cells) else (cells[6].strip() if len(cells) > 6 else "")
 
                 student_meta[regno] = {
                     "quota": quota,
@@ -1245,25 +1319,27 @@ def parse_combined_ia_marks_content(
                     if col_idx < len(cells):
                         mark_val = cells[col_idx].strip()
                         if mark_val and mark_val not in ("&nbsp;", "-", "—"):
-                            test_key = "ia1"
-                            if sub_test in ("A1", "IAT1", "IA1", "CT1"):
+                            test_key = None
+                            sub_clean = re.sub(r"[\s\-_]+", "", sub_test).upper()
+                            if sub_clean in ("A1", "IAT1", "IA1", "CT1", "TEST1", "1"):
                                 test_key = "ia1"
-                            elif sub_test in ("A2", "MUT1", "MT1"):
-                                test_key = "mut1"
-                            elif sub_test in ("A3", "IAT2", "IA2", "CT2"):
+                            elif sub_clean in ("A2", "IAT2", "IA2", "CT2", "TEST2", "2"):
                                 test_key = "ia2"
-                            elif sub_test in ("A5", "MUT2", "MT2", "MODEL"):
-                                test_key = "mut2"
-                            elif sub_test in ("A4", "IAT3", "IA3", "CT3"):
+                            elif sub_clean in ("A3", "IAT3", "IA3", "CT3", "TEST3", "3"):
                                 test_key = "ia3"
 
-                            st_rec = test_marks[test_key].setdefault(regno, {
-                                "name": name,
-                                "batch_no": batchno,
-                                "quota": quota,
-                                "marks": {}
-                            })
-                            st_rec["marks"][ccode] = mark_val
+                            if test_key:
+                                test_marks.setdefault(test_key, {})
+                                st_rec = test_marks[test_key].setdefault(regno, {
+                                    "name": name,
+                                    "batch_no": batchno,
+                                    "quota": quota,
+                                    "marks": {}
+                                })
+                                st_rec["marks"][ccode] = mark_val
+                                base_c = re.sub(r"([A-Z])$", "", ccode) if re.search(r"^(?:\d{2})?[A-Z]{2,4}\d{3,4}[A-Z]$", ccode) else ccode
+                                if base_c != ccode:
+                                    st_rec["marks"][base_c] = mark_val
 
     except Exception:
         pass
@@ -1285,7 +1361,7 @@ def parse_ia_marks_content(
         # If target test exists in multi_marks, return that; otherwise return first non-empty
         if multi_marks.get(target_test_key):
             return multi_marks[target_test_key], c_titles, c_staff
-        for t_k in ("ia1", "ia2", "ia3", "mut1", "mut2"):
+        for t_k in ("ia1", "ia2", "ia3"):
             if multi_marks.get(t_k):
                 return multi_marks[t_k], c_titles, c_staff
 
@@ -1334,7 +1410,11 @@ def parse_ia_marks_content(
                             if code_tok:
                                 course_titles[code_tok] = cells[title_col]
                                 if faculty_col >= 0 and len(cells) > faculty_col:
-                                    course_staff[code_tok] = clean_staff_name(cells[faculty_col])
+                                    st_clean = clean_staff_name(cells[faculty_col])
+                                    course_staff[code_tok] = st_clean
+                                    base_tok = re.sub(r"([A-Z])$", "", code_tok) if re.search(r"^(?:\d{2})?[A-Z]{2,4}\d{3,4}[A-Z]$", code_tok) else code_tok
+                                    if base_tok != code_tok:
+                                        course_staff[base_tok] = st_clean
                     continue
 
                 # Main Marks Table
@@ -1346,9 +1426,9 @@ def parse_ia_marks_content(
                     code_cols: Dict[int, str] = {}
                     for col_idx, h_text in enumerate(header_cells):
                         clean_h = re.sub(r"\s+", "", h_text.upper())
-                        m_code = re.search(r"((?:24[-_]?)?[A-Z]{2,4}[-_]?\d{3,5})", clean_h)
+                        m_code = re.search(r"((?:\d{2}[-_]?)?[A-Z]{2,4}[-_]?\d{3,4}[A-Z]?)", clean_h)
                         if m_code and clean_h not in ("TOTAL", "AVG", "ATT%", "S.NO", "REGNO", "BATCHNO", "NAME"):
-                            code_cols[col_idx] = m_code.group(1)
+                            code_cols[col_idx] = m_code.group(1).replace("-", "").replace("_", "")
 
                     for r in rows[1:]:
                         cells = [re.sub(r"\s+", " ", c.get_text()).strip() for c in r.find_all(['th', 'td'])]
@@ -1656,6 +1736,17 @@ def build_class_analysis_excel(ca: "ClassAnalysis") -> bytes:
         ["Validation passed", "YES" if ok else "NO"],
     ] + [["Issue", i] for i in issues])
 
+    # Unlock all cells and remove workbook protection
+    wb.security = None
+    UNLOCKED = Protection(locked=False, hidden=False)
+    for ws in wb.worksheets:
+        ws.freeze_panes = None
+        ws.protection.sheet = False
+        ws.protection.enabled = False
+        for row in ws.iter_rows(min_row=1, max_row=ws.max_row, min_col=1, max_col=ws.max_column):
+            for cell in row:
+                cell.protection = UNLOCKED
+
     bio = io.BytesIO()
     wb.save(bio)
     return bio.getvalue()
@@ -1688,7 +1779,7 @@ def _is_theory_course(course_code: str, subject_name: str = "", credits: float =
         return False
 
     # Check course code digit patterns (e.g., 24CS211, 24EM211, 24PH111, CS8381, GE8261)
-    # Anna University / Autonomous regulations designate 1, 8, or 9 in tens place for practical/lab courses
+    # Saranathan College Of Engineering / Autonomous regulations designate 1, 8, or 9 in tens place for practical/lab courses
     m = re.search(r"(\d{3,4})[A-Z]?$", code_upper)
     if m:
         num_str = m.group(1)
@@ -1770,12 +1861,31 @@ def _session_short_code(exam_session: str) -> str:
     return f"RESULT_{year}"
 
 
+def _semester_short_code(semester_text: Any) -> str:
+    """
+    Extracts a clean, normalized semester code (e.g. SEM_I, SEM_II, SEM_III, SEM_IV, etc.)
+    derived from roman numerals, digit numbers, or textual representation.
+    """
+    s_str = str(semester_text or "").strip().upper()
+    m = re.search(r"(?:SEMESTER\s*|SEM\s*)?([IVX]+|\d+)", s_str)
+    if m:
+        tok = m.group(1)
+        int_to_roman = {1: "I", 2: "II", 3: "III", 4: "IV", 5: "V", 6: "VI", 7: "VII", 8: "VIII"}
+        roman = int_to_roman.get(int(tok)) if tok.isdigit() and int(tok) in int_to_roman else tok
+        return f"SEM_{roman}"
+    return "SEM"
+
+
 def department_excel_filename(pdf_report: "PDFExtractionReport") -> str:
-    """Filename derived dynamically from department / exam session / year -- never hardcoded."""
+    """
+    Filename format: <dept>_<exam_duration>_<semester>_Result_Analysis.xlsx
+    e.g. AI_DS_NOV_DEC_2025_SEM_II_Result_Analysis.xlsx
+    """
     meta = pdf_report.doc_metadata
     dept_code = _dept_short_code(meta.department, meta.programme)
     session_code = _session_short_code(meta.exam_session)
-    fname = f"{dept_code}_{session_code}_Result_Analysis.xlsx"
+    sem_code = _semester_short_code(meta.semester)
+    fname = f"{dept_code}_{session_code}_{sem_code}_Result_Analysis.xlsx"
     return re.sub(r"[^\w\.\-]", "_", fname)
 
 
@@ -1805,6 +1915,7 @@ def build_department_excel(
     prev_ca: Optional["ClassAnalysis"] = None,
     prev_pdf_report: Optional["PDFExtractionReport"] = None,
     mentor_map: Optional[Dict[str, str]] = None,
+    student_meta_map: Optional[Dict[str, Dict[str, str]]] = None,
 ) -> bytes:
     """
     Build the departmental official result-analysis workbook: Analysis 1_New, 2_New,
@@ -1812,7 +1923,7 @@ def build_department_excel(
     departmental workbook.
     """
     import openpyxl
-    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side, Protection
     from openpyxl.utils import get_column_letter
 
     meta = pdf_report.doc_metadata
@@ -1827,8 +1938,14 @@ def build_department_excel(
     session_line = meta.exam_session
 
     mappings = list(ca.subject_mappings or [])  # first-seen order == PDF course order
-    code_to_staff = {m["course_code"]: (staff_map.get(m["course_code"], "") or "").strip() for m in mappings}
+    code_to_staff = {m["course_code"]: resolve_staff_for_code(m["course_code"], staff_map) for m in mappings}
     code_to_subj: Dict[str, "SubjectAnalysis"] = {s.course_code: s for s in ca.subjects}
+
+    ia_data = ia_marks_dir or {}
+    ia1_dict = ia_data.get("ia1", {})
+    ia2_dict = ia_data.get("ia2", {})
+    ia3_dict = ia_data.get("ia3", {})
+    ia4_dict = ia_data.get("ia4", {}) or ia_data.get("model", {}) or ia_data.get("retest", {})
 
     THIN = Side(style="thin", color="9AA5B1")
     BORDER = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
@@ -1841,6 +1958,7 @@ def build_department_excel(
     NOTE_FONT = Font(italic=True, size=8, color="64748B")
 
     wb = openpyxl.Workbook()
+    wb.security = None
     wb.remove(wb.active)
 
     def title_block(ws, ncols: int, extra_lines: List[str], analysis_title: str) -> int:
@@ -1887,7 +2005,7 @@ def build_department_excel(
         ws.oddFooter.center.text = "Page &P of &N"
         last_col = get_column_letter(max(ncols, 1))
         ws.print_area = f"A1:{last_col}{max(last_row, 1)}"
-        ws.freeze_panes = freeze
+        ws.freeze_panes = None
 
     # ---------------------------------------------------------------
     # Analysis 1 - University Examination Result Analysis
@@ -1922,12 +2040,6 @@ def build_department_excel(
 
         ws1.cell(row=r, column=3).alignment = LEFT_WRAP
         r += 1
-    # ── Note row ────────────────────────────────────────────────────────────
-    ws1.cell(row=r, column=1,
-             value="Note: Absent-count is not separately tracked by COE PDF extraction; shown as 0 rather than fabricated.")
-    ws1.merge_cells(start_row=r, start_column=1, end_row=r, end_column=ncols1)
-    ws1.cell(row=r, column=1).font = NOTE_FONT
-
     # ── Overall Pass Percentage row (matches departmental format) ────────────
     r += 1
     total_registered = sum(
@@ -2068,6 +2180,25 @@ def build_department_excel(
             prev_subj_map[ps.course_code.upper()] = ps
             prev_subj_map[code_c] = ps
             prev_subj_map[name_c] = ps
+
+    if prev_pdf_report and prev_pdf_report.all_records:
+        subj_grouped = defaultdict(list)
+        for rec in prev_pdf_report.all_records:
+            subj_grouped[rec.subject_code].append(rec)
+        for code, recs in subj_grouped.items():
+            code_u = code.upper()
+            code_c = re.sub(r"[^A-Z0-9]", "", code_u)
+            if code_u not in prev_subj_map and code_c not in prev_subj_map:
+                passed = sum(1 for r in recs if r.result_status not in ("U", "RA", "UA", "AB", "WH", "W", "WH1", "WH2"))
+                total = len(recs)
+                pass_p = (passed / total * 100.0) if total > 0 else 0.0
+                subj_name = recs[0].subject_name or code
+                dummy_ps = type("DummySubj", (), {"course_code": code, "subject": subj_name, "pass_pct": pass_p})()
+                prev_subj_map[code_u] = dummy_ps
+                prev_subj_map[code_c] = dummy_ps
+                name_c = re.sub(r"[^A-Z0-9]", "", subj_name.upper())
+                if name_c and name_c not in prev_subj_map:
+                    prev_subj_map[name_c] = dummy_ps
 
     for i, m in enumerate(mappings, start=1):
         c_code = m["course_code"]
@@ -2215,10 +2346,20 @@ def build_department_excel(
         n_failed += 1
         gp_lookup = _grade_gp_lookup(s)
 
+        raw_q3 = (
+            (student_meta_map.get(s.regno, {}).get("quota") if student_meta_map else "") or
+            s.meta.get("quota") or
+            ia1_dict.get(s.regno, {}).get("quota") or
+            ia2_dict.get(s.regno, {}).get("quota") or
+            ia3_dict.get(s.regno, {}).get("quota") or
+            ""
+        )
+        quota3 = raw_q3.strip().upper() if raw_q3 and raw_q3.strip().upper() not in ("NA", "N/A", "NONE", "") else "GQ"
+
         ws3.cell(row=r, column=1, value=n_failed)
         ws3.cell(row=r, column=2, value=s.regno)
         ws3.cell(row=r, column=3, value=s.name)
-        ws3.cell(row=r, column=4, value=s.meta.get("quota") or "NA")
+        ws3.cell(row=r, column=4, value=quota3)
 
         for j, m in enumerate(analysis3_mappings, start=5):
             grade, _pts = gp_lookup.get(m["course_code"], ("", 0))
@@ -2288,8 +2429,6 @@ def build_department_excel(
     ia1_dict = ia_data.get("ia1", {})
     ia2_dict = ia_data.get("ia2", {})
     ia3_dict = ia_data.get("ia3", {})
-    mut1_dict = ia_data.get("mut1", {})
-    mut2_dict = ia_data.get("mut2", {})
 
     s_no = 0
     for s in ca.students:
@@ -2302,32 +2441,51 @@ def build_department_excel(
             code_key = c.course_code.upper()
             code_clean = re.sub(r"[^A-Z0-9]", "", code_key)
 
-            def get_mark(ia_map: Dict[str, Dict[str, Any]], reg: str, ccode: str) -> str:
-                if reg not in ia_map:
-                    return "N/A"
+            def is_lab_course(ccode: str, sub_name: str) -> bool:
+                s_up = (sub_name or "").upper()
+                c_up = (ccode or "").upper()
+                if any(w in s_up for w in ("LAB", "LABORATORY", "PRACTICAL", "SEMINAR", "PROJECT", "STUDIO", "INTERNSHIP")):
+                    return True
+                if re.search(r"^[A-Z0-9]{2,4}\d1\d[A-Z]?$", c_up) or re.search(r"^\d{2}[A-Z]{2,4}\d1\d[A-Z]?$", c_up):
+                    return True
+                return False
+
+            def get_mark(ia_map: Dict[str, Dict[str, Any]], reg: str, ccode: str, is_lab: bool = False) -> str:
+                if not ia_map or reg not in ia_map:
+                    return ""
                 m_dict = ia_map[reg].get("marks", {})
+                if not m_dict:
+                    return ""
+                if ccode in m_dict:
+                    val = str(m_dict[ccode]).strip()
+                    return "AB" if val.upper() in ("A", "AB", "ABS") else val
+                c_clean = re.sub(r"[^A-Z0-9]", "", ccode.upper())
+                c_base = re.sub(r"([A-Z])$", "", c_clean) if re.search(r"^(?:\d{2})?[A-Z]{2,4}\d{3,4}[A-Z]$", c_clean) else c_clean
                 for k, v in m_dict.items():
-                    if k.upper() == ccode or re.sub(r"[^A-Z0-9]", "", k.upper()) == code_clean:
-                        return str(v)
-                return "N/A"
+                    k_clean = re.sub(r"[^A-Z0-9]", "", k.upper())
+                    k_base = re.sub(r"([A-Z])$", "", k_clean) if re.search(r"^(?:\d{2})?[A-Z]{2,4}\d{3,4}[A-Z]$", k_clean) else k_clean
+                    if k_clean == c_clean or k_base == c_base or k_clean == c_base or k_base == c_clean:
+                        val = str(v).strip()
+                        return "AB" if val.upper() in ("A", "AB", "ABS") else val
+                return ""
 
-            mark_iat1 = get_mark(ia1_dict, s.regno, code_key)
-            mark_mut1 = get_mark(mut1_dict, s.regno, code_key)
-            mark_iat2 = get_mark(ia2_dict, s.regno, code_key)
-            mark_mut2 = get_mark(mut2_dict, s.regno, code_key)
-            mark_iat3 = get_mark(ia3_dict, s.regno, code_key)
+            is_lab = is_lab_course(c.course_code, c.subject)
+            mark_iat1 = get_mark(ia1_dict, s.regno, code_key, is_lab)
+            mark_iat2 = get_mark(ia2_dict, s.regno, code_key, is_lab)
+            mark_iat3 = get_mark(ia3_dict, s.regno, code_key, is_lab)
 
-            staff_name = code_to_staff.get(c.course_code, "") or "(Staff name not entered)"
+            staff_name = code_to_staff.get(c.course_code, "") or resolve_staff_for_code(c.course_code, staff_map) or "(Staff name not entered)"
             subj_obj = code_to_subj.get(c.course_code)
             num_failures = subj_obj.arrear_count if subj_obj else 0
-            quota = s.meta.get("quota") or (
+            raw_quota = (
+                (student_meta_map.get(s.regno, {}).get("quota") if student_meta_map else "") or
+                s.meta.get("quota") or
                 ia1_dict.get(s.regno, {}).get("quota") or
-                mut1_dict.get(s.regno, {}).get("quota") or
                 ia2_dict.get(s.regno, {}).get("quota") or
-                mut2_dict.get(s.regno, {}).get("quota") or
                 ia3_dict.get(s.regno, {}).get("quota") or
-                "NA"
+                ""
             )
+            quota = raw_quota.strip().upper() if raw_quota and raw_quota.strip().upper() not in ("NA", "N/A", "NONE", "") else "GQ"
 
             ws4.cell(row=r, column=1, value=s_no)
             ws4.cell(row=r, column=2, value=staff_name)
@@ -2337,11 +2495,11 @@ def build_department_excel(
             ws4.cell(row=r, column=6, value=s.regno)
             ws4.cell(row=r, column=7, value=s.name)
             ws4.cell(row=r, column=8, value=quota)
-            ws4.cell(row=r, column=9, value=mark_iat1)
-            ws4.cell(row=r, column=10, value=mark_mut1)
-            ws4.cell(row=r, column=11, value=mark_iat2)
-            ws4.cell(row=r, column=12, value=mark_mut2)
-            ws4.cell(row=r, column=13, value=mark_iat3)
+            ws4.cell(row=r, column=9, value=mark_iat1 if mark_iat1 and str(mark_iat1).strip() != "" else "-")
+            ws4.cell(row=r, column=10, value="")
+            ws4.cell(row=r, column=11, value=mark_iat2 if mark_iat2 and str(mark_iat2).strip() != "" else "-")
+            ws4.cell(row=r, column=12, value="")
+            ws4.cell(row=r, column=13, value=mark_iat3 if mark_iat3 and str(mark_iat3).strip() != "" else "-")
 
             style_body_row(ws4, r, ncols4)
             ws4.cell(row=r, column=2).alignment = LEFT_WRAP
@@ -2354,7 +2512,7 @@ def build_department_excel(
         ws4.cell(row=r, column=1, value="No students with academic arrears (U / RA) were found.")
         r += 1
     elif not ia1_dict and not ia2_dict and not ia3_dict:
-        ws4.cell(row=r, column=1, value="Note: Internal Assessment (Cycle Test) mark sheets can be uploaded on the PDF-to-Excel page to populate IAT 1, MUT 1, IAT 2, MUT 2, and IAT 3 marks.")
+        ws4.cell(row=r, column=1, value="Note: Internal Assessment mark sheets can be uploaded on the PDF-to-Excel page to populate IAT 1, IAT 2, and IAT 3 marks.")
         ws4.merge_cells(start_row=r, start_column=1, end_row=r, end_column=ncols4)
         ws4.cell(row=r, column=1).font = NOTE_FONT
         r += 1
@@ -2712,6 +2870,17 @@ def build_department_excel(
     ws_meta.column_dimensions["A"].width = 22
     ws_meta.column_dimensions["B"].width = 44
     ws_meta.sheet_state = "hidden"
+
+    # Unlock all cells across all worksheets and strip workbookProtection tag so output Excel is fully editable
+    wb.security = None
+    UNLOCKED = Protection(locked=False, hidden=False)
+    for ws in wb.worksheets:
+        ws.freeze_panes = None
+        ws.protection.sheet = False
+        ws.protection.enabled = False
+        for row in ws.iter_rows(min_row=1, max_row=ws.max_row, min_col=1, max_col=ws.max_column):
+            for cell in row:
+                cell.protection = UNLOCKED
 
     bio = io.BytesIO()
     wb.save(bio)
@@ -5528,6 +5697,9 @@ def build_subject_pdf(subj: SubjectAnalysis, ca: ClassAnalysis, ai_text: str) ->
     parts.append(f"<h2>Subject Performance Analysis: {html.escape(subj.subject)}</h2>")
     if subj.course_code:
         parts.append(f"<p><b>Course Code:</b> {html.escape(subj.course_code)}</p>")
+        staff_name = resolve_staff_for_code(subj.course_code, SESSION.get("staff_directory", {}))
+        if staff_name:
+            parts.append(f"<p><b>Faculty In-Charge:</b> {html.escape(staff_name)}</p>")
     parts.append("<table><tr><th>Metric</th><th>Value</th></tr>")
     for label, val in [
         ("Course Credits", subj.credits),
@@ -6064,7 +6236,7 @@ def layout(title: str, active: str, content, ca: Optional[ClassAnalysis] = None)
     alert_divs = [alert_bar(k, m) for k, m in alerts]
 
     app_footer = Div(
-        P("Developed by Srimuthukrishnan S and Jeffin Josva S from AI&DS 2024-2028 Batch",
+        P("Developed by Jeffin Josva S and Srimuthukrishnan S from AI&DS 2024-2028 Batch",
           cls="text-xs font-semibold text-slate-500 text-center tracking-wide"),
         cls="border-t border-slate-200/80 pt-6 mt-12 pb-4 w-full"
     )
@@ -6429,7 +6601,7 @@ def page_upload() -> Tuple:
                                         NotStr('<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="#1a56db" stroke-width="2" style="width:22px;height:22px;flex-shrink:0"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>'),
                                         Div(
                                             Label("Current Batch COE Result PDF:", cls="block text-xs font-bold text-slate-800 leading-snug"),
-                                            Span("Select official Anna University grade sheet PDF", cls="block text-[11px] text-slate-500 font-normal"),
+                                            Span("Select official Saranathan College Of Engineering grade sheet PDF", cls="block text-[11px] text-slate-500 font-normal"),
                                         ),
                                         cls="flex items-center gap-2.5 mb-2"
                                     ),
@@ -9213,13 +9385,7 @@ app = FastHTML(
 
 @app.get("/favicon.ico")
 def route_favicon():
-    logo_path = os.path.join(os.path.dirname(__file__), "sara.webp")
-    try:
-        with open(logo_path, "rb") as f:
-            data = f.read()
-        return Response(content=data, media_type="image/webp", headers={"Cache-Control": "public, max-age=86400"})
-    except FileNotFoundError:
-        return Response(status_code=204)
+    return Response(status_code=204)
 
 
 @app.get("/logo")
@@ -9493,7 +9659,7 @@ def page_pdf_to_excel(pdf_report: "PDFExtractionReport", ca: "ClassAnalysis", fi
     rows = []
     for i, m in enumerate(mappings, start=1):
         code = m["course_code"]
-        prefill = staff_directory.get(code, "")
+        prefill = resolve_staff_for_code(code, staff_directory)
         status = "✓" if not m.get("unresolved") else "⚠"
         rows.append(Tr(
             Td(str(i), cls="px-3 py-2 text-xs text-slate-600 border-b"),
@@ -9551,24 +9717,36 @@ def page_pdf_to_excel(pdf_report: "PDFExtractionReport", ca: "ClassAnalysis", fi
 
     # Internal Assessment Marks Upload Panel for Analysis 4
     ia1_count = len(ia_marks_store.get("ia1", {}))
-    mut1_count = len(ia_marks_store.get("mut1", {}))
     ia2_count = len(ia_marks_store.get("ia2", {}))
-    mut2_count = len(ia_marks_store.get("mut2", {}))
     ia3_count = len(ia_marks_store.get("ia3", {}))
     total_ia_students = len(set().union(
         ia_marks_store.get("ia1", {}).keys(),
-        ia_marks_store.get("mut1", {}).keys(),
         ia_marks_store.get("ia2", {}).keys(),
-        ia_marks_store.get("mut2", {}).keys(),
         ia_marks_store.get("ia3", {}).keys()
     ))
+    student_meta_store = SESSION.get("student_meta_directory", {})
+    gq_count = 0
+    mq_count = 0
+    for s in ca.students:
+        q = (
+            student_meta_store.get(s.regno, {}).get("quota") or
+            s.meta.get("quota") or
+            ia_marks_store.get("ia1", {}).get(s.regno, {}).get("quota") or
+            ia_marks_store.get("ia2", {}).get(s.regno, {}).get("quota") or
+            ia_marks_store.get("ia3", {}).get(s.regno, {}).get("quota") or
+            "GQ"
+        ).strip().upper()
+        if q == "MQ":
+            mq_count += 1
+        else:
+            gq_count += 1
 
     ia_upload_form = Form(
         Div(
             Div(
                 Div(
                     H3("Analysis 4 — Internal Assessment (Cycle Test) Mark Sheets", cls="text-sm font-bold text-slate-800 mb-1"),
-                    P("Upload Internal Assessment mark sheets to populate IAT 1, MUT 1, IAT 2, MUT 2, and IAT 3 marks, Quota, and faculty names of failed students in Analysis 4:", cls="text-xs text-slate-500"),
+                    P("Upload Internal Assessment mark sheets to populate IAT 1, IAT 2, and IAT 3 marks, Quota, and faculty names of failed students in Analysis 4:", cls="text-xs text-slate-500"),
                     cls="flex-1"
                 ),
                 Div(
@@ -9582,10 +9760,9 @@ def page_pdf_to_excel(pdf_report: "PDFExtractionReport", ca: "ClassAnalysis", fi
             # Status Summary Badges
             Div(
                 Span(f"IAT 1: {ia1_count} loaded", cls=f"text-[11px] font-semibold px-2.5 py-1 rounded {('bg-green-50 text-green-700 border border-green-200' if ia1_count else 'bg-slate-50 text-slate-400 border border-slate-200')}"),
-                Span(f"MUT 1: {mut1_count} loaded", cls=f"text-[11px] font-semibold px-2.5 py-1 rounded {('bg-green-50 text-green-700 border border-green-200' if mut1_count else 'bg-slate-50 text-slate-400 border border-slate-200')}"),
                 Span(f"IAT 2: {ia2_count} loaded", cls=f"text-[11px] font-semibold px-2.5 py-1 rounded {('bg-green-50 text-green-700 border border-green-200' if ia2_count else 'bg-slate-50 text-slate-400 border border-slate-200')}"),
-                Span(f"MUT 2: {mut2_count} loaded", cls=f"text-[11px] font-semibold px-2.5 py-1 rounded {('bg-green-50 text-green-700 border border-green-200' if mut2_count else 'bg-slate-50 text-slate-400 border border-slate-200')}"),
                 Span(f"IAT 3: {ia3_count} loaded", cls=f"text-[11px] font-semibold px-2.5 py-1 rounded {('bg-green-50 text-green-700 border border-green-200' if ia3_count else 'bg-slate-50 text-slate-400 border border-slate-200')}"),
+                Span(f"Quotas: {gq_count} GQ · {mq_count} MQ", cls="text-[11px] font-semibold px-2.5 py-1 rounded bg-indigo-50 text-indigo-700 border border-indigo-200"),
                 cls="flex flex-wrap gap-2 mb-5"
             ),
 
@@ -9595,7 +9772,7 @@ def page_pdf_to_excel(pdf_report: "PDFExtractionReport", ca: "ClassAnalysis", fi
                 Div(
                     Div(
                         Span("⚡ Option 1: Combined Section-Wise Reports (Recommended)", cls="text-xs font-bold text-indigo-900 block mb-1"),
-                        P("Upload all-cycle-test section mark sheets (e.g. II A IA.html, II B.html). Select all section files together — extracts all tests (IAT 1, MUT 1, IAT 2, MUT 2, IAT 3), Quota, and faculty names at once:", cls="text-xs text-slate-600 mb-2"),
+                        P("Upload all-cycle-test section mark sheets (e.g. II A IA.html, II B.html). Select all section files together — extracts all tests (IAT 1, IAT 2, IAT 3), Quota, and faculty names at once:", cls="text-xs text-slate-600 mb-2"),
                         Input(type="file", name="combined_files", accept=".html,.htm,.mhtml,.mht,.xlsx,.xls,.csv", multiple=True,
                               cls="w-full text-xs text-slate-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-indigo-100 file:text-indigo-800 hover:file:bg-indigo-200"),
                         cls="card p-4 bg-indigo-50/40 border border-indigo-200 rounded-lg mb-4"
@@ -9613,20 +9790,8 @@ def page_pdf_to_excel(pdf_report: "PDFExtractionReport", ca: "ClassAnalysis", fi
                             cls="p-2.5 bg-slate-50 border border-slate-200 rounded"
                         ),
                         Div(
-                            Label("MUT 1 / Mid Term 1", cls="block text-xs font-semibold text-slate-700 mb-1"),
-                            Input(type="file", name="mut1_file", accept=".mhtml,.mht,.html,.htm,.xlsx,.xls,.csv", multiple=True,
-                                  cls="w-full text-xs text-slate-500 file:mr-1 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-slate-100"),
-                            cls="p-2.5 bg-slate-50 border border-slate-200 rounded"
-                        ),
-                        Div(
                             Label("IAT 2 / Cycle Test 2", cls="block text-xs font-semibold text-slate-700 mb-1"),
                             Input(type="file", name="ia2_file", accept=".mhtml,.mht,.html,.htm,.xlsx,.xls,.csv", multiple=True,
-                                  cls="w-full text-xs text-slate-500 file:mr-1 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-slate-100"),
-                            cls="p-2.5 bg-slate-50 border border-slate-200 rounded"
-                        ),
-                        Div(
-                            Label("MUT 2 / Model Exam", cls="block text-xs font-semibold text-slate-700 mb-1"),
-                            Input(type="file", name="mut2_file", accept=".mhtml,.mht,.html,.htm,.xlsx,.xls,.csv", multiple=True,
                                   cls="w-full text-xs text-slate-500 file:mr-1 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-slate-100"),
                             cls="p-2.5 bg-slate-50 border border-slate-200 rounded"
                         ),
@@ -9636,7 +9801,7 @@ def page_pdf_to_excel(pdf_report: "PDFExtractionReport", ca: "ClassAnalysis", fi
                                   cls="w-full text-xs text-slate-500 file:mr-1 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-slate-100"),
                             cls="p-2.5 bg-slate-50 border border-slate-200 rounded"
                         ),
-                        cls="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5"
+                        cls="grid grid-cols-1 sm:grid-cols-3 gap-2.5"
                     ),
                     cls="card p-4 bg-slate-50/70 border border-slate-200 rounded-lg mb-4"
                 ),
@@ -9962,7 +10127,11 @@ async def route_pdf_to_excel_save_staff(request):
         code = m["course_code"]
         key = f"staff__{code}"
         if key in form:
-            directory[code] = str(form[key]).strip()
+            val = str(form[key]).strip()
+            directory[code] = val
+            base_code = re.sub(r"([A-Z])$", "", code) if re.search(r"^(?:24)?[A-Z]{2,4}\d{3}[A-Z]$", code) else code
+            if base_code != code:
+                directory[base_code] = val
     SESSION["staff_verified"] = True
     push_alert("Staff names saved and verified.", "green")
     return page_pdf_to_excel(pdf_report, ca, SESSION.get("preview_pdf_filename", "coe_result.pdf"))
@@ -9983,11 +10152,28 @@ async def route_pdf_to_excel_upload_ia(request):
         return RedirectResponse("/upload", status_code=303)
 
     form = await request.form()
-    ia_store = SESSION.setdefault("ia_marks_directory", {"ia1": {}, "mut1": {}, "ia2": {}, "mut2": {}, "ia3": {}})
+    ia_store = SESSION.setdefault("ia_marks_directory", {"ia1": {}, "ia2": {}, "ia3": {}})
     staff_directory = SESSION.setdefault("staff_directory", {})
     student_meta_dir = SESSION.setdefault("student_meta_directory", {})
     uploaded_counts = []
     has_new_staff = False
+
+    def _merge_marks_records(dest: Dict[str, Dict[str, Any]], src: Dict[str, Dict[str, Any]]):
+        for regno, sdata in src.items():
+            if regno not in dest:
+                dest[regno] = {
+                    "name": sdata.get("name", ""),
+                    "batch_no": sdata.get("batch_no", ""),
+                    "quota": sdata.get("quota", "GQ"),
+                    "marks": dict(sdata.get("marks", {}))
+                }
+            else:
+                cur = dest[regno]
+                for field in ("name", "batch_no", "quota"):
+                    val = sdata.get(field)
+                    if val and (not cur.get(field) or cur.get(field) in ("NA", "N/A", "GQ")):
+                        cur[field] = val
+                cur.setdefault("marks", {}).update(sdata.get("marks", {}))
 
     # 1. Process Combined Section Mark Sheets (e.g. II A IA.html, II B.html)
     combined_files = form.getlist("combined_files")
@@ -10004,7 +10190,8 @@ async def route_pdf_to_excel_upload_ia(request):
                     comb_files_processed += 1
                     for t_key, t_map in multi_marks.items():
                         if t_map:
-                            ia_store.setdefault(t_key, {}).update(t_map)
+                            dest_map = ia_store.setdefault(t_key, {})
+                            _merge_marks_records(dest_map, t_map)
                             comb_students_loaded.update(t_map.keys())
 
                     for regno, smeta in stu_meta.items():
@@ -10019,27 +10206,28 @@ async def route_pdf_to_excel_upload_ia(request):
                             staff_name = staff_name.strip()
                             if not staff_name:
                                 continue
-                            existing_staff = staff_directory.get(code, "").strip()
-                            if not existing_staff:
-                                staff_directory[code] = staff_name
-                                has_new_staff = True
-                            else:
-                                existing_names = [s.strip() for s in existing_staff.split("&")]
-                                if staff_name not in existing_names:
-                                    staff_directory[code] = f"{existing_staff} & {staff_name}"
+                            base_code = re.sub(r"([A-Z])$", "", code) if re.search(r"^(?:\d{2})?[A-Z]{2,4}\d{3,4}[A-Z]$", code) else code
+                            for target_code in set([code, base_code]):
+                                existing_staff = staff_directory.get(target_code, "").strip()
+                                if not existing_staff:
+                                    staff_directory[target_code] = staff_name
                                     has_new_staff = True
+                                else:
+                                    existing_names = [s.strip() for s in existing_staff.split("&")]
+                                    if staff_name not in existing_names:
+                                        staff_directory[target_code] = f"{existing_staff} & {staff_name}"
+                                        has_new_staff = True
 
     if comb_files_processed > 0:
         uploaded_counts.append(f"Combined Section Reports ({len(comb_students_loaded)} students across {comb_files_processed} section file(s))")
 
-    # 2. Process Individual IA Files (ia1_file, mut1_file, ia2_file, mut2_file, ia3_file)
+    # 2. Process Individual IA Files (ia1_file, ia2_file, ia3_file)
     for test_key, field_name in [
-        ("ia1", "ia1_file"), ("mut1", "mut1_file"),
-        ("ia2", "ia2_file"), ("mut2", "mut2_file"),
+        ("ia1", "ia1_file"),
+        ("ia2", "ia2_file"),
         ("ia3", "ia3_file")
     ]:
         file_objs = form.getlist(field_name)
-        merged_marks = dict(ia_store.get(test_key, {}))
         processed_files_count = 0
 
         for file_obj in file_objs:
@@ -10052,7 +10240,8 @@ async def route_pdf_to_excel_upload_ia(request):
                     if any(multi_marks.values()):
                         for t_k, t_map in multi_marks.items():
                             if t_map:
-                                ia_store.setdefault(t_k, {}).update(t_map)
+                                dest_map = ia_store.setdefault(t_k, {})
+                                _merge_marks_records(dest_map, t_map)
                         if stu_meta:
                             for regno, smeta in stu_meta.items():
                                 student_meta_dir.setdefault(regno, {}).update(smeta)
@@ -10063,24 +10252,26 @@ async def route_pdf_to_excel_upload_ia(request):
                     else:
                         parsed_marks, _titles, parsed_staff = parse_ia_marks_content(raw_bytes, fname, target_test_key=test_key)
                         if parsed_marks:
-                            merged_marks.update(parsed_marks)
+                            dest_map = ia_store.setdefault(test_key, {})
+                            _merge_marks_records(dest_map, parsed_marks)
                             processed_files_count += 1
-                            ia_store[test_key] = merged_marks
 
                     if parsed_staff:
                         for code, staff_name in parsed_staff.items():
                             staff_name = staff_name.strip()
                             if not staff_name:
                                 continue
-                            existing_staff = staff_directory.get(code, "").strip()
-                            if not existing_staff:
-                                staff_directory[code] = staff_name
-                                has_new_staff = True
-                            else:
-                                existing_names = [s.strip() for s in existing_staff.split("&")]
-                                if staff_name not in existing_names:
-                                    staff_directory[code] = f"{existing_staff} & {staff_name}"
+                            base_code = re.sub(r"([A-Z])$", "", code) if re.search(r"^(?:\d{2})?[A-Z]{2,4}\d{3,4}[A-Z]$", code) else code
+                            for target_code in set([code, base_code]):
+                                existing_staff = staff_directory.get(target_code, "").strip()
+                                if not existing_staff:
+                                    staff_directory[target_code] = staff_name
                                     has_new_staff = True
+                                else:
+                                    existing_names = [s.strip() for s in existing_staff.split("&")]
+                                    if staff_name not in existing_names:
+                                        staff_directory[target_code] = f"{existing_staff} & {staff_name}"
+                                        has_new_staff = True
 
         if processed_files_count > 0:
             uploaded_counts.append(f"{test_key.upper()} ({len(ia_store.get(test_key, {}))} students from {processed_files_count} file(s))")
@@ -10098,9 +10289,41 @@ async def route_pdf_to_excel_upload_ia(request):
 
 @app.post("/pdf-to-excel/clear-ia")
 def route_pdf_to_excel_clear_ia():
-    SESSION["ia_marks_directory"] = {"ia1": {}, "mut1": {}, "ia2": {}, "mut2": {}, "ia3": {}}
+    SESSION["ia_marks_directory"] = {"ia1": {}, "ia2": {}, "ia3": {}}
     push_alert("Saved Internal Assessment marks cleared.", "blue")
     return RedirectResponse("/pdf-to-excel", status_code=303)
+
+
+@app.post("/pdf-to-excel/save-student-meta")
+async def route_pdf_to_excel_save_student_meta(request):
+    pdf_report, ca = _get_pdf_to_excel_context()
+    if not pdf_report or not ca:
+        push_alert("Upload a COE PDF first to convert it to a department Excel workbook.", "amber")
+        return RedirectResponse("/upload", status_code=303)
+    form = await request.form()
+    student_meta_dir = SESSION.setdefault("student_meta_directory", {})
+    action = str(form.get("bulk_action") or "").strip()
+
+    if action == "default_all_gq":
+        for s in ca.students:
+            cur_q = student_meta_dir.get(s.regno, {}).get("quota", "")
+            if not cur_q or cur_q in ("NA", "N/A"):
+                student_meta_dir.setdefault(s.regno, {})["quota"] = "GQ"
+                s.meta["quota"] = "GQ"
+        push_alert("All missing/unassigned student quotas set to GQ (Government Quota).", "green")
+    else:
+        updated = 0
+        for s in ca.students:
+            q_key = f"quota__{s.regno}"
+            if q_key in form:
+                val = str(form[q_key]).strip().upper()
+                if val in ("GQ", "MQ"):
+                    student_meta_dir.setdefault(s.regno, {})["quota"] = val
+                    s.meta["quota"] = val
+                    updated += 1
+        push_alert(f"Saved quota metadata for {updated} students.", "green")
+
+    return page_pdf_to_excel(pdf_report, ca, SESSION.get("preview_pdf_filename", "coe_result.pdf"))
 
 
 @app.get("/pdf-to-excel/download")
@@ -10115,11 +10338,16 @@ def route_pdf_to_excel_download():
         return RedirectResponse("/pdf-to-excel", status_code=303)
     staff_map = SESSION.get("staff_directory", {})
     ia_store = SESSION.get("ia_marks_directory", {})
+    student_meta_dir = SESSION.get("student_meta_directory", {})
     filename = SESSION.get("preview_pdf_filename", "coe_result.pdf")
     prev_ca = SESSION.get("prev_ca")
     prev_pdf_report = SESSION.get("prev_pdf_report")
     mentor_map = SESSION.get("mentor_directory", {})
-    xlsx_bytes = build_department_excel(ca, pdf_report, staff_map, filename, ia_store, prev_ca=prev_ca, prev_pdf_report=prev_pdf_report, mentor_map=mentor_map)
+    xlsx_bytes = build_department_excel(
+        ca, pdf_report, staff_map, filename, ia_store,
+        prev_ca=prev_ca, prev_pdf_report=prev_pdf_report,
+        mentor_map=mentor_map, student_meta_map=student_meta_dir
+    )
     fname = department_excel_filename(pdf_report)
     return Response(
         content=xlsx_bytes,
