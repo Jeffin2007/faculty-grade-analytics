@@ -2009,8 +2009,8 @@ def build_department_excel(
 
     # ---------------------------------------------------------------
     # Analysis 1 - University Examination Result Analysis
-    # ---------------------------------------------------------------
-    ws1 = wb.create_sheet("Analysis 1_New")
+    # -------------------------------------------------------------
+    ws1 = wb.create_sheet("Class Analysis")
     headers1 = ["S.NO", "SUBJECT CODE", "SUBJECT TITLE / STAFF NAME", "NO.OF STUDENTS REGISTERED",
                 "NO. OF STUDENTS ABSENT", "NO.OF STUDENTS FAILED", "NO. OF STUDENTS WH",
                 "NO. OF STUDENTS PASSED", "PASS % (Including ABSENT)"]
@@ -2084,7 +2084,7 @@ def build_department_excel(
     # ---------------------------------------------------------------
     # Analysis 2 - Comparison of Previous Batch Results
     # ---------------------------------------------------------------
-    ws2 = wb.create_sheet("Analysis 2_New")
+    ws2 = wb.create_sheet("Comparison with Prev")
     ncols2 = 6
     start_row = title_block(ws2, ncols2, [programme_line, ay_line, session_line],
                              "ANALYSIS 2 - COMPARISON OF PREVIOUS BATCH RESULTS")
@@ -2244,7 +2244,7 @@ def build_department_excel(
     # ---------------------------------------------------------------
     # Analysis 3 - Result Analysis of Failed Students
     # ---------------------------------------------------------------
-    ws3 = wb.create_sheet("Analysis 3_New")
+    ws3 = wb.create_sheet("Arrear Students Analysis")
     # In official format, Analysis 3 columns display Theory subjects
     analysis3_mappings = [m for m in mappings if _is_theory_course(m["course_code"], m["official_subject_name"], m.get("credits", 3.0))]
     if not analysis3_mappings:
@@ -2411,7 +2411,7 @@ def build_department_excel(
     # ---------------------------------------------------------------
     # Analysis 4 - Internal Assessment Marks of Failed Students
     # ---------------------------------------------------------------
-    ws4 = wb.create_sheet("Analysis 4_New")
+    ws4 = wb.create_sheet("IA Of Arrear Students")
     headers4 = [
         "S. No", "STAFF NAME", "SUB. CODE", "SUBJECT NAME", "NO.OF FAILURES",
         "REGISTER NUMBER", "NAME OF THE STUDENT", "QUOTA",
@@ -2537,7 +2537,7 @@ def build_department_excel(
     # ---------------------------------------------------------------
     # Analysis 5 - List of Subject Toppers
     # ---------------------------------------------------------------
-    ws5 = wb.create_sheet("Analysis 5_New")
+    ws5 = wb.create_sheet("Subject Toppers")
     headers5 = ["S.No", "STAFF NAME", "SUBJECT CODE", "SUBJECT NAME", "NO.OF TOPPERS",
                 "REGISTER NUMBER", "NAME OF THE STUDENT", "GRADE"]
     ncols5 = len(headers5)
@@ -2605,7 +2605,7 @@ def build_department_excel(
     # ---------------------------------------------------------------
     # Analysis 6 - Rank List Based on GPA (reuses the existing ranking engine)
     # ---------------------------------------------------------------
-    ws6 = wb.create_sheet("Analysis 6_New")
+    ws6 = wb.create_sheet("Rank")
     headers6 = ["S. No.", "REGISTER NUMBER", "NAME OF THE STUDENT", "GPA", "RANK"]
     ncols6 = len(headers6)
     start_row = title_block(ws6, ncols6, [programme_line, ay_line, session_line],
@@ -2637,7 +2637,7 @@ def build_department_excel(
     # ---------------------------------------------------------------
     # Analysis 7 - Provisional Results (raw, per-student per-subject)
     # ---------------------------------------------------------------
-    ws7 = wb.create_sheet("Analysis 7")
+    ws7 = wb.create_sheet("Overall Analysis")
     ncols7 = 3 + len(mappings) * 2
     start_row = title_block(ws7, ncols7, [programme_line, ay_line, session_line],
                              "ANALYSIS 7 - PROVISIONAL RESULTS")
