@@ -54,6 +54,7 @@ from fasthtml.common import (
     Body,
     Br,
     Button,
+    Datalist,
     Div,
     FastHTML,
     Footer,
@@ -1496,14 +1497,14 @@ def build_subject_mapping_log(records: List[StudentResultRecord]) -> List[Dict[s
     return list(seen.values())
 
 
-def validate_export_dataset(ca: "ClassAnalysis") -> Tuple[bool, List[str]]:
+def validate_export_dataset(ca: "ClassAnalysis", is_dept_excel: bool = True) -> Tuple[bool, List[str]]:
     """
     Pre-download validation gate. Returns (ok, issues). When issues is non-empty the
     caller must refuse to generate the Excel file rather than ship something misleading.
     """
     issues: List[str] = []
 
-    if not SESSION.get("staff_verified", False):
+    if is_dept_excel and not SESSION.get("staff_verified", False):
         issues.append("Extracted/entered staff names require manual verification. Please review the 'Subject Staff Mapping' table below and click 'Save Staff Names' to confirm.")
 
     if ca.student_count <= 0 or not ca.students:
@@ -1580,7 +1581,7 @@ def build_class_analysis_excel(ca: "ClassAnalysis") -> bytes:
     ever falls back to using the raw course code as the subject name.
     """
     import openpyxl
-    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side, Protection
     from openpyxl.utils import get_column_letter
 
     wb = openpyxl.Workbook()
@@ -1726,7 +1727,7 @@ def build_class_analysis_excel(ca: "ClassAnalysis") -> bytes:
         ws_prov.append([k, v])
 
     # Sheet 6: Data Quality
-    ok, issues = validate_export_dataset(ca)
+    ok, issues = validate_export_dataset(ca, is_dept_excel=False)
     ws6 = wb.create_sheet("Data Quality")
     write_sheet(ws6, ["Check", "Status"], [
         ["Students verified", ca.student_count],
@@ -7351,6 +7352,8 @@ def page_dashboard(ca: ClassAnalysis) -> Tuple:
                 Form(Button("📄 Download PDF", type="submit",
                             cls="px-4 py-2 text-sm font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors"),
                      action="/report/class", method="POST", cls="inline-block"),
+                A("📊 Download Excel", href="/download-class-excel",
+                  cls="px-4 py-2 text-sm font-medium bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg border border-emerald-200 transition-colors ml-2"),
                 cls="flex items-center gap-2"
             ),
             cls="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6"
@@ -7644,6 +7647,8 @@ def page_students(ca: ClassAnalysis) -> Tuple:
                    cls="filter-btn", aria_label="Filter single arrear students"),
             Button("Multi-Arrear", data_filter="multi-u", data_filter_target="student-row",
                    cls="filter-btn", aria_label="Filter multiple arrear students"),
+            Button("Backlog (Sem 1-4)", data_filter="backlog", data_filter_target="student-row",
+                   cls="filter-btn", aria_label="Filter Sem 1-4 backlog students"),
             Button("SA", data_filter="sa", data_filter_target="student-row",
                    cls="filter-btn", aria_label="Filter SA students"),
             Button("WD", data_filter="wd", data_filter_target="student-row",
@@ -7923,8 +7928,8 @@ def page_student_detail(ca: ClassAnalysis, regno: str) -> Tuple:
         # PTM Brief Action Section
         Div(
             H3("Parent-Teacher Meeting (PTM) Brief", cls="text-sm font-semibold text-slate-700 mb-3"),
-            Form(
-                Button("Generate / Refresh PTM Brief", type="submit",
+            Div(
+                Button("Generate / Refresh PTM Brief", type="button",
                        hx_post=f"/student/{s.regno}/ptm",
                        hx_target="#ptm-result",
                        hx_swap="innerHTML",
@@ -8255,8 +8260,11 @@ def page_interactive_report(ca: ClassAnalysis) -> Tuple:
 
         # Quick Action Buttons
         Div(
-            A("📄 Download PDF Report", href="/reports",
-              cls="px-4 py-2 text-sm font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-sm transition-colors"),
+            Form(Button("📄 Download PDF Report", type="submit",
+                        cls="px-4 py-2 text-sm font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-sm transition-colors"),
+                 action="/report/class", method="POST", cls="inline-block"),
+            A("📊 Download Class Analysis Excel", href="/download-class-excel",
+              cls="px-4 py-2 text-sm font-semibold bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg border border-emerald-200 transition-colors"),
             A("← Back to Dashboard", href="/dashboard",
               cls="px-4 py-2 text-sm font-medium bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg transition-colors"),
             cls="flex items-center gap-3 mb-6"
@@ -8539,6 +8547,8 @@ def page_reports(ca: ClassAnalysis) -> Tuple:
                         Form(Button("📄 Download Class Coordinator PDF", type="submit",
                                     cls="w-full px-4 py-2.5 text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors mb-2"),
                              action="/report/class", method="POST"),
+                        A("📊 Download Class Analysis Excel", href="/download-class-excel",
+                          cls="block w-full text-center px-4 py-2.5 text-sm font-semibold bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg transition-colors mb-2"),
                         A("🌐 Open Interactive Web Report", href="/reports/interactive",
                           cls="block w-full text-center px-4 py-2.5 text-sm font-semibold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg transition-colors"),
                     ),
@@ -8578,9 +8588,11 @@ def page_reports(ca: ClassAnalysis) -> Tuple:
                       "and structured discussion points for parent meetings.",
                       cls="text-sm text-slate-500 mb-4 leading-relaxed"),
                     Form(
-                        Input(type="text", name="regno", placeholder="Enter student register number", aria_label="Student Register Number for Report",
-                               cls="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg mb-3 "
-                                   "focus:ring-2 focus:ring-blue-500 focus:border-blue-500"),
+                        Input(type="text", name="regno", placeholder="Enter register number or select student...", aria_label="Student Register Number for Report",
+                              list="students_datalist",
+                              cls="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg mb-3 "
+                                  "focus:ring-2 focus:ring-blue-500 focus:border-blue-500"),
+                        Datalist(*[Option(f"{s.name} ({s.regno})", value=s.regno) for s in ca.students], id="students_datalist"),
                         Button("Generate PTM Report PDF", type="submit",
                                cls="w-full px-4 py-2.5 text-sm font-medium bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors"),
                         action="/report/student-select", method="POST",
@@ -10086,7 +10098,17 @@ async def route_confirm_pdf(request):
         ca.subject_mappings = build_subject_mapping_log(pdf_report.records)
         ca.quarantined_tokens = pdf_report.quarantined_tokens
         ca.format_detected = "pdf"
-        ca.metadata["source_page_count"] = pdf_report.doc_metadata.page_count
+        meta = pdf_report.doc_metadata
+        ca.metadata["institution"] = meta.institution
+        ca.metadata["programme"] = meta.programme
+        ca.metadata["department"] = meta.department
+        ca.metadata["semester"] = meta.semester
+        ca.metadata["regulation"] = meta.regulation
+        ca.metadata["academic_year"] = meta.academic_year
+        ca.metadata["exam_session"] = meta.exam_session
+        ca.metadata["publication_date"] = meta.publication_date
+        ca.metadata["document_type"] = meta.document_type
+        ca.metadata["source_page_count"] = meta.page_count
         ca.metadata["extraction_confidence"] = pdf_report.overall_confidence
 
         SESSION["records"] = df
@@ -10615,7 +10637,6 @@ def route_class_ai_summary():
     ca = SESSION["analytics"]
     ai = generate_class_ai_insight(ca)
     return Div(
-        H3("AI Academic Advisory Insight", cls="text-sm font-semibold text-slate-700 mb-3"),
         md_block(ai["text"], ai["live"]),
         id="class-ai-advisory"
     )
@@ -10688,6 +10709,11 @@ async def route_report_student_select(request):
     ca = SESSION["analytics"]
     s = get_student(ca, regno)
     if not s:
+        for cand in ca.students:
+            if cand.regno.lower() == regno.lower() or cand.regno.lower() in regno.lower():
+                s = cand
+                break
+    if not s:
         push_alert(f"Student '{html.escape(regno)}' not found in the dataset.", "red")
         return RedirectResponse("/reports", status_code=303)
     rid = create_report_id("student", {"class_analysis": ca, "regno": s.regno})
@@ -10700,12 +10726,17 @@ def route_download_class_excel():
         push_alert("No data loaded.", "amber")
         return RedirectResponse("/", status_code=303)
     ca = SESSION["analytics"]
-    ok, issues = validate_export_dataset(ca)
+    ok, issues = validate_export_dataset(ca, is_dept_excel=False)
     if not ok:
         push_alert("Export validation failed: " + "; ".join(issues), "red")
         return RedirectResponse("/dashboard", status_code=303)
     xlsx_bytes = build_class_analysis_excel(ca)
-    fname = re.sub(r"[^\w\.\-]", "_", f"class_analysis_{ca.file_name or 'report'}.xlsx")
+    fname = f"class_analysis_{ca.file_name or 'report'}.xlsx"
+    if ca.metadata.get("department"):
+        dept = str(ca.metadata.get("department", "")).replace(" ", "_")[:30]
+        sess = str(ca.metadata.get("exam_session", "")).replace(" ", "_")[:20]
+        fname = f"{dept}_{sess}_Class_Analysis.xlsx"
+    fname = re.sub(r"[^\w\.\-]", "_", fname)
     return Response(
         content=xlsx_bytes,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
