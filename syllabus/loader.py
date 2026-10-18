@@ -153,10 +153,15 @@ def get_catalog(
         with open(catalog_path, "rb") as f:
             raw_bytes = f.read()
 
-        data = json.loads(raw_bytes.decode("utf-8"))
+        try:
+            text_content = raw_bytes.decode("utf-8")
+        except UnicodeDecodeError:
+            text_content = raw_bytes.decode("utf-8", errors="replace")
+
+        data = json.loads(text_content)
         sha256_hash = data.get("catalog_hash") or hashlib.sha256(raw_bytes).hexdigest()
     except Exception as e:
-        raise RuntimeError(f"Failed to read syllabus catalog at {catalog_path}: {e}")
+        return None
 
     courses = data.get("courses", [])
     dept_name = data.get("department", dept_clean)
