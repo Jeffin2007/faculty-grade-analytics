@@ -9,3 +9,5 @@ uvicorn
 python-dotenv
 PyMuPDF
 pdfplumber
+paddlepaddle
+paddleocr

@@ -242,7 +242,9 @@ GRADE_TOKEN_CLEAN = {
     "A+": "A+", "A PLUS": "A+", "AP": "A+", "A PLUS PLUS": "A+",
     "B+": "B+", "B PLUS": "B+", "BP": "B+",
     "C+": "C+", "C PLUS": "C+", "CP": "C+",
-    "A0": "A+", "A1": "O", "O": "O", "S": "S", "A": "A", "B": "B", "C": "C",
+    "A0": "A+", "A1": "O", "O": "O", "OUTSTANDING": "O", "GRADE O": "O",
+    "S": "S", "SUPER": "S", "GRADE S": "S", "S GRADE": "S", "S+": "S",
+    "A": "A", "B": "B", "C": "C",
     "U": "U", "FAIL": "U", "F": "U",
     "RA": "RA", "R.A": "RA", "R/A": "RA", "R A": "RA",
     "AB": "UA", "ABSENT": "UA", "UA": "UA", "ABS": "UA", "A B": "UA", "A.B": "UA", "A/B": "UA",
@@ -626,9 +628,177 @@ def _parse_page_semester(text: str) -> Optional[int]:
     return None
 
 
+_PADDLE_OCR_ENGINE = None
+
+def get_paddle_ocr_reader():
+    """Lazily instantiate PaddleOCR reader so startup remains instantaneous."""
+    global _PADDLE_OCR_ENGINE
+    if _PADDLE_OCR_ENGINE is not None:
+        return _PADDLE_OCR_ENGINE
+    try:
+        from paddleocr import PaddleOCR
+        # Configure OCR for English table/text parsing
+        _PADDLE_OCR_ENGINE = PaddleOCR(use_angle_cls=True, lang="en")
+    except Exception as e:
+        _PADDLE_OCR_ENGINE = None
+    return _PADDLE_OCR_ENGINE
+
+
+def extract_page_via_paddle_ocr(page, src_page: int, current_page_sem: int, student_reg_pattern: re.Pattern) -> Tuple[List[StudentResultRecord], List[Dict[str, Any]]]:
+    """
+    Renders a PDF page to image (300 DPI) and executes PaddleOCR.
+    Clusters detected bounding boxes into tabular rows and columns to reliably
+    extract student registration numbers, names, subjects, and grades even when digital text is absent.
+    """
+    records: List[StudentResultRecord] = []
+    inspector_items: List[Dict[str, Any]] = []
+
+    ocr = get_paddle_ocr_reader()
+    if ocr is None:
+        return records, inspector_items
+
+    try:
+        import numpy as np
+        # Render high-resolution pixmap (2.5x scale ~ 180-200 DPI for optimal accuracy)
+        pix = page.get_pixmap(dpi=200)
+        img_bytes = pix.tobytes("png")
+        from PIL import Image
+        img = Image.open(io.BytesIO(img_bytes)).convert("RGB")
+        img_np = np.array(img)
+
+        # Run PaddleOCR
+        results = ocr.ocr(img_np)
+        if not results or not results[0]:
+            return records, inspector_items
+
+        # Extract items: (box, text, confidence)
+        items = []
+        for line in results[0]:
+            if not line or len(line) < 2:
+                continue
+            box, (txt, score) = line
+            txt_clean = str(txt).strip()
+            if not txt_clean or score < 0.40:
+                continue
+            # Bounding box center coordinates
+            xs = [pt[0] for pt in box]
+            ys = [pt[1] for pt in box]
+            cx = sum(xs) / len(xs)
+            cy = sum(ys) / len(ys)
+            items.append({
+                "text": txt_clean,
+                "cx": cx,
+                "cy": cy,
+                "box": box,
+                "score": score
+            })
+
+        if not items:
+            return records, inspector_items
+
+        # Sort items vertically to group into horizontal table rows
+        items.sort(key=lambda it: it["cy"])
+        rows = []
+        curr_row = [items[0]]
+        y_threshold = 18.0  # pixel vertical delta for same row
+
+        for it in items[1:]:
+            if abs(it["cy"] - curr_row[-1]["cy"]) <= y_threshold:
+                curr_row.append(it)
+            else:
+                curr_row.sort(key=lambda x: x["cx"])
+                rows.append(curr_row)
+                curr_row = [it]
+        if curr_row:
+            curr_row.sort(key=lambda x: x["cx"])
+            rows.append(curr_row)
+
+        # Identify subject header row if present
+        detected_course_headers = []
+        for row in rows:
+            line_str = " ".join(it["text"] for it in row)
+            # Find subject code candidates (e.g., CS3401, 24CS401, etc.)
+            cand_codes = re.findall(r"\b(?:\d{2})?[A-Z]{2,4}\d{3,4}[A-Z]?\b", line_str.upper())
+            if len(cand_codes) >= 2:
+                for c_code in cand_codes:
+                    can_name, code, cred, sem, cat, conf, amb = resolve_subject_info(c_code)
+                    detected_course_headers.append({
+                        "header": can_name or c_code,
+                        "code": code or c_code,
+                        "credits": cred or 3.0,
+                        "sem": sem or current_page_sem
+                    })
+                if detected_course_headers:
+                    break
+
+        # Process student data rows
+        for row in rows:
+            line_str = " ".join(it["text"] for it in row)
+            m = student_reg_pattern.search(line_str)
+            if not m:
+                continue
+            regno = m.group(1).upper()
+
+            # Find items appearing after regno horizontally
+            reg_idx = -1
+            for idx_it, it in enumerate(row):
+                if regno in it["text"].upper():
+                    reg_idx = idx_it
+                    break
+            after_items = row[reg_idx + 1:] if reg_idx >= 0 else row
+
+            # Detect name and grades
+            grades_found = []
+            name_parts = []
+            for it in after_items:
+                g_norm = _grade_normalize(it["text"])
+                if g_norm and it["text"].upper() != regno:
+                    grades_found.append((it["text"], g_norm))
+                elif not grades_found:
+                    name_parts.append(it["text"])
+
+            name_val = " ".join(name_parts).strip()
+            for g_idx, (raw_g, norm_g) in enumerate(grades_found):
+                subj_info = (
+                    detected_course_headers[g_idx]
+                    if g_idx < len(detected_course_headers)
+                    else {"header": f"Subject_{g_idx+1}", "code": f"SUBJ_{g_idx+1}", "credits": 3.0, "sem": current_page_sem}
+                )
+                rec = StudentResultRecord(
+                    register_number=regno,
+                    student_name=name_val,
+                    subject_code=subj_info["code"],
+                    subject_name=subj_info["header"],
+                    original_subject_text=subj_info["header"],
+                    credits=subj_info["credits"],
+                    result_status=norm_g,
+                    raw_result_status=raw_g,
+                    result_semester=current_page_sem,
+                    subject_semester=subj_info["sem"],
+                    source_type="PDF_OCR",
+                    source_page=src_page,
+                    extraction_confidence=0.88
+                )
+                records.append(rec)
+                inspector_items.append({
+                    "source_page": src_page,
+                    "raw_text": line_str,
+                    "parsed_regno": regno,
+                    "parsed_name": name_val or "—",
+                    "parsed_subject": subj_info["header"],
+                    "parsed_grade": norm_g,
+                    "confidence": "HIGH (PADDLE_OCR)"
+                })
+
+    except Exception:
+        pass
+
+    return records, inspector_items
+
+
 def extract_coe_pdf(pdf_bytes: bytes, filename: str, analysis_context: Optional[Dict[str, Any]] = None) -> PDFExtractionReport:
     """
-    Universal multi-page COE PDF extraction engine using PyMuPDF with pdfplumber fallback.
+    Universal multi-page COE PDF extraction engine using PyMuPDF, PaddleOCR, and pdfplumber fallback.
     Extracts document metadata, multi-page tables, detects per-page semesters across arbitrary
     numbers of pages (e.g. 1 to N pages of arrear exams for earlier semesters, cleanly segregated
     from the target regular cohort), isolates headers per page, and tracks student provenance.
@@ -1043,6 +1213,22 @@ def extract_coe_pdf(pdf_bytes: bytes, filename: str, analysis_context: Optional[
                                             })
             except Exception as pe:
                 report.warnings.append(f"pdfplumber table extraction notice for page {src_page}: {pe}")
+
+        # 5. PaddleOCR Fallback for Scanned / Image-Based / Unextracted Pages
+        if len(page_records) == 0:
+            try:
+                ocr_recs, ocr_items = extract_page_via_paddle_ocr(
+                    page,
+                    src_page=src_page,
+                    current_page_sem=current_page_sem,
+                    student_reg_pattern=student_reg_pattern
+                )
+                if ocr_recs:
+                    page_records.extend(ocr_recs)
+                    inspector_items.extend(ocr_items)
+                    report.warnings.append(f"Page {src_page}: successfully extracted {len(ocr_recs)} record(s) via PaddleOCR.")
+            except Exception as ocr_err:
+                report.warnings.append(f"PaddleOCR notice for page {src_page}: {ocr_err}")
 
         extracted_records.extend(page_records)
 
@@ -4380,7 +4566,20 @@ def compute_subject_analytics(records: pd.DataFrame, class_gpa_ref: Optional[flo
         credits_series = grp["credits"].dropna().astype(float)
         credits = float(credits_series.mode().iloc[0]) if len(credits_series) else (cred_syl if cred_syl > 0 else 3.0)
 
-        top = grp.sort_values(["points", "regno"], ascending=[False, True]).head(6)
+        # Subject Toppers / Top Performers:
+        # Include all students tied for the highest passing grade points (e.g. all 10 GP students, both S and O)
+        # and ensure a healthy minimum view (up to top 25 if tied)
+        passing_grp = grp[grp["grade"].isin(PASSING_GRADES)]
+        if not passing_grp.empty:
+            best_subj_pts = passing_grp["points"].max()
+            tied_toppers = passing_grp[passing_grp["points"] == best_subj_pts].sort_values("regno")
+            if len(tied_toppers) >= 6:
+                top = tied_toppers
+            else:
+                top = grp.sort_values(["points", "regno"], ascending=[False, True]).head(max(6, len(tied_toppers)))
+        else:
+            top = grp.sort_values(["points", "regno"], ascending=[False, True]).head(6)
+
         top_students = [
             {"regno": str(r["regno"]), "name": str(r["name"]),
              "grade": str(r["grade"]), "points": float(r["points"])}
@@ -4398,12 +4597,12 @@ def compute_subject_analytics(records: pd.DataFrame, class_gpa_ref: Optional[flo
         avg_gp_gap = max(0.0, 8.0 - (avg_gp or 0.0))
         diff_score = _round(u_pct_val * 0.6 + avg_gp_gap * 4.0 + credits * 1.5, 1) or 0.0
 
-        distinction_cnt = counts.get("O", 0) + counts.get("A+", 0)
+        distinction_cnt = counts.get("O", 0) + counts.get("S", 0) + counts.get("A+", 0)
         high_pass_cnt = counts.get("A", 0) + counts.get("B+", 0)
         pass_cnt = counts.get("B", 0) + counts.get("C", 0)
         fail_cnt = u_count + ra_count + ua_count + sa_count + wd_count + mm_count + wh2_count
         grade_tiers = {
-            "Distinction (O/A+)": distinction_cnt,
+            "Distinction (O/S/A+)": distinction_cnt,
             "High Pass (A/B+)": high_pass_cnt,
             "Pass (B/C)": pass_cnt,
             "Fail / Arrear": fail_cnt,
@@ -4680,9 +4879,9 @@ def generate_deterministic_insights(ca: ClassAnalysis) -> Dict[str, Any]:
         diff_str = f"{abs(weakest_subject.gp_diff_vs_class):.1f} lower average GP" if weakest_subject.gp_diff_vs_class < 0 else "comparable GP"
         insights.append(f"'{weakest_subject.subject}' has highest concentration of arrears ({weakest_subject.arrear_count} students, {diff_str} than class average).")
 
-    top_distinction = ca.grade_distribution.get("O", 0) + ca.grade_distribution.get("A+", 0)
+    top_distinction = ca.grade_distribution.get("O", 0) + ca.grade_distribution.get("S", 0) + ca.grade_distribution.get("A+", 0)
     if top_distinction > 0:
-        insights.append(f"{top_distinction} result entries achieved top distinction (O or A+).")
+        insights.append(f"{top_distinction} result entries achieved top distinction (O, S, or A+).")
 
     if ca.sa_student_count > 0:
         insights.append(f"{ca.sa_student_count} student(s) carry Shortage of Attendance (SA) status.")
@@ -5308,9 +5507,9 @@ def fallback_class_insight(ca: ClassAnalysis) -> str:
     lines.append("\n## Strengths")
     if ca.cleared_count > 0:
         lines.append(f"- **{ca.cleared_count} student(s)** cleared all declared subjects without any arrears.")
-    top_dist = ca.grade_distribution.get("O", 0) + ca.grade_distribution.get("A+", 0)
+    top_dist = ca.grade_distribution.get("O", 0) + ca.grade_distribution.get("S", 0) + ca.grade_distribution.get("A+", 0)
     if top_dist > 0:
-        lines.append(f"- **{top_dist} result entries** achieved top distinction grades (O or A+).")
+        lines.append(f"- **{top_dist} result entries** achieved top distinction grades (O, S, or A+).")
 
     lines.append("\n## Areas Requiring Attention")
     if worst:
@@ -7394,7 +7593,7 @@ def page_dashboard(ca: ClassAnalysis) -> Tuple:
                         Div(
                             Div(Span("⚠", cls="text-amber-500 font-bold mr-2 text-base"), Span(f"{ca.multiple_u_count} student(s) have multiple arrears requiring immediate faculty intervention.", cls="text-xs text-slate-700 font-medium"), cls="flex items-center py-1"),
                             Div(Span("📘", cls="text-blue-500 font-bold mr-2 text-base"), Span(f"'{weakest_subj.subject}' has highest arrear concentration ({weakest_subj.arrear_count} arrears).", cls="text-xs text-slate-700 font-medium"), cls="flex items-center py-1") if weakest_subj else None,
-                            Div(Span("⭐", cls="text-yellow-500 font-bold mr-2 text-base"), Span(f"{ca.grade_distribution.get('O',0) + ca.grade_distribution.get('A+',0)} student(s) achieved distinction (O/A+ grade).", cls="text-xs text-slate-700 font-medium"), cls="flex items-center py-1"),
+                            Div(Span("⭐", cls="text-yellow-500 font-bold mr-2 text-base"), Span(f"{ca.grade_distribution.get('O',0) + ca.grade_distribution.get('S',0) + ca.grade_distribution.get('A+',0)} student(s) achieved distinction (O/S/A+ grade).", cls="text-xs text-slate-700 font-medium"), cls="flex items-center py-1"),
                         ),
                         cls="bg-blue-50/50 p-4 rounded-xl border border-blue-100"
                     ),
